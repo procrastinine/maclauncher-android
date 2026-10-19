@@ -1,0 +1,8 @@
+import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import {spawnSync} from 'node:child_process';
+const root=path.resolve(import.meta.dirname,'..'),args=process.argv.slice(2);
+if(args.length!==2||args[0]!=='--inputs')throw Error('Usage: node tools/build.mjs --inputs build-inputs.json');
+const options=JSON.parse(fs.readFileSync(path.resolve(args[1])));
+if(!options||Array.isArray(options)||Object.values(options).some(v=>typeof v!=='string'||!path.isAbsolute(v)))throw Error('Build inputs must map option names to absolute paths.');
+const native=path.join(root,'src/modules/android/native'),tools=path.join(native,'tools');fs.mkdirSync(tools,{recursive:true});
+for(const name of ['asm-binary.json','apksig-binary.json']){const pin=JSON.parse(fs.readFileSync(path.join(native,name)));for(const file of pin.files){const output=path.join(tools,file.path);let bytes;try{bytes=fs.readFileSync(output);}catch(error){if(error.code!=='ENOENT')throw error;}if(bytes&&crypto.createHash('sha256').update(bytes).digest('hex')===file.sha256)continue;const response=await fetch(file.url||pin.url);if(!response.ok)throw Error('Build tool download failed: '+response.status);bytes=Buffer.from(await response.arrayBuffer());if(bytes.length!==file.size||crypto.createHash('sha256').update(bytes).digest('hex')!==file.sha256)throw Error('Build tool checksum differs from its source pin.');fs.writeFileSync(output,bytes,{mode:0o644});}}
+const result=spawnSync(process.execPath,[path.join(native,'build.mjs'),...Object.entries(options).flatMap(([key,value])=>['--'+key,value])],{stdio:'inherit'});if(result.error)throw result.error;process.exitCode=result.status??1;

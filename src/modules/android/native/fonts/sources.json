@@ -1,0 +1,11 @@
+[
+  { "key": "aospFramework", "path": "src/external/aosp-framework", "url": "https://android.googlesource.com/platform/frameworks/base", "directory": "data/fonts" },
+  { "key": "aospNotoFonts", "path": "src/external/aosp-noto-fonts", "url": "https://android.googlesource.com/platform/external/noto-fonts" },
+  { "key": "aospRobotoFonts", "path": "src/external/aosp-roboto-fonts", "url": "https://android.googlesource.com/platform/external/roboto-fonts" },
+  { "key": "aospRobotoFlexFonts", "path": "src/external/aosp-roboto-flex-fonts", "url": "https://android.googlesource.com/platform/external/roboto-flex-fonts" },
+  { "key": "aospCarroisGothicScFonts", "path": "src/external/aosp-google-fonts-carrois-gothic-sc", "url": "https://android.googlesource.com/platform/external/google-fonts/carrois-gothic-sc" },
+  { "key": "aospComingSoonFonts", "path": "src/external/aosp-google-fonts-coming-soon", "url": "https://android.googlesource.com/platform/external/google-fonts/coming-soon" },
+  { "key": "aospCutiveMonoFonts", "path": "src/external/aosp-google-fonts-cutive-mono", "url": "https://android.googlesource.com/platform/external/google-fonts/cutive-mono" },
+  { "key": "aospDancingScriptFonts", "path": "src/external/aosp-google-fonts-dancing-script", "url": "https://android.googlesource.com/platform/external/google-fonts/dancing-script" },
+  { "key": "aospSourceSansProFonts", "path": "src/external/aosp-google-fonts-source-sans-pro", "url": "https://android.googlesource.com/platform/external/google-fonts/source-sans-pro" }
+]

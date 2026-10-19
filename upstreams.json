@@ -1,0 +1,1463 @@
+{
+  "schemaVersion": 1,
+  "projects": [
+    {
+      "id": "aim",
+      "repository": "https://github.com/hahnlee/aim",
+      "path": "src/external/aim-custom",
+      "revision": "9b5068fa8185d3f51f1862fe7c54d88d51f09ec8",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Low-level Android supplier used by the custom JVM and ART runtime.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aim"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/art/supplier.json",
+          "property": "sources.aim.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle",
+      "repository": "https://chromium.googlesource.com/angle/angle",
+      "path": "src/external/android-angle",
+      "revision": "cbc4153da8d5796b0fbb3cf288e97bee19436191",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Metal EGL/GLES provider with RGB565 IOSurface and display-owned synchronization adaptations",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "angle"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-build",
+      "repository": "https://chromium.googlesource.com/chromium/src/build.git",
+      "path": "src/external/android-angle-deps/build",
+      "revision": "38265dc9620be22c42da758e534deca1a8af1fbd",
+      "licensePaths": [
+        "BUILD.gn"
+      ],
+      "usage": "Pinned ANGLE Metal build dependency: build",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.4.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-buildtools",
+      "repository": "https://chromium.googlesource.com/chromium/src/buildtools.git",
+      "path": "src/external/android-angle-deps/buildtools",
+      "revision": "6a6a2b6fd3c37c0624e52cb563d999a3819134f8",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Pinned ANGLE Metal build dependency: buildtools",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.0.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-testing",
+      "repository": "https://chromium.googlesource.com/chromium/src/testing",
+      "path": "src/external/android-angle-deps/testing",
+      "revision": "d383bed741641364fe020bfe9eac7a36180e9e6f",
+      "licensePaths": [
+        "test.gni"
+      ],
+      "usage": "Pinned ANGLE Metal build dependency: testing",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.5.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-third_party-abseil-cpp",
+      "repository": "https://chromium.googlesource.com/chromium/src/third_party/abseil-cpp",
+      "path": "src/external/android-angle-deps/third_party-abseil-cpp",
+      "revision": "5f6b05eac05371bee829951e64f3fd35854e9311",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Pinned ANGLE Metal build dependency: third_party/abseil-cpp",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.6.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-third_party-astc-encoder-src",
+      "repository": "https://chromium.googlesource.com/external/github.com/ARM-software/astc-encoder",
+      "path": "src/external/android-angle-deps/third_party-astc-encoder-src",
+      "revision": "2319d9c4d4af53a7fc7c52985e264ce6e8a02a9b",
+      "licensePaths": [
+        "LICENSE.txt"
+      ],
+      "usage": "Pinned ANGLE Metal build dependency: third_party/astc-encoder/src",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.7.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-third_party-glslang-src",
+      "repository": "https://chromium.googlesource.com/external/github.com/KhronosGroup/glslang",
+      "path": "src/external/android-angle-deps/third_party-glslang-src",
+      "revision": "38f6708b6b6f213010c51ffa8f577a7751e12ce7",
+      "licensePaths": [
+        "LICENSE.txt"
+      ],
+      "usage": "Pinned ANGLE build dependency: third_party/glslang/src",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.12.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-third_party-jsoncpp",
+      "repository": "https://chromium.googlesource.com/chromium/src/third_party/jsoncpp",
+      "path": "src/external/android-angle-deps/third_party-jsoncpp",
+      "revision": "f62d44704b4da6014aa231cfc116e7fd29617d2a",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Pinned ANGLE Metal build dependency: third_party/jsoncpp",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.8.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-third_party-jsoncpp-source",
+      "repository": "https://chromium.googlesource.com/external/github.com/open-source-parsers/jsoncpp",
+      "path": "src/external/android-angle-deps/third_party-jsoncpp-source",
+      "revision": "42e892d96e47b1f6e29844cc705e148ec4856448",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Pinned ANGLE Metal build dependency: third_party/jsoncpp/source",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.9.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-third_party-rapidjson-src",
+      "repository": "https://chromium.googlesource.com/external/github.com/Tencent/rapidjson",
+      "path": "src/external/android-angle-deps/third_party-rapidjson-src",
+      "revision": "781a4e667d84aeedbeb8184b7b62425ea66ec59f",
+      "licensePaths": [
+        "license.txt"
+      ],
+      "usage": "Pinned ANGLE Metal build dependency: third_party/rapidjson/src",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.3.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-third_party-spirv-cross-src",
+      "repository": "https://chromium.googlesource.com/external/github.com/KhronosGroup/SPIRV-Cross",
+      "path": "src/external/android-angle-deps/third_party-spirv-cross-src",
+      "revision": "b8fcf307f1f347089e3c46eb4451d27f32ebc8d3",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Pinned ANGLE build dependency: third_party/spirv-cross/src",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.13.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-third_party-spirv-headers-src",
+      "repository": "https://chromium.googlesource.com/external/github.com/KhronosGroup/SPIRV-Headers",
+      "path": "src/external/android-angle-deps/third_party-spirv-headers-src",
+      "revision": "97e96f9e9defeb4bba3cfbd034dec516671dd7a3",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Pinned ANGLE Metal build dependency: third_party/spirv-headers/src",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.2.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-third_party-spirv-tools-src",
+      "repository": "https://chromium.googlesource.com/external/github.com/KhronosGroup/SPIRV-Tools",
+      "path": "src/external/android-angle-deps/third_party-spirv-tools-src",
+      "revision": "3aeaaa088d37b86cff036eee1a9bf452abad7d9d",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Pinned ANGLE Metal build dependency: third_party/spirv-tools/src",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.11.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-third_party-vulkan_memory_allocator",
+      "repository": "https://chromium.googlesource.com/external/github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator",
+      "path": "src/external/android-angle-deps/third_party-vulkan_memory_allocator",
+      "revision": "cb0597213b0fcb999caa9ed08c2f88dc45eb7d50",
+      "licensePaths": [
+        "LICENSE.txt"
+      ],
+      "usage": "Pinned ANGLE build dependency: third_party/vulkan_memory_allocator",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.15.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-third_party-vulkan-headers-src",
+      "repository": "https://chromium.googlesource.com/external/github.com/KhronosGroup/Vulkan-Headers",
+      "path": "src/external/android-angle-deps/third_party-vulkan-headers-src",
+      "revision": "37057b4756df4009ad85803bd2e06ec8a3bb1bca",
+      "licensePaths": [
+        "LICENSE.md",
+        "LICENSES"
+      ],
+      "usage": "Pinned ANGLE build dependency: third_party/vulkan-headers/src",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.14.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-third_party-vulkan-loader-src",
+      "repository": "https://chromium.googlesource.com/external/github.com/KhronosGroup/Vulkan-Loader",
+      "path": "src/external/android-angle-deps/third_party-vulkan-loader-src",
+      "revision": "f2389e27734347c1d9f40e03be53f69f969976b1",
+      "licensePaths": [
+        "LICENSE.txt"
+      ],
+      "usage": "Pinned ANGLE build dependency: third_party/vulkan-loader/src",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.16.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-third_party-zlib",
+      "repository": "https://chromium.googlesource.com/chromium/src/third_party/zlib",
+      "path": "src/external/android-angle-deps/third_party-zlib",
+      "revision": "363a126ed293970f3df97ee5f760cba29a29e193",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Pinned ANGLE Metal build dependency: third_party/zlib",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.1.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-tools-clang",
+      "repository": "https://chromium.googlesource.com/chromium/src/tools/clang",
+      "path": "src/external/android-angle-deps/tools-clang",
+      "revision": "094a12c2b1338e4af17d3ebfae8c7206228a3630",
+      "licensePaths": [
+        "scripts/update.py"
+      ],
+      "usage": "Pinned ANGLE Metal build dependency: tools/clang",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-source.json",
+          "property": "dependencies.10.commit"
+        }
+      ]
+    },
+    {
+      "id": "android-angle-flip-reference",
+      "repository": "https://chromium.googlesource.com/angle/angle",
+      "path": "src/external/android-angle-flip-reference",
+      "revision": "37c976ffba9d2940add977cad9945b23de14c150",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Reference for Metal framebuffer origin handling in the existing Android ANGLE adaptation.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/angle-flip-source.json",
+          "property": "revision"
+        }
+      ],
+      "referenceOnly": true
+    },
+    {
+      "id": "android-gles-headers",
+      "repository": "https://github.com/krkrz/angle.git",
+      "path": "src/external/android-gles-headers",
+      "revision": "f82b1b4dc548dc8325ec83c11cd2363f3656a894",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "EGL/GLES headers and GL registry used by Android JNI and ARM32 declarations.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/gles-headers.json",
+          "property": "revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "glesHeaders"
+        }
+      ]
+    },
+    {
+      "id": "aosp-aidl",
+      "repository": "https://android.googlesource.com/platform/system/tools/aidl",
+      "path": "src/external/aosp-aidl",
+      "revision": "5bde6fcffe8e3ac6feca449f7bc3502eed5fc0f5",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "11.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-apache-http",
+      "repository": "https://android.googlesource.com/platform/external/apache-http",
+      "path": "src/external/aosp-apache-http",
+      "revision": "4c955170a0e8eafbb61bfe440c365a7539e84e4c",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospApacheHttp"
+        }
+      ]
+    },
+    {
+      "id": "aosp-apex",
+      "repository": "https://android.googlesource.com/platform/system/apex",
+      "path": "src/external/aosp-apex",
+      "revision": "9921a73777f97def1d8851dd0a1529f1c45bcc72",
+      "licensePaths": [
+        "apexer/apexer.py",
+        "apexd/apexservice.cpp"
+      ],
+      "usage": "Original APEX packaging and package service with expanded-directory storage hooks",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "7.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-art",
+      "repository": "https://android.googlesource.com/platform/art",
+      "path": "src/external/aosp-art",
+      "revision": "ed6c006bd06ae060bd9698fd2cb25c4865512ec3",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Original libcore Memory native implementation unit adapted to the existing JDK object owner; no second Java virtual machine.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospArt"
+        }
+      ]
+    },
+    {
+      "id": "aosp-av",
+      "repository": "https://android.googlesource.com/platform/frameworks/av",
+      "path": "src/external/aosp-av",
+      "revision": "22fd1c5d895e45a49df5582a4b345d8e3b75e46b",
+      "licensePaths": [
+        "media/module/foundation/NOTICE"
+      ],
+      "usage": "Complete original Android media libraries and services from their Soong products; typed Mac audio/video devices retain original framework object and service ownership.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospAv"
+        }
+      ]
+    },
+    {
+      "id": "aosp-bionic",
+      "repository": "https://android.googlesource.com/platform/bionic",
+      "path": "src/external/aosp-bionic",
+      "revision": "09a271af557444c9a6b3f3146d6d474156fd6cdb",
+      "licensePaths": [
+        "libc/NOTICE"
+      ],
+      "usage": "Binder protocol structures and Linux ABI headers; complete guest DSO finalization and atfork ownership with Darwin device boundaries. No replacement of macOS libc.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospBionic"
+        }
+      ]
+    },
+    {
+      "id": "aosp-boringssl",
+      "repository": "https://android.googlesource.com/platform/external/boringssl",
+      "path": "src/external/aosp-boringssl",
+      "revision": "ecc1358826150d6a1851c517c325b0e6c0e1b8be",
+      "licensePaths": [
+        "LICENSE",
+        "NOTICE"
+      ],
+      "usage": "Original crypto and SSL production targets used by the matching Android Conscrypt provider.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospBoringSSL"
+        }
+      ]
+    },
+    {
+      "id": "aosp-build",
+      "repository": "https://android.googlesource.com/platform/build",
+      "path": "src/external/aosp-build",
+      "revision": "874fa586c48ae230ebfcff0df1b9c1b004fa8f7c",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "12.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-build-release",
+      "repository": "https://android.googlesource.com/platform/build/release",
+      "path": "src/external/aosp-build-release",
+      "revision": "5da94f17b7a143d754a3b250c08bff210d3b046b",
+      "licensePaths": [
+        "Android.bp"
+      ],
+      "licenseStatus": "Original source header or build license declaration",
+      "usage": "Original Android build tools and configuration inputs; runtime implementations retain their existing providers.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "13.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-compiler-rt",
+      "repository": "https://android.googlesource.com/platform/external/compiler-rt",
+      "path": "src/external/aosp-compiler-rt",
+      "revision": "9f188da05921b58660238d25bea57d7cf4977602",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospCompilerRt"
+        }
+      ]
+    },
+    {
+      "id": "aosp-conscrypt",
+      "repository": "https://android.googlesource.com/platform/external/conscrypt",
+      "path": "src/external/aosp-conscrypt",
+      "revision": "156a72a6cf2c27ff27ca526942258af8ae6b13fd",
+      "licensePaths": [
+        "LICENSE",
+        "NOTICE"
+      ],
+      "usage": "Complete Android Conscrypt native provider and original CA catalog, retaining Android network-security policy.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospConscrypt"
+        }
+      ]
+    },
+    {
+      "id": "aosp-fmt",
+      "repository": "https://android.googlesource.com/platform/external/fmtlib",
+      "path": "src/external/aosp-fmt",
+      "revision": "b94c6ae0bc963c4f38bce355fe74bec30eaf0be2",
+      "licensePaths": [
+        "LICENSE",
+        "NOTICE"
+      ],
+      "usage": "Header dependency of Android libbase result types; no separate binary payload.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospFmt"
+        }
+      ]
+    },
+    {
+      "id": "aosp-framework",
+      "repository": "https://android.googlesource.com/platform/frameworks/base",
+      "path": "src/external/aosp-framework",
+      "revision": "4e43ad12e1b211f15152e9c5b16b0fe88e6b93f3",
+      "licensePaths": [
+        "core/java/android/content/UriMatcher.java",
+        "data/fonts/NOTICE"
+      ],
+      "usage": "Android framework API adaptations",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospFramework"
+        }
+      ]
+    },
+    {
+      "id": "aosp-framework-java",
+      "repository": "https://android.googlesource.com/platform/frameworks/base",
+      "path": "src/external/aosp-framework-java",
+      "revision": "99b01a65cc4c104933788b3143285ab6bae65827",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "16.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-google-fonts-carrois-gothic-sc",
+      "repository": "https://android.googlesource.com/platform/external/google-fonts/carrois-gothic-sc",
+      "path": "src/external/aosp-google-fonts-carrois-gothic-sc",
+      "revision": "317d5aad96dac8c1c6ac70fe7f1f77aa0a0bc178",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Original Android font data consumed by the platform font configuration and fallback system.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospCarroisGothicScFonts"
+        }
+      ]
+    },
+    {
+      "id": "aosp-google-fonts-coming-soon",
+      "repository": "https://android.googlesource.com/platform/external/google-fonts/coming-soon",
+      "path": "src/external/aosp-google-fonts-coming-soon",
+      "revision": "e72d9ee22b601fd4e4ae56adc3b74a3d455364e3",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Original Android font data consumed by the platform font configuration and fallback system.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospComingSoonFonts"
+        }
+      ]
+    },
+    {
+      "id": "aosp-google-fonts-cutive-mono",
+      "repository": "https://android.googlesource.com/platform/external/google-fonts/cutive-mono",
+      "path": "src/external/aosp-google-fonts-cutive-mono",
+      "revision": "f9e9dbc9604e91245765ba59c405712f618ac9bd",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Original Android font data consumed by the platform font configuration and fallback system.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospCutiveMonoFonts"
+        }
+      ]
+    },
+    {
+      "id": "aosp-google-fonts-dancing-script",
+      "repository": "https://android.googlesource.com/platform/external/google-fonts/dancing-script",
+      "path": "src/external/aosp-google-fonts-dancing-script",
+      "revision": "56d6ed7d67ef97d12eae22d95aea33aab2270e1d",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Original Android font data consumed by the platform font configuration and fallback system.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospDancingScriptFonts"
+        }
+      ]
+    },
+    {
+      "id": "aosp-google-fonts-source-sans-pro",
+      "repository": "https://android.googlesource.com/platform/external/google-fonts/source-sans-pro",
+      "path": "src/external/aosp-google-fonts-source-sans-pro",
+      "revision": "ea777a6c3d98a14c34605c56e1cf36251fd8040b",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Original Android font data consumed by the platform font configuration and fallback system.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospSourceSansProFonts"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hardware-interfaces",
+      "repository": "https://android.googlesource.com/platform/hardware/interfaces",
+      "path": "src/external/aosp-hardware-interfaces",
+      "revision": "5688f7eb1e117ed26e642a695de300b7683acb87",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Original Android build tools and configuration inputs; runtime implementations retain their existing providers.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "5.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-incremental-delivery",
+      "repository": "https://android.googlesource.com/platform/system/incremental_delivery",
+      "path": "src/external/aosp-incremental-delivery",
+      "revision": "c999e3e207ec7633a172d773dda162746b6eaf18",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/ndk-graphics/sources.json",
+          "property": "1.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-keymaster",
+      "repository": "https://android.googlesource.com/platform/system/keymaster",
+      "path": "src/external/aosp-keymaster",
+      "revision": "1d26bd0ab27ccf3ed1af84e6514026ea4167bf3f",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "1.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-libbase",
+      "repository": "https://android.googlesource.com/platform/system/libbase",
+      "path": "src/external/aosp-libbase",
+      "revision": "0ac7ea4a65d981166d6e5617e1e4ef0572f774e5",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Unmodified Android native result and expected headers for the publisher input ABI.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospLibbase"
+        }
+      ]
+    },
+    {
+      "id": "aosp-libcppbor",
+      "repository": "https://android.googlesource.com/platform/system/libcppbor",
+      "path": "src/external/aosp-libcppbor",
+      "revision": "a1cda453ee51c4bbf20b30c6cf00796c983d23ce",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "2.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-libhardware",
+      "repository": "https://android.googlesource.com/platform/hardware/libhardware",
+      "path": "src/external/aosp-libhardware",
+      "revision": "cd2b68d71a1dd9a45668ddd9a507000ccd7ff114",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "3.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-libnativehelper",
+      "repository": "https://android.googlesource.com/platform/libnativehelper",
+      "path": "src/external/aosp-libnativehelper",
+      "revision": "5c36ece5ac42b20f0e384d9e57400f2f22aad9fb",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Complete upstream JNI helper headers for original Binder and Parcel native implementations.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospLibnativehelper"
+        }
+      ]
+    },
+    {
+      "id": "aosp-libziparchive",
+      "repository": "https://android.googlesource.com/platform/system/libziparchive",
+      "path": "src/external/aosp-libziparchive",
+      "revision": "8c51527debf9394dfa515f7e6c7941d2720c6d01",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/ndk-graphics/sources.json",
+          "property": "2.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-logging",
+      "repository": "https://android.googlesource.com/platform/system/logging",
+      "path": "src/external/aosp-logging",
+      "revision": "d78b713380007d3c0dde14712cbcbec27f491ad9",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "4.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-native",
+      "repository": "https://android.googlesource.com/platform/frameworks/native",
+      "path": "src/external/aosp-native",
+      "revision": "2827a4a16b0340ecd07c2d5a6c89991799b362bb",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Native input keyboard map declarations and complete portable Binder RPC SDK source groups.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospNative"
+        }
+      ]
+    },
+    {
+      "id": "aosp-noto-fonts",
+      "repository": "https://android.googlesource.com/platform/external/noto-fonts",
+      "path": "src/external/aosp-noto-fonts",
+      "revision": "f1fe27f9777986e0f5973b4e6dda8be9dae49a95",
+      "licensePaths": [
+        "emoji-compat/LICENSE_OFL",
+        "emoji-compat/LICENSE_UNICODE",
+        "notonaskharabic/NOTICE",
+        "notonaskharabicui/NOTICE",
+        "notosansadlam/NOTICE",
+        "notosansanatolianhieroglyphs/NOTICE",
+        "notosansarmenian/NOTICE",
+        "notosansavestan/NOTICE",
+        "notosansbalinese/NOTICE",
+        "notosansbamum/NOTICE",
+        "notosansbassavah/NOTICE",
+        "notosansbatak/NOTICE",
+        "notosansbengali/NOTICE",
+        "notosansbengaliui/NOTICE",
+        "notosansbhaiksuki/NOTICE",
+        "notosansbrahmi/NOTICE",
+        "notosansbuginese/NOTICE",
+        "notosansbuhid/NOTICE",
+        "notosanscanadianaboriginal/NOTICE",
+        "notosanscarian/NOTICE",
+        "notosanschakma/NOTICE",
+        "notosanscham/NOTICE",
+        "notosanscherokee/NOTICE",
+        "notosanscjk/NOTICE",
+        "notosanscoptic/NOTICE",
+        "notosanscuneiform/NOTICE",
+        "notosanscypriot/NOTICE",
+        "notosansdeseret/NOTICE",
+        "notosansdevanagari/NOTICE",
+        "notosansdevanagariui/NOTICE",
+        "notosansegyptianhieroglyphs/NOTICE",
+        "notosanselbasan/NOTICE",
+        "notosansethiopic/NOTICE",
+        "notosansgeorgian/NOTICE",
+        "notosansglagolitic/NOTICE",
+        "notosansgothic/NOTICE",
+        "notosansgrantha/NOTICE",
+        "notosansgujarati/NOTICE",
+        "notosansgujaratiui/NOTICE",
+        "notosansgunjalagondi/NOTICE",
+        "notosansgurmukhi/NOTICE",
+        "notosansgurmukhiui/NOTICE",
+        "notosanshanifirohingya/NOTICE",
+        "notosanshanunoo/NOTICE",
+        "notosanshatran/NOTICE",
+        "notosanshebrew/NOTICE",
+        "notosansimperialaramaic/NOTICE",
+        "notosansinscriptionalpahlavi/NOTICE",
+        "notosansinscriptionalparthian/NOTICE",
+        "notosansjavanese/NOTICE",
+        "notosanskaithi/NOTICE",
+        "notosanskannada/NOTICE",
+        "notosanskannadaui/NOTICE",
+        "notosanskayahli/NOTICE",
+        "notosanskharoshthi/NOTICE",
+        "notosanskhmer/NOTICE",
+        "notosanskhmerui/NOTICE",
+        "notosanskhojki/NOTICE",
+        "notosanslao/NOTICE",
+        "notosanslaoui/NOTICE",
+        "notosanslepcha/NOTICE",
+        "notosanslimbu/NOTICE",
+        "notosanslineara/NOTICE",
+        "notosanslinearb/NOTICE",
+        "notosanslisu/NOTICE",
+        "notosanslycian/NOTICE",
+        "notosanslydian/NOTICE",
+        "notosansmalayalam/NOTICE",
+        "notosansmalayalamui/NOTICE",
+        "notosansmandaic/NOTICE",
+        "notosansmanichaean/NOTICE",
+        "notosansmarchen/NOTICE",
+        "notosansmasaramgondi/NOTICE",
+        "notosansmedefaidrin/NOTICE",
+        "notosansmeeteimayek/NOTICE",
+        "notosansmeroitic/NOTICE",
+        "notosansmiao/NOTICE",
+        "notosansmodi/NOTICE",
+        "notosansmongolian/NOTICE",
+        "notosansmro/NOTICE",
+        "notosansmultani/NOTICE",
+        "notosansmyanmar/NOTICE",
+        "notosansmyanmarui/NOTICE",
+        "notosansnabataean/NOTICE",
+        "notosansnewa/NOTICE",
+        "notosansnewtailue/NOTICE",
+        "notosansnko_todelist/NOTICE",
+        "notosansogham/NOTICE",
+        "notosansolchiki/NOTICE",
+        "notosansolditalic/NOTICE",
+        "notosansoldnortharabian/NOTICE",
+        "notosansoldpermic/NOTICE",
+        "notosansoldpersian/NOTICE",
+        "notosansoldsoutharabian/NOTICE",
+        "notosansoldturkic/NOTICE",
+        "notosansoriya/NOTICE",
+        "notosansoriyaui/NOTICE",
+        "notosansosage/NOTICE",
+        "notosansosmanya/NOTICE",
+        "notosanspahawhhmong/NOTICE",
+        "notosanspalmyrene/NOTICE",
+        "notosanspaucinhau/NOTICE",
+        "notosansphagspa/NOTICE",
+        "notosansphoenician/NOTICE",
+        "notosansrejang/NOTICE",
+        "notosansrunic/NOTICE",
+        "notosanssamaritan/NOTICE",
+        "notosanssaurashtra/NOTICE",
+        "notosanssharada/NOTICE",
+        "notosansshavian/NOTICE",
+        "notosanssinhala/NOTICE",
+        "notosanssinhalaui/NOTICE",
+        "notosanssorasompeng/NOTICE",
+        "notosanssoyombo/NOTICE",
+        "notosanssundanese/NOTICE",
+        "notosanssylotinagri/NOTICE",
+        "notosanssymbols/NOTICE",
+        "notosanssyriac/NOTICE",
+        "notosanstagalog/NOTICE",
+        "notosanstagbanwa/NOTICE",
+        "notosanstaile/NOTICE",
+        "notosanstaitham/NOTICE",
+        "notosanstaiviet/NOTICE",
+        "notosanstakri/NOTICE",
+        "notosanstamil/NOTICE",
+        "notosanstamilui/NOTICE",
+        "notosanstelugu/NOTICE",
+        "notosansteluguui/NOTICE",
+        "notosansthaana/NOTICE",
+        "notosansthai/NOTICE",
+        "notosansthaiui/NOTICE",
+        "notosanstifinagh/NOTICE",
+        "notosansugaritic/NOTICE",
+        "notosansvai/NOTICE",
+        "notosanswancho/NOTICE",
+        "notosanswarangciti/NOTICE",
+        "notosansyi/NOTICE",
+        "notoserif/NOTICE",
+        "notoserifahom/NOTICE",
+        "notoserifarmenian/NOTICE",
+        "notoserifbengali/NOTICE",
+        "notoserifcjk/NOTICE",
+        "notoserifdevanagari/NOTICE",
+        "notoserifdogra/NOTICE",
+        "notoserifethiopic/NOTICE",
+        "notoserifgeorgian/NOTICE",
+        "notoserifgujarati/NOTICE",
+        "notoserifgurmukhi/NOTICE",
+        "notoserifhebrew/NOTICE",
+        "notoserifhentaigana/NOTICE",
+        "notoserifkannada/NOTICE",
+        "notoserifkhmer/NOTICE",
+        "notoseriflao/NOTICE",
+        "notoserifmalayalam/NOTICE",
+        "notoserifmyanmar/NOTICE",
+        "notoserifnyiakengpuachuehmong/NOTICE",
+        "notoserifsinhala/NOTICE",
+        "notoseriftamil/NOTICE",
+        "notoseriftelugu/NOTICE",
+        "notoserifthai/NOTICE",
+        "notoseriftibetan/NOTICE",
+        "notoserifyezidi/NOTICE"
+      ],
+      "usage": "Original Android font data consumed by the platform font configuration and fallback system.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospNotoFonts"
+        }
+      ]
+    },
+    {
+      "id": "aosp-roboto-flex-fonts",
+      "repository": "https://android.googlesource.com/platform/external/roboto-flex-fonts",
+      "path": "src/external/aosp-roboto-flex-fonts",
+      "revision": "e9deeba80f18a1348a113f8ce954f0e5248fabde",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Original Android font data consumed by the platform font configuration and fallback system.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospRobotoFlexFonts"
+        }
+      ]
+    },
+    {
+      "id": "aosp-roboto-fonts",
+      "repository": "https://android.googlesource.com/platform/external/roboto-fonts",
+      "path": "src/external/aosp-roboto-fonts",
+      "revision": "c50938f329a44707b06b336166c95ec2aa49c331",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Original Android font data consumed by the platform font configuration and fallback system.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospRobotoFonts"
+        }
+      ]
+    },
+    {
+      "id": "aosp-rust-crates",
+      "repository": "https://android.googlesource.com/platform/external/rust/android-crates-io",
+      "path": "src/external/aosp-rust-crates",
+      "revision": "c991cad10330f37e93d82926bd6dae7f4f6647f6",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "14.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-rust-cxx",
+      "repository": "https://android.googlesource.com/platform/external/rust/cxx",
+      "path": "src/external/aosp-rust-cxx",
+      "revision": "686b428d8a630aecfd8328389cd8e6ef304e6f72",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "15.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-rustutils",
+      "repository": "https://android.googlesource.com/platform/system/librustutils",
+      "path": "src/external/aosp-rustutils",
+      "revision": "1110a8083ad83dc1b77c1cd03d39665555a34521",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "8.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-security",
+      "repository": "https://android.googlesource.com/platform/system/security",
+      "path": "src/external/aosp-security",
+      "revision": "ce2aa0ef49158d0d45fb133fd42ab1deff210f8c",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "0.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-selinux",
+      "repository": "https://android.googlesource.com/platform/external/selinux",
+      "path": "src/external/aosp-selinux",
+      "revision": "89fe589e4b91ea164f01788724d7e3dd73949a44",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "9.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-sepolicy",
+      "repository": "https://android.googlesource.com/platform/system/sepolicy",
+      "path": "src/external/aosp-sepolicy",
+      "revision": "d4a7f392598cee96d9479a8ac0f84259c19b043a",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "10.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-skia",
+      "repository": "https://android.googlesource.com/platform/external/skia",
+      "path": "src/external/aosp-skia",
+      "revision": "bcb0f77c44783b1800ba37641ba7ecab04f05e07",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/ndk-graphics/sources.json",
+          "property": "0.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-statsd",
+      "repository": "https://android.googlesource.com/platform/packages/modules/StatsD",
+      "path": "src/external/aosp-statsd",
+      "revision": "8022cc37e35d424fb0eab65f79cd272759b5dc54",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospStatsd"
+        }
+      ]
+    },
+    {
+      "id": "aosp-system-core",
+      "repository": "https://android.googlesource.com/platform/system/core",
+      "path": "src/external/aosp-system-core",
+      "revision": "68be0c2c0006a0740d0b1809abe4717308f90d15",
+      "licensePaths": [
+        "libutils/NOTICE",
+        "libcutils/NOTICE"
+      ],
+      "usage": "Upstream libutils and native-handle ownership for the Android Binder and Parcel runtime.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospSystemCore"
+        }
+      ]
+    },
+    {
+      "id": "aosp-system-hardware",
+      "repository": "https://android.googlesource.com/platform/system/hardware/interfaces",
+      "path": "src/external/aosp-system-hardware",
+      "revision": "f3d42be8ff32eb4ff00873bf2762d13c013d314a",
+      "licensePaths": [
+        "suspend/1.0/default/SystemSuspend.cpp"
+      ],
+      "usage": "Original system suspend interfaces and service implementation with Mac device hooks",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/keystore/sources.json",
+          "property": "6.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-wilhelm",
+      "repository": "https://android.googlesource.com/platform/frameworks/wilhelm",
+      "path": "src/external/aosp-wilhelm",
+      "revision": "1bd6fdb6d12498f8433fcad4db7a3e5836c7ec5e",
+      "licensePaths": [
+        "src/OpenSLES_IID.cpp",
+        "src/sl_iid.cpp"
+      ],
+      "usage": "Complete original OpenSL interface identifiers connected to the shared native audio owner.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospWilhelm"
+        }
+      ]
+    },
+    {
+      "id": "aosp-xmlpull",
+      "repository": "https://android.googlesource.com/platform/libcore",
+      "path": "src/external/aosp-xmlpull",
+      "revision": "a996d969fdd17c6707b84544e5d1c35e0c25b5cb",
+      "licensePaths": [
+        "xml/src/main/java/org/xmlpull/v1/XmlPullParser.java",
+        "NOTICE"
+      ],
+      "usage": "Original XMLPull interfaces and complete libcore Memory native implementation, sharing JDK buffers and descriptors.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospXmlPull"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "aospLibcore"
+        }
+      ]
+    },
+    {
+      "id": "dex2jvm",
+      "repository": "https://github.com/kksimp/dex2jvm",
+      "path": "src/external/dex2jvm",
+      "revision": "4c666fdc49fee8f61166fa943980e92a1368a15f",
+      "licensePaths": [
+        "LICENSE",
+        "NOTICE"
+      ],
+      "usage": "DEX converter with module-owned native-loading redirects and metadata export",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "dex2jvm"
+        }
+      ]
+    },
+    {
+      "id": "dynarmic",
+      "repository": "https://github.com/lioncash/dynarmic",
+      "path": "src/external/dynarmic",
+      "revision": "a41c380246d3d9f9874f0f792d234dc0cc17c180",
+      "licensePaths": [
+        "LICENSE.txt"
+      ],
+      "usage": "ARM32 CPU execution component; JNI32 and application ABI integration remain separate from the shared Android framework and device owners.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/arm32/source.json",
+          "property": "revision"
+        }
+      ]
+    },
+    {
+      "id": "epoll-shim",
+      "repository": "https://github.com/jiixyj/epoll-shim.git",
+      "path": "src/external/epoll-shim",
+      "revision": "18159584bb3d17e601b9315a7398ace018251bdc",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "epollShim"
+        }
+      ]
+    },
+    {
+      "id": "klepton",
+      "repository": "https://github.com/shinyquagsire23/Klepton",
+      "path": "src/external/klepton",
+      "revision": "ce74582cb1e434db210014dbcd0ca0aad0e46ba2",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Native Android services linked into the module-owned Java host",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "klepton"
+        }
+      ]
+    },
+    {
+      "id": "libffi",
+      "repository": "https://github.com/libffi/libffi.git",
+      "path": "src/external/libffi",
+      "revision": "bc553867367246d140cd156f060bd0409f57f157",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/art/supplier.json",
+          "property": "sources.libffi.commit"
+        }
+      ]
+    },
+    {
+      "id": "libinotify-kqueue",
+      "repository": "https://github.com/libinotify-kqueue/libinotify-kqueue.git",
+      "path": "src/external/libinotify-kqueue",
+      "revision": "cc614f659a6a8ca3529328fe278bfc303c35cd5c",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Android runtime build source.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "libinotifyKqueue"
+        }
+      ]
+    },
+    {
+      "id": "libvpx",
+      "repository": "https://github.com/webmproject/libvpx",
+      "path": "src/external/libvpx",
+      "revision": "6df3ec34557879fff673706f4a1d9fbd0f3a6f0e",
+      "licensePaths": [
+        "LICENSE",
+        "PATENTS"
+      ],
+      "usage": "Software VP8 and VP9 decoders beneath the original Android MediaCodec APIs.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/media-foundation/vpx-source.json",
+          "property": "revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "libvpx"
+        }
+      ]
+    },
+    {
+      "id": "ninja",
+      "repository": "https://github.com/ninja-build/ninja",
+      "path": "src/external/ninja",
+      "revision": "2daa09ba270b0a43e1929d29b073348aa985dfaa",
+      "licensePaths": [
+        "COPYING"
+      ],
+      "usage": "Original Ninja parser for complete Android build input discovery.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/source-pins.json",
+          "property": "ninja"
+        }
+      ]
+    },
+    {
+      "id": "robolectric",
+      "repository": "https://github.com/robolectric/robolectric",
+      "path": "src/external/robolectric",
+      "revision": "83b71974f00edaef78b72e212d60168b4bc4a70a",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "JVM portability call adapters for the AOSP Java framework",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/notices/robolectric-portability/source.json",
+          "property": "commit"
+        }
+      ],
+      "referenceOnly": true
+    }
+  ]
+}

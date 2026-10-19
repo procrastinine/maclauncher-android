@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/krkrz/angle.git",
+  "revision": "f82b1b4dc548dc8325ec83c11cd2363f3656a894",
+  "directory": "src/external/android-gles-headers",
+  "license": "MIT AND SGI-B-2.0",
+  "files": [
+    {
+      "path": "include/EGL/egl.h",
+      "size": 20345,
+      "sha256": "ec4aa536d55b544202eadcb41b539056335edc624592106bd2b1835f8b0d6371"
+    },
+    {
+      "path": "include/EGL/eglext.h",
+      "size": 65912,
+      "sha256": "16309f81264723e87fd3aafe11e1c7e834900c98c48ac581bb990f5e2669712b"
+    },
+    {
+      "path": "include/EGL/eglplatform.h",
+      "size": 6053,
+      "sha256": "75eb1009b679ee17392edfeff36a64b7de77eecd0c3af635136fbc4258db8159"
+    },
+    {
+      "path": "include/GLES/gl.h",
+      "size": 44832,
+      "sha256": "79592c4d0c9fcd6af3470de8acece16c6d2bba43d14926d442cba1eb21bd18e7"
+    },
+    {
+      "path": "include/GLES/glext.h",
+      "size": 53493,
+      "sha256": "a0438894cd7b9b5e94e8ec5a61f431ba4931f724e6c0d2d143e28535616b1754"
+    },
+    {
+      "path": "include/GLES/glplatform.h",
+      "size": 1152,
+      "sha256": "857bf0685ecb0dddf692157ea9ef98c95e9f58b5ed0c41b26fd3fe51ed1a3624"
+    },
+    {
+      "path": "include/GLES2/gl2.h",
+      "size": 43972,
+      "sha256": "a098b3f77bbcbcbba9b8c6637a55fd65b46099b0410a58b91a9ff4d8ac1a1a7e"
+    },
+    {
+      "path": "include/GLES2/gl2ext.h",
+      "size": 217850,
+      "sha256": "8dbd6839a7c1b6d131f239f8f6f0f1aeccb6d01e9f3dd817fa02c65c7972c3a8"
+    },
+    {
+      "path": "include/GLES2/gl2platform.h",
+      "size": 909,
+      "sha256": "9fa1b645c46dee2ff091628f3804572403ba5e424785595d3d97068c3fdc7522"
+    },
+    {
+      "path": "include/GLES3/gl3.h",
+      "size": 82674,
+      "sha256": "f81abbba8bf5658b9cacbb5fcc53b3293cfa67d9922ad480b832bb2bfad38cc0"
+    },
+    {
+      "path": "include/GLES3/gl31.h",
+      "size": 107463,
+      "sha256": "7fb6d736b3e2a4036f279e654230f6cd04ddfb564f5505c39036316fe40c9e94"
+    },
+    {
+      "path": "include/GLES3/gl32.h",
+      "size": 128343,
+      "sha256": "a2cfd7d890f16f67665e01e6f514a7c75bfc702e50c8861a44d04536271fffd1"
+    },
+    {
+      "path": "include/GLES3/gl3platform.h",
+      "size": 909,
+      "sha256": "3eae5adc8ad2adef24c2a9fc5572a8ea73dc953fd519d3fe7d374cd7f7b9aba8"
+    },
+    {
+      "path": "include/KHR/khrplatform.h",
+      "size": 10037,
+      "sha256": "890c04e4cc75739666aa8ff989a0a37b7f11d9e0ec60bc362b40f91835d11b5c"
+    }
+  ],
+  "notices": {
+    "sgiLicenseUrl": "https://raw.githubusercontent.com/spdx/license-list-data/main/text/SGI-B-2.0.txt"
+  },
+  "registry": {
+    "path": "scripts/gl.xml",
+    "size": 2712864,
+    "sha256": "5b6953680d28d4c6e60259f79a2e9c91dae42a437e78fa27f5f6ad7bf6259797"
+  }
+}

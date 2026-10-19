@@ -1,0 +1,638 @@
+{
+  "schemaVersion": 1,
+  "framework": "framework-binary.json",
+  "policy": "Every AOSP class and method remains available. Owned adaptations replace only implemented native, service or exact JVM portability boundaries; all other upstream implementations remain unchanged. API preservation is verified in tests.",
+  "nativeBridges": [
+    {
+      "id": "aosp-activity-thread-allocator",
+      "reason": "Complete original ActivityThread JNI unit delegates idle allocation purging to Darwin malloc zones without releasing live objects. Optional Android zygote heap-profiler initialization retains the allocator's unavailable result in a standalone JVM.",
+      "nativeSources": [
+        "activity-thread/build.mjs",
+        "activity-thread/allocator.h"
+      ]
+    },
+    {
+      "id": "aosp-application-shared-memory",
+      "reason": "Original ApplicationSharedMemory and PropertyInvalidatedCache APIs use mapped Darwin shared storage, original nonce/name publication and kernel-enforced read-only descriptors. Local services share one writable JVM-lifetime root because original cache handlers retain native pointers.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostApplicationSharedMemory.java",
+        "java/maclauncher/android/framework/HostApplication.java"
+      ],
+      "nativeSources": [
+        "framework-appsharedmemory.c"
+      ]
+    },
+    {
+      "id": "android-network-host-policy",
+      "reason": "Original libcore DNS and the Java 21 resolver-provider boundary share a process-local advertising host policy with guest libc and WebKit. Permitted lookups retain the platform resolver; no SDK or framework clients are replaced.",
+      "javaSources": [
+        "java/maclauncher/android/net/HostNetworkPolicy.java",
+        "java/maclauncher/android/net/HostInetAddressResolverProvider.java"
+      ],
+      "nativeSources": [
+        "network-policy.c",
+        "network-resolver.c",
+        "native-resolver-imports.h",
+        "webview-ad-rules.h"
+      ]
+    },
+    {
+      "id": "android-java-cryptography",
+      "reason": "The original Android BouncyCastle provider is registered alongside existing JVM providers, retaining every supplied algorithm and the existing JVM provider order.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostCrypto.java",
+        "java/maclauncher/android/framework/JvmNativeMemory.java"
+      ]
+    },
+    {
+      "id": "macos-webkit-provider",
+      "reason": "Original WebViewFactory acquires the macOS WebKit provider at its private provider-class boundary. Original WebView APIs, provider caching, security checks and View lifecycle remain intact; browser images enter the existing Android Canvas presentation path.",
+      "normalizers": [
+        "framework/ServicePortability.java"
+      ],
+      "nativeSources": [
+        "webview.mm"
+      ]
+    },
+    {
+      "id": "aosp-statistics-host",
+      "reason": "The optional Android statsd collector uses all host methods supplied by the original StatsLog class. Public APIs, statistics encoding and pooled-buffer release retain their original implementations.",
+      "normalizers": [
+        "framework/ServicePortability.java"
+      ]
+    },
+    {
+      "id": "macos-power-and-local-alarms",
+      "reason": "Original PowerManager, BatteryManager and AlarmManager clients use app-owned logical wake locks, virtual Android battery/thermal state and the existing Android message queue. Android activity does not prevent Mac sleep or reset its idle timer. Original ActivityThread mainline module initialization retains upstream manager ownership.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostPowerService.java",
+        "java/maclauncher/android/framework/HostBatteryService.java",
+        "java/maclauncher/android/framework/HostAlarmService.java"
+      ],
+      "nativeSources": []
+    },
+    {
+      "id": "aosp-event-log-platform",
+      "reason": "Original EventLog and DebugStore native APIs use bounded process-local diagnostic records, original event decoding and real process identities.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostEventLog.java"
+      ],
+      "nativeSources": [
+        "framework-event-log.c"
+      ]
+    },
+    {
+      "id": "klepton-host",
+      "reason": "One Klepton native loader, private filesystem, audio, input, XR and graphics owner. Java declarations bind to these existing host libraries; no second Android backend or simulated native success.",
+      "javaSources": [
+        "java/maclauncher/android/media/AudioHost.java",
+        "java/maclauncher/android/media/HostAudioManager.java",
+        "java/maclauncher/android/media/HostAudioDevices.java",
+        "java/maclauncher/android/framework/HostConnectivityManager.java",
+        "java/maclauncher/android/bridge/Bridge.java",
+        "java/maclauncher/android/bridge/CanvasOverlay.java",
+        "java/maclauncher/android/bridge/Clock.java",
+        "java/maclauncher/android/bridge/FrameWakeup.java",
+        "java/maclauncher/android/bridge/Graphics.java",
+        "java/maclauncher/android/bridge/GuestNativeEntry.java",
+        "java/maclauncher/android/bridge/NativeBinding.java",
+        "java/maclauncher/android/bridge/NativeLocation.java",
+        "java/maclauncher/android/bridge/NativeSurface.java",
+        "java/maclauncher/android/bridge/NextGLES.java",
+        "java/maclauncher/android/bridge/WebLinks.java",
+        "java/maclauncher/android/bridge/WindowSession.java",
+        "java/maclauncher/android/media/MediaInputs.java",
+        "java/maclauncher/android/media/HostMediaPlayer.java",
+        "java/maclauncher/android/media/HostAudioTrack.java",
+        "java/maclauncher/android/media/HostAudioRoute.java",
+        "java/maclauncher/android/media/HostAudioSystem.java",
+        "java/maclauncher/android/media/HostMediaMetrics.java",
+        "java/maclauncher/android/media/HostAudioPortEventHandler.java",
+        "java/maclauncher/android/media/HostPlayer.java",
+        "java/maclauncher/android/media/HostMediaObjects.java",
+        "java/maclauncher/android/media/HostAudioRecord.java",
+        "java/maclauncher/android/media/HostCamera.java",
+        "java/maclauncher/android/media/HostSoundPool.java",
+        "java/maclauncher/android/media/HostAudioService.java",
+        "java/maclauncher/android/framework/HostAudioPolicy.java",
+        "java/maclauncher/android/framework/HostAppOps.java",
+        "java/maclauncher/android/framework/HostTrafficStats.java"
+      ],
+      "nativeSources": [
+        "audio-routes.mm",
+        "audio.m",
+        "audio-track.c",
+        "audio-pcm.c",
+        "audio-pcm.h",
+        "bridge.c",
+        "connectivity.c",
+        "eglbridge.c",
+        "file-observer.c",
+        "gles-next.c",
+        "loader-entry.c",
+        "media-inputs.mm",
+        "native-activity.c",
+        "native-clock/clock-bridge.c",
+        "native-clock/futex.c",
+        "native-egl.mm",
+        "composition-target.mm",
+        "native-heap.c",
+        "native-host.c",
+        "native-location.mm",
+        "native-methods.c",
+        "native-surface.mm",
+        "hardware-buffer.mm",
+        "hardware-buffer-overlay.c",
+        "java/maclauncher/android/framework/HostHardwareBuffer.java",
+        "nativebinding.c",
+        "parcel-fd.c",
+        "web-links.c",
+        "window-session.mm",
+        "audio-volume.c",
+        "audio-volume.h",
+        "audio-pause-overlay.c",
+        "scheduler.c"
+      ],
+      "buildSources": [
+        "framework/HostCallbacks.java",
+        "host-callbacks.tsv"
+      ]
+    },
+    {
+      "id": "aosp-native-framework",
+      "reason": "API-matched AOSP native graphics, resources and SQLite engines, actual JDK Cleaner/direct-memory accounting, Klepton-owned properties, and macOS filesystem calls. AOSP objects and state remain authoritative. Original NDK bitmap wrappers share that Bitmap owner; active native locks adapt macOS BGRA storage to the Android RGBA ABI.",
+      "javaSources": [
+        "java/maclauncher/android/framework/JvmNativeMemory.java",
+        "java/maclauncher/android/framework/HostFilesystem.java",
+        "java/maclauncher/android/framework/HostStorageService.java"
+      ],
+      "nativeSources": [
+        "framework-memory.c",
+        "framework-properties.c",
+        "framework-filesystem.c",
+        "ndk-graphics/bridge.cpp",
+        "ndk-graphics/pixel-layout.cpp"
+      ],
+      "artifact": "framework-binary.json#nativeRuntime",
+      "frameworkNativeClasses": [
+        "libcore.util.NativeAllocationRegistry",
+        "android.content.res.ApkAssets",
+        "android.content.res.AssetManager",
+        "android.content.res.StringBlock",
+        "android.content.res.XmlBlock",
+        "android.graphics.Bitmap",
+        "android.graphics.BitmapFactory",
+        "android.graphics.BitmapRegionDecoder",
+        "android.graphics.ByteBufferStreamAdaptor",
+        "android.graphics.Camera",
+        "android.graphics.Canvas",
+        "android.graphics.CanvasProperty",
+        "android.graphics.Color",
+        "android.graphics.ColorFilter",
+        "android.graphics.ColorSpace",
+        "android.graphics.CreateJavaOutputStreamAdaptor",
+        "android.graphics.DrawFilter",
+        "android.graphics.FontFamily",
+        "android.graphics.Gainmap",
+        "android.graphics.Graphics",
+        "android.graphics.HardwareRenderer",
+        "android.graphics.HardwareRendererObserver",
+        "android.graphics.ImageDecoder",
+        "android.graphics.Interpolator",
+        "android.graphics.MaskFilter",
+        "android.graphics.Matrix",
+        "android.graphics.NinePatch",
+        "android.graphics.Paint",
+        "android.graphics.Path",
+        "android.graphics.PathEffect",
+        "android.graphics.PathIterator",
+        "android.graphics.PathMeasure",
+        "android.graphics.Picture",
+        "android.graphics.RecordingCanvas",
+        "android.graphics.Region",
+        "android.graphics.RenderEffect",
+        "android.graphics.RenderNode",
+        "android.graphics.Shader",
+        "android.graphics.Typeface",
+        "android.graphics.YuvImage",
+        "android.graphics.animation.NativeInterpolatorFactory",
+        "android.graphics.animation.RenderNodeAnimator",
+        "android.graphics.drawable.AnimatedVectorDrawable",
+        "android.graphics.drawable.AnimatedImageDrawable",
+        "android.graphics.drawable.VectorDrawable",
+        "android.graphics.fonts.Font",
+        "android.graphics.fonts.FontFamily",
+        "android.graphics.text.LineBreaker",
+        "android.graphics.text.MeasuredText",
+        "android.graphics.text.TextRunShaper",
+        "android.util.PathParser",
+        "android.util.Log",
+        "android.database.CursorWindow",
+        "android.database.sqlite.SQLiteConnection",
+        "android.database.sqlite.SQLiteRawStatement",
+        "android.view.MotionEvent",
+        "android.view.KeyCharacterMap",
+        "android.view.InputDevice",
+        "android.view.VelocityTracker"
+      ],
+      "buildSources": [
+        "ndk-graphics/build.mjs",
+        "ndk-graphics/publisher-symbols.mjs",
+        "ndk-graphics/system-symbols.cpp"
+      ]
+    },
+    {
+      "id": "aosp-message-queue",
+      "reason": "Original AOSP messages, barriers and dispatch use the shared Klepton ALooper for real native polling and wakeups. The SDL owner adopts that queue; native descriptor ownership and optional disabled Perfetto categories remain explicit platform boundaries.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostLooper.java",
+        "java/maclauncher/android/framework/HostFileDescriptor.java"
+      ],
+      "nativeSources": [
+        "framework-message-queue.c",
+        "framework-tracing.c",
+        "looper-sources.mjs",
+        "scheduler.c",
+        "parcel-fd.c"
+      ],
+      "frameworkNativeClasses": [
+        "android.os.MessageQueue",
+        "android.os.PerfettoTrace",
+        "android.os.PerfettoTrace$Category",
+        "android.os.PerfettoTrackEventExtra"
+      ]
+    },
+    {
+      "id": "aosp-binder-parcel",
+      "reason": "Original native AOSP Binder and Parcel own bytes, Binder references, descriptors and RPC transport. Darwin adapters provide sockets, sealed private shared memory and exact JVM JNI calling conventions.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostObjectParcel.java",
+        "java/maclauncher/android/framework/HostBinderRpc.java",
+        "java/maclauncher/android/framework/HostServiceEndpoints.java",
+        "java/maclauncher/android/framework/HostServiceDirectory.java",
+        "java/maclauncher/android/framework/HostProcessServices.java",
+        "java/maclauncher/android/ProcessAuthority.java",
+        "java/maclauncher/android/ServiceHost.java",
+        "java/maclauncher/android/framework/HostRemoteServices.java"
+      ],
+      "nativeSources": [
+        "binder-rpc/build.mjs",
+        "binder-rpc/jni-sources.mjs",
+        "binder-rpc/motion-parcel.mjs",
+        "binder-rpc/keymap-parcel.mjs",
+        "binder-rpc/JniRuntime.cpp",
+        "binder-rpc/ObjectParcel.cpp",
+        "binder-rpc/ParcelTransport.cpp",
+        "binder-rpc/ParcelTransport.h",
+        "binder-rpc/shared-memory.cpp",
+        "binder-rpc/ashmem-codec.mjs",
+        "binder-rpc/ashmem-codec.rs",
+        "binder-rpc/ashmem-access.rs",
+        "binder-rpc/descriptor-capability.h",
+        "pollable-fds/readonly-description.inc",
+        "binder-rpc/OS_darwin.cpp",
+        "binder-rpc/rpc-sources.mjs",
+        "binder-rpc/rpc-identity.h",
+        "binder-rpc/RpcSessionBridge.cpp",
+        "binder-rpc/properties.cpp",
+        "supervisor-channel.c",
+        "binder-rpc/cursor-parcel.mjs"
+      ]
+    },
+    {
+      "id": "aosp-process-filesystem-policy",
+      "reason": "Original Android Process, clocks, libcore file operations and StrictMode retain their Java state; native calls use the current macOS process, Mach clocks, Klepton flag conversion and the private filesystem owner. ART transitional-GC hints have no HotSpot equivalent and remain advisory, with one bounded diagnostic; the JVM retains collection scheduling.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostStrictMode.java",
+        "java/maclauncher/android/framework/HostVmDebug.java",
+        "java/maclauncher/android/framework/HostIncrementalFilesystem.java",
+        "java/maclauncher/android/framework/HostMappedBuffer.java"
+      ],
+      "nativeSources": [
+        "framework-process.c",
+        "framework-filesystem.c"
+      ],
+      "frameworkNativeClasses": [
+        "android.os.Process",
+        "android.os.SystemClock",
+        "libcore.io.Linux",
+        "dalvik.system.VMRuntime",
+        "dalvik.system.VMDebug"
+      ]
+    },
+    {
+      "id": "platform-owner-lifetime",
+      "reason": "Reference-counted Mac platform objects retire through the original AOSP NativeAllocationRegistry.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostNativeHandle.java"
+      ],
+      "nativeSources": [
+        "framework-native-handle.c"
+      ]
+    },
+    {
+      "id": "input-platform",
+      "reason": "Original input event state uses the supplied native motion and keyboard engine; SDL ingress, local capability tokens and pointer images share the native window and handle owners.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostInput.java",
+        "java/maclauncher/android/framework/HostMotionEvent.java",
+        "java/maclauncher/android/framework/HostKeyCharacterMap.java",
+        "java/maclauncher/android/framework/HostInputTransferToken.java"
+      ],
+      "nativeSources": [
+        "framework/NativeBindings.java",
+        "resources/Virtual.kcm"
+      ]
+    },
+    {
+      "id": "upstream-egl-gles",
+      "reason": "Pinned complete AOSP graphics JNI adapters use ANGLE with JDK NIO storage and the existing native surface owner.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostGles.java"
+      ],
+      "nativeSources": [
+        "gles-framework-sources.mjs",
+        "framework-gles/nio.cpp",
+        "framework-gles/dispatch.cpp",
+        "framework-gles/dispatch.h",
+        "framework-gles/bitmap.h",
+        "framework-gles/window.h",
+        "framework-gles/array-storage.h",
+        "framework-gles/include/nativehelper/JNIHelp.h",
+        "framework-gles/include/nativehelper/JNIPlatformHelp.h",
+        "framework-gles/include/android_runtime/AndroidRuntime.h",
+        "framework-gles/include/utils/misc.h",
+        "framework-gles/include/GLES3/gl3ext.h"
+      ]
+    },
+    {
+      "id": "application-lifecycle-platform",
+      "reason": "Original Activity/Application/PhoneWindow/ViewRoot and job, broadcast and intent clients retain their complete API; process/window attachment and local services reuse native owners.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostActivity.java",
+        "java/maclauncher/android/framework/HostApplication.java",
+        "java/maclauncher/android/framework/HostWindowManager.java",
+        "java/maclauncher/android/framework/HostWindowService.java",
+        "java/maclauncher/android/framework/HostUiAccess.java",
+        "java/maclauncher/android/framework/HostActivityService.java",
+        "java/maclauncher/android/framework/HostPendingIntentDispatch.java",
+        "java/com/android/server/am/HostPendingIntentInjector.java",
+        "java/maclauncher/android/framework/HostJobScheduler.java",
+        "java/maclauncher/android/framework/HostNativeActivity.java",
+        "java/maclauncher/android/framework/HostInputQueue.java"
+      ],
+      "nativeSources": [
+        "framework/NativeBindings.java",
+        "framework/UiPortability.java",
+        "native-activity.c",
+        "framework-input-queue.c"
+      ]
+    },
+    {
+      "id": "surface-copy-platform",
+      "reason": "The complete upstream PixelCopy API uses its original callback adapters and bitmap operations; the native copy boundary reuses existing IOSurface capture and Canvas posted pixels.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostPixelCopy.java"
+      ],
+      "nativeSources": [
+        "pixel-copy.mm",
+        "pixel-copy.hpp"
+      ]
+    },
+    {
+      "id": "native-keyboard-map",
+      "reason": "Constructs the complete upstream native keyboard map with the publisher parser and pinned native ABI headers.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostInput.java"
+      ],
+      "nativeSources": [
+        "framework-keymap.cpp",
+        "keymap-sources.mjs"
+      ]
+    },
+    {
+      "id": "original-platform-providers",
+      "reason": "Original supplied manifests locate provider APKs for lazy ownership by the profile system process. Original SettingsProvider code retains its settings algorithms and receives each application's existing private random Android ID at the external identity-source call. Complete original MemoryIntArray JNI retains generation sharing through protected descriptors.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostPlatformPackages.java",
+        "java/maclauncher/android/framework/HostAndroidIdentity.java"
+      ],
+      "normalizers": [
+        "portability/PortableCalls.java"
+      ],
+      "nativeSources": [
+        "platform-packages.mjs",
+        "binder-rpc/jni-sources.mjs",
+        "binder-rpc/shared-memory.cpp"
+      ]
+    },
+    {
+      "id": "aosp-storage-boundaries",
+      "reason": "Original AOSP descriptor and filesystem algorithms use original JDK descriptors, private paths and one libinotify-kqueue owner. Exact JVM and guest POSIX operation boundaries supply Darwin open/access/close notifications without replacing filesystem or observer algorithms.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostFileObserver.java",
+        "java/maclauncher/android/framework/HostSequentialInput.java"
+      ],
+      "normalizers": [
+        "framework/DescriptorPortability.java",
+        "framework/FilesystemPortability.java",
+        "framework/NioPortability.java",
+        "framework/PortableCalls.java"
+      ],
+      "nativeSources": [
+        "file-events/build.mjs",
+        "file-events/darwin-config.h",
+        "file-events/operations.h",
+        "file-events/operations.c",
+        "file-events/imports.h",
+        "file-events/controller.inc",
+        "file-events/worker.inc",
+        "file-events/jdk.c",
+        "file-events/guest-sources.mjs"
+      ]
+    },
+    {
+      "id": "aosp-window-platform",
+      "reason": "Original AOSP window, view, display and input algorithms share the native presentation and input owners. SurfaceFlinger display-mode and frame-timeline requests remain advisory: macOS owns the physical display mode and CoreVideo supplies actual presentation timing.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostDisplay.java",
+        "java/maclauncher/android/framework/HostDisplayEvents.java",
+        "java/maclauncher/android/framework/HostInputManager.java",
+        "java/maclauncher/android/framework/HostInputMethodService.java",
+        "java/maclauncher/android/framework/HostSurface.java",
+        "java/maclauncher/android/framework/HostSurfaceControl.java",
+        "java/maclauncher/android/framework/HostSurfaceSession.java",
+        "java/maclauncher/android/framework/HostSensors.java"
+      ],
+      "nativeSources": [
+        "native-gamepad.c",
+        "native-gamepad.h"
+      ]
+    },
+    {
+      "id": "aosp-local-services",
+      "reason": "Original framework clients use application-local lifecycle, package, permission and service adapters.",
+      "javaSources": [
+        "java/maclauncher/android/framework/FrameworkResources.java",
+        "java/maclauncher/android/framework/HostActivityManager.java",
+        "java/maclauncher/android/framework/HostActivityTasks.java",
+        "java/maclauncher/android/framework/HostAsyncTasks.java",
+        "java/maclauncher/android/framework/HostBufferQueue.java",
+        "java/maclauncher/android/framework/HostClipboardService.java",
+        "java/maclauncher/android/framework/HostContentService.java",
+        "java/maclauncher/android/framework/HostContext.java",
+        "java/maclauncher/android/framework/HostLocalServices.java",
+        "java/maclauncher/android/framework/HostDexFiles.java",
+        "java/maclauncher/android/framework/HostIdentity.java",
+        "java/maclauncher/android/framework/HostNetworkValues.java",
+        "java/maclauncher/android/framework/HostNotificationChannels.java",
+        "java/maclauncher/android/framework/HostNotificationService.java",
+        "java/maclauncher/android/framework/HostPackages.java",
+        "java/maclauncher/android/framework/HostPermissions.java",
+        "java/maclauncher/android/framework/HostServices.java",
+        "java/maclauncher/android/framework/HostUiModeService.java",
+        "java/maclauncher/android/framework/HostUserService.java",
+        "java/maclauncher/android/framework/JvmCompoundEnumeration.java"
+      ]
+    },
+    {
+      "id": "surface-texture-platform",
+      "reason": "Original SurfaceTexture JNI owns bounded producer images and cross-context GPU fences on the shared IOSurface/ANGLE path.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostSurfaceTexture.java"
+      ],
+      "nativeSources": [
+        "surface-texture.mm",
+        "surface-texture.hpp",
+        "angle-metal.hpp"
+      ]
+    },
+    {
+      "id": "aosp-account-service",
+      "reason": "The original AccountManagerService owns account APIs, authenticator discovery, signing checks and private SQLite data. Host adapters provide lazy process lifetime and exact internal package-service calls over actual installed APK identities.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostAccounts.java",
+        "java/maclauncher/android/framework/HostAccountIdentity.java",
+        "java/maclauncher/android/AccountControl.java",
+        "java/com/android/server/accounts/HostAccountInjector.java",
+        "java/maclauncher/android/framework/HostServices.java",
+        "java/maclauncher/android/framework/HostPackages.java"
+      ],
+      "normalizers": [
+        "framework/ServicePortability.java"
+      ]
+    },
+    {
+      "id": "aosp-platform-compatibility-service",
+      "reason": "Original PlatformCompat and CompatConfig evaluate every generated compatibility definition supplied in the framework archive, including disabled defaults and target SDK thresholds. A process-owned context scopes local read/report permissions and receiver lifetime; original override permission checks remain intact.",
+      "javaSources": [
+        "java/com/android/server/compat/HostPlatformCompat.java",
+        "java/maclauncher/android/framework/HostContextServices.java"
+      ],
+      "normalizers": [
+        "framework/ServicePortability.java"
+      ]
+    },
+    {
+      "id": "google-provider-query-identity",
+      "reason": "An explicit Google integration policy exposes installed, cryptographically verified microG provider compatibility metadata in generated PackageInfo queries. Actual signing lineage, permission checks and account storage identity remain unchanged.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostGoogleProviders.java"
+      ]
+    },
+    {
+      "id": "aosp-native-media-format",
+      "reason": "Complete upstream media formats and portable metadata algorithms share original Binder/libutils storage. Original Java and NDK extractor APIs use one retained AVFoundation source/sample owner; Java and NDK codecs share one VideoToolbox session, buffer leases, callbacks and existing Surface consumers.",
+      "nativeSources": [
+        "media-format.c",
+        "media-format.h",
+        "media-foundation/MediaRuntime.cpp",
+        "media-data-source.c",
+        "media-data-source.h",
+        "media-data-loader.m",
+        "media-foundation/MediaExtractorOwner.h",
+        "media-foundation/MediaExtractorOwner.m",
+        "media-foundation/MediaExtractorJni.cpp",
+        "media-foundation/MediaExtractorNdk.cpp",
+        "media-foundation/MediaExtractorMetadata.cpp",
+        "media-surface.c",
+        "media-surface.h",
+        "media-reader-retain.c",
+        "media-reader-surface.c",
+        "video-pixels.hpp",
+        "video-pixels.mm",
+        "video-surface.mm",
+        "media-foundation/MediaCodecOwner.h",
+        "media-foundation/MediaCodecOwner.cpp",
+        "media-foundation/MediaCodecNdk.cpp",
+        "media-foundation/MediaCodecJni.cpp",
+        "media-foundation/MediaCodecStreams.cpp"
+      ],
+      "buildSources": [
+        "media-foundation/build.mjs",
+        "media-format-source.mjs",
+        "media-extractor-source.mjs",
+        "media-codec-source.mjs",
+        "video-decoder-source.mjs",
+        "media-symbol-sources.mjs"
+      ]
+    },
+    {
+      "id": "conscrypt-openjdk",
+      "reason": "Complete original Android Conscrypt JNI and BoringSSL crypto/TLS state. The original OpenJDK socket-descriptor boundary and strict hostname verifier bridge JDK internals; EC parameter metadata and Android environment paths preserve JDK object ownership. Original Android CA and application network-security policy retain actual certificate validation.",
+      "javaSources": [
+        "java/maclauncher/android/framework/HostCrypto.java",
+        "java/maclauncher/android/framework/HostEcParameters.java",
+        "java/maclauncher/android/framework/HostFrameworkLibraries.java"
+      ],
+      "nativeSources": [
+        "conscrypt/build.mjs"
+      ]
+    },
+    {
+      "id": "opensl-interface-identifiers",
+      "reason": "Original Khronos/AOSP UUID data and the complete published OpenSL interface-ID exports share the existing native audio implementation. An interface identifier does not claim its optional methods are implemented.",
+      "normalizers": [
+        "opensl-ids.mjs",
+        "media-symbol-sources.mjs"
+      ]
+    },
+    {
+      "id": "original-android-font-resources",
+      "reason": "Original SystemFonts and Typeface own configuration parsing, family state, variable axes and fallback ordering. Their original private directory getters resolve through the common installed filesystem namespace. Original Typeface serialization and SharedMemory publication populate the native font catalog and retain its mapping. The complete original SharedMemory JNI unit uses the existing Binder ashmem owner; exact direct-buffer construction and type checks use the shared JDK portability boundary. Original publisher Hyphenator consumes the full supplied pattern directory; only its private native resource-path configuration is set before initialization, without another Android-visible property store.",
+      "normalizers": [
+        "framework/FilesystemPortability.java"
+      ],
+      "javaSources": [
+        "java/maclauncher/android/framework/HostFilesystem.java",
+        "java/maclauncher/android/framework/JvmNativeMemory.java"
+      ],
+      "nativeSources": [
+        "framework-native-registration.c",
+        "binder-rpc/JniRuntime.cpp",
+        "binder-rpc/shared-memory.cpp"
+      ],
+      "buildSources": [
+        "fonts/build.mjs",
+        "fonts/sources.json",
+        "framework-native.mjs",
+        "binder-rpc/jni-sources.mjs"
+      ]
+    },
+    {
+      "id": "android-wide-stdio-abi",
+      "reason": "Complete original Bionic wide formatter and gdtoa retain Android AAPCS64 argument descriptors and binary128 arithmetic. The shared native FILE owner retains streams; an operation-scoped adapter supplies macOS locale conversion, output bounds and native errno. Compiler support follows original compiler-rt module declarations and actual compiled dependencies.",
+      "nativeSources": [
+        "wide-stdio/build.mjs",
+        "wide-stdio/bridge.c",
+        "wide-stdio/bridge.h"
+      ]
+    }
+  ],
+  "portability": {
+    "definition": "notices/robolectric-portability/source.json",
+    "normalizer": "framework/PortableCalls.java",
+    "scope": "Exact JVM/libcore call signatures are normalized across all framework classes; native method bodies and unmapped calls retain AOSP behavior.",
+    "pathNormalizer": "framework/FilesystemPortability.java"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "version": "16-robolectric-13921718",
+  "androidApi": 36,
+  "artifact": "org.robolectric:android-all:16-robolectric-13921718",
+  "url": "https://repo.maven.apache.org/maven2/org/robolectric/android-all/16-robolectric-13921718/android-all-16-robolectric-13921718.jar",
+  "license": "Apache-2.0",
+  "implementation": "Uninstrumented AOSP Java framework; no Robolectric shadows or SDK stubs",
+  "declarationSource": {
+    "url": "https://android.googlesource.com/platform/frameworks/base",
+    "revision": "99b01a65cc4c104933788b3143285ab6bae65827",
+    "release": "android-16.0.0_r1",
+    "role": "Original Java service declarations and release flags; native component donor revisions remain in source-pins.json"
+  },
+  "files": [
+    {
+      "path": "android-all-16-robolectric-13921718.jar",
+      "size": 196985634,
+      "sha256": "8b74a0a137330658d2f33f0dc715d42734f74ba8b2d7014fc2e95aa40d3f682d"
+    }
+  ],
+  "nativeRuntime": {
+    "archivePath": "native/mac/aarch64/libandroid_runtime.dylib",
+    "path": "libandroid_runtime.dylib",
+    "size": 18142784,
+    "sha256": "ad739c252c82fad64bca6a500e60b4c1fd8984f01f1a1d9bca4a5ebb2ba40de5",
+    "platform": "macOS arm64",
+    "minimumMacOS": "11.0",
+    "data": [
+      {
+        "archivePath": "icu/icudt76l.dat",
+        "path": "icudt76l.dat",
+        "size": 29094000,
+        "sha256": "c5450087565eb20ca37d70af5ef53a99a4c8e2e3da17c9140582b685f06d980f"
+      }
+    ],
+    "registrationCatalog": "Generated from the verified native artifact registration maps and remaining native declarations in the adapted framework; unmatched families remain registered"
+  }
+}

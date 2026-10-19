@@ -1,0 +1,103 @@
+{
+  "version": "29.0.14206865",
+  "release": "r29",
+  "artifact": "Android NDK unified public headers",
+  "url": "https://dl.google.com/android/repository/android-ndk-r29-linux.zip",
+  "archiveBytes": 783549481,
+  "selection": "toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include",
+  "files": 3671,
+  "bytes": 25560704,
+  "treeSha256": "289f86acaca303786009fc1c8ba2675a1b2223030050be1cef4bdfcc29899912",
+  "license": "Original component licenses retained in the NDK NOTICE and source headers",
+  "noticeSha256": "faf0dc52cf6ce9ab09a04b0c074a378dd2565ee1ed9bc1179d83793bcdba012e",
+  "sourcePropertiesSha256": "716f3518a923198cfab037abb32dc3f1b1f7e9a9dcdcda6b66be5906215d2658",
+  "centralDirectorySha256": "b2054f06a13ca8a163caffd00f7ec113ccd98118ea9acc31b95a467a37477487",
+  "compilerRuntime": {
+    "entry": "android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/21/lib/linux/libclang_rt.builtins-arm-android.a",
+    "file": "libclang_rt.builtins-arm-android.a",
+    "bytes": 228288,
+    "sha256": "9b9a580d98d7b653a4f0894bbb5a4a8bc176e649e094c78e3e19f1a09eaaa2c2",
+    "noticeEntry": "android-ndk-r29/NOTICE.toolchain",
+    "noticeSha256": "789714a9076571c580cf531bdcebec776a4d889c12c3c1108adafc6e4338710a"
+  },
+  "caseSensitiveHeaders": [
+    {
+      "path": "linux/netfilter/xt_rateest.h",
+      "sha256": "3a469f4c4d80b625d05a9535184a3d440707f143b9899d1073bca7ed862ad314"
+    },
+    {
+      "path": "linux/netfilter/xt_RATEEST.h",
+      "sha256": "42597cf72fab230776c05424eb4088a8974591d81a68d58744600a49a0778b85"
+    },
+    {
+      "path": "linux/netfilter/xt_dscp.h",
+      "sha256": "9ba152e950f1a5919c9102a39d06d8b5d5023d9b85116ffb6eb9bda1147de765"
+    },
+    {
+      "path": "linux/netfilter/xt_DSCP.h",
+      "sha256": "4f8afdf8c4620b48eef64d38a56f940811919b5eea29566fbe4926790f65fb82"
+    },
+    {
+      "path": "linux/netfilter/xt_MARK.h",
+      "sha256": "92a9c0b7f9ae486b9c5555ae3a61fa4f874494c4fe3765e575a318da2a4686b2"
+    },
+    {
+      "path": "linux/netfilter/xt_mark.h",
+      "sha256": "58a1fcf49ec095530d3abd89a30ab3a55553c0b497e041413fae916171db4b46"
+    },
+    {
+      "path": "linux/netfilter/xt_TCPMSS.h",
+      "sha256": "9813e67965aff707cc34523e4da538f6936521675440d114d05d745833175aaa"
+    },
+    {
+      "path": "linux/netfilter/xt_tcpmss.h",
+      "sha256": "2017b627c64340dcab485498aff5fcbfaaf672119ec272c8a1231b0d762b0340"
+    },
+    {
+      "path": "linux/netfilter/xt_connmark.h",
+      "sha256": "37b52b5cf98126973bbfff60c9c5defd94dbbff85833d574ac22997cc50197b0"
+    },
+    {
+      "path": "linux/netfilter/xt_CONNMARK.h",
+      "sha256": "fb12f9ad1781cc11c072342b5016a06be47ee97f4c42660d73775c754ae9d992"
+    },
+    {
+      "path": "linux/netfilter_ipv4/ipt_ECN.h",
+      "sha256": "e5cdeedd5d34eca6a4fefbb808eb1292ea34ae747e3bd0fe509d6ae9427e7a02"
+    },
+    {
+      "path": "linux/netfilter_ipv4/ipt_ecn.h",
+      "sha256": "957ce7a288e64e4b0262b4a0f83fcf9c51382542cd92859468c1954842275c9e"
+    },
+    {
+      "path": "linux/netfilter_ipv4/ipt_TTL.h",
+      "sha256": "6d72bcaab5adb3fcd638cceb553cfd233039ead4d96678151d416ea2d7526b37"
+    },
+    {
+      "path": "linux/netfilter_ipv4/ipt_ttl.h",
+      "sha256": "040009ec6aeb4d87f048934587a582c96f06f21d595f316594021e58325d3608"
+    },
+    {
+      "path": "linux/netfilter_ipv6/ip6t_hl.h",
+      "sha256": "565c9324bd417b545b2d749a230287104fb04f196c046844912df0ecdd5a2a90"
+    },
+    {
+      "path": "linux/netfilter_ipv6/ip6t_HL.h",
+      "sha256": "1f7161d6edfbdfe0a2da554f675eea18c6be3287b131ad2151b6c45da1b73c97"
+    }
+  ],
+  "linkLibraries": [
+    {
+      "file": "libandroid.so",
+      "entry": "android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/35/libandroid.so",
+      "bytes": 53096,
+      "sha256": "6bf17efbaf363960bca4bc9822fcffdf771d9944c7aaf705f272e1c0ab940898"
+    },
+    {
+      "file": "liblog.so",
+      "entry": "android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/35/liblog.so",
+      "bytes": 5424,
+      "sha256": "0e19df71ea50d921557eb96f07a7535529751804a56405d90a0f6209bb51e0ed"
+    }
+  ]
+}

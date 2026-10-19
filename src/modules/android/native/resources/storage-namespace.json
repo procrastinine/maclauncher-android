@@ -1,0 +1,25 @@
+{
+  "partitions": {
+    "ANDROID_ROOT": "system", "OEM_ROOT": "oem", "ODM_ROOT": "odm", "VENDOR_ROOT": "vendor",
+    "PRODUCT_ROOT": "product", "PRODUCT_SERVICES_ROOT": "product_services", "SYSTEM_EXT_ROOT": "system_ext", "APEX_ROOT": "apex"
+  },
+  "environment": {
+    "ANDROID_DATA": "{data}", "DOWNLOAD_CACHE": "{cache}", "EXTERNAL_STORAGE": "{files}",
+    "ANDROID_STORAGE": "{files}", "ANDROID_EXPAND": "{partitions}/mnt/expand"
+  },
+  "mappings": [
+    ["/etc", "{partitions}/system/etc"], ["/data", "{data}", false], ["/cache", "{cache}"],
+    ["/sdcard", "{files}"], ["/mnt/sdcard", "{files}"], ["/storage/emulated/0", "{files}"],
+    ["/storage/self/primary", "{files}"], ["/storage", "{files}"],
+    ["/metadata", "{partitions}/metadata"], ["/mnt/expand", "{partitions}/mnt/expand"]
+  ],
+  "dataPrefixes": ["{data}", "/data"],
+  "dataAliases": [
+    ["user/0/{package}", "{data}"], ["user_de/0/{package}", "{data}/device_protected"], ["data/{package}", "{data}"]
+  ],
+  "storagePrefixes": ["{files}", "/sdcard", "/mnt/sdcard", "/storage/emulated/0", "/storage/self/primary"],
+  "storageAliases": [
+    ["Android/data/{package}/files", "{files}"], ["Android/data/{package}/cache", "{cache}"],
+    ["Android/data/{package}", "{data}"], ["Android/obb/{package}", "{data}/obb"], ["Android/media/{package}", "{data}/media"]
+  ]
+}

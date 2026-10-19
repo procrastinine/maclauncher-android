@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "android-art-16",
+  "android": {
+    "api": 36,
+    "release": "16",
+    "buildId": "BE2A.250530.026.F3",
+    "architectures": [
+      "arm64-v8a"
+    ],
+    "imageArchive": "arm64-v8a-playstore-ps16k-36_r07.zip",
+    "imageSha256": "182f51ad2b04bbb9cd9464d3e0396a81201db6d9659e1fde5951b6efc1e0a00e"
+  },
+  "sources": {
+    "aim": {
+      "path": "src/external/aim-custom",
+      "url": "https://github.com/hahnlee/aim.git",
+      "commit": "9b5068fa8185d3f51f1862fe7c54d88d51f09ec8",
+      "license": "Apache-2.0"
+    },
+    "libffi": {
+      "path": "src/external/libffi",
+      "url": "https://github.com/libffi/libffi.git",
+      "commit": "bc553867367246d140cd156f060bd0409f57f157",
+      "license": "MIT"
+    }
+  },
+  "hostcallVersion": 1,
+  "applicationEntry": "maclauncher.android.Art",
+  "guestEntry": "/system/bin/app_process64",
+  "imageAcquisition": {
+    "repository": "https://dl.google.com/android/repository/sys-img/google_apis_playstore/sys-img2-4.xml",
+    "package": "system-images;android-36;google_apis_playstore_ps16k;arm64-v8a",
+    "revision": 7,
+    "url": "https://dl.google.com/android/repository/sys-img/google_apis_playstore/arm64-v8a-playstore-ps16k-36_r07.zip",
+    "bytes": 1953548168,
+    "sha256": "182f51ad2b04bbb9cd9464d3e0396a81201db6d9659e1fde5951b6efc1e0a00e",
+    "license": {
+      "id": "android-sdk-arm-dbt-license",
+      "path": "licenses/android-sdk-arm-dbt-license.txt",
+      "sha256": "0682da42e0ca119ce29503c265587f8ae17277094f9262b54c1d2bb99557c6f5"
+    },
+    "delivery": "explicit-download"
+  }
+}

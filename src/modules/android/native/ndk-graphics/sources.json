@@ -1,0 +1,31 @@
+[
+  {
+    "name": "skia",
+    "checkout": "aosp-skia",
+    "url": "https://android.googlesource.com/platform/external/skia",
+    "revision": "bcb0f77c44783b1800ba37641ba7ecab04f05e07",
+    "trees": [
+      "include",
+      "mac/include",
+      "client_utils/android",
+      "modules/skcms",
+      "src/base",
+      "LICENSE",
+      "NOTICE"
+    ]
+  },
+  {
+    "name": "incfs",
+    "checkout": "aosp-incremental-delivery",
+    "url": "https://android.googlesource.com/platform/system/incremental_delivery",
+    "revision": "c999e3e207ec7633a172d773dda162746b6eaf18",
+    "trees": ["incfs/util/include", "incfs/include", "NOTICE"]
+  },
+  {
+    "name": "ziparchive",
+    "checkout": "aosp-libziparchive",
+    "url": "https://android.googlesource.com/platform/system/libziparchive",
+    "revision": "8c51527debf9394dfa515f7e6c7941d2720c6d01",
+    "trees": ["include", "NOTICE"]
+  }
+]

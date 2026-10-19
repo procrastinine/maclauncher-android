@@ -1,0 +1,13 @@
+{
+  "name": "maclauncher-android",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "node tools/check-sources.mjs",
+    "test": "node --test tests/*.test.js tests/*.test.mjs",
+    "build": "node tools/build.mjs"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "repository": "https://android.googlesource.com/platform/external/apache-http",
+  "revision": "4c955170a0e8eafbb61bfe440c365a7539e84e4c",
+  "module": "org.apache.http.legacy",
+  "license": "Apache-2.0",
+  "sourceDirectories": [
+    "src",
+    "android/src"
+  ],
+  "implementation": "Complete unmodified Android legacy HTTP module, normalized at JVM platform boundaries"
+}

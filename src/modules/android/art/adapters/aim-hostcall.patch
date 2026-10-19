@@ -1,0 +1,202 @@
+--- a/crates/aim-linux-abi/src/context.rs
++++ b/crates/aim-linux-abi/src/context.rs
+@@ -28,6 +28,7 @@
+     in_host = const std::mem::offset_of!(GuestContext, in_host),
+     attn = const std::mem::offset_of!(GuestContext, attn),
+     orig = const std::mem::offset_of!(GuestContext, orig_x0),
++    callback_sp = const std::mem::offset_of!(GuestContext, callback_sp),
+ );
+ 
+ unsafe extern "C" {
+@@ -41,6 +42,7 @@
+     fn linux_abi_tail_end();
+     fn linux_abi_resume_trap() -> !;
+     fn linux_abi_text_end();
++    fn linux_abi_call_guest(ctx: *mut GuestContext, function: u64, argument: u64) -> u64;
+ }
+ 
+ /// The process id, answered by the lean syscall path without a Darwin call.
+@@ -71,6 +73,24 @@
+     /// x0 of a lean-path syscall, to restart it.
+     pub orig_x0: u64,
+     pub(crate) thread: *const crate::sys::Thread,
++    /// Stack below the currently suspended host-call frame, owned by this thread.
++    pub callback_sp: u64,
++}
++
++/// Re-enter a fixed-signature guest function on the suspended guest stack.
++/// The caller retains the current JNI frame and all object references.
++///
++/// # Safety
++/// Only callable synchronously from a host call on this same guest thread;
++/// `function` is translated guest code with signature u64(u64).
++pub unsafe extern "C" fn call_guest(function: u64, argument: u64) -> u64 {
++    let ctx = current_ctx();
++    assert!(!ctx.is_null(), "guest callback without a guest thread");
++    unsafe {
++        assert!((*ctx).in_host != 0 && (*ctx).callback_sp != 0,
++                "guest callback outside a suspended host call");
++        linux_abi_call_guest(ctx, function, argument)
++    }
+ }
+ 
+ const _: () = {
+--- a/crates/aim-linux-abi/src/trampoline.S
++++ b/crates/aim-linux-abi/src/trampoline.S
+@@ -59,6 +59,11 @@
+ _linux_abi_syscall_entry:
+     mrs     x17, nzcv
+     str     x17, [sp, #24]
++    // Host calls may synchronously re-enter guest JNI. Keep their live-register
++    // path even during tracing; the full syscall frame is not re-entrant.
++    movz    x16, #{hostcall_hi}, lsl #16
++    cmp     x8, x16
++    b.eq    Lhostcall
+     adrp    x16, {trace}@PAGE
+     ldrb    w16, [x16, {trace}@PAGEOFF]
+     cbnz    w16, Lfull                  // --trace: everything through Rust
+@@ -133,11 +138,14 @@
+ // guest sp and the return address into the stub across the call. It runs
+ // host code, so in_host is set around it; the lean exit check follows.
+ Lhostcall:
+-    stp     x19, x20, [sp, #-16]!
++    stp     x19, x20, [sp, #-32]!
+     mov     x19, sp
+     mov     x20, x30
+     mrs     x16, tpidrro_el0
+     ldr     x16, [x16, #{ctx}]
++    ldr     x17, [x16, #{callback_sp}]
++    str     x17, [sp, #16]
++    str     x19, [x16, #{callback_sp}]
+     mov     w17, #1
+     str     w17, [x16, #{in_host}]
+     ldr     x16, [x16, #296]
+@@ -147,9 +155,41 @@
+     ldr     x16, [x16, #{ctx}]
+     str     wzr, [x16, #{in_host}]
+     mov     sp, x19
++    ldr     x17, [sp, #16]
++    str     x17, [x16, #{callback_sp}]
+     mov     x30, x20
+-    ldp     x19, x20, [sp], #16
++    ldp     x19, x20, [sp], #32
+     b       Llean_ret
++
++// u64 callback(GuestContext*, u64 guest_function, u64 argument).
++// Fixed argument/return ABI; JNI variadic entry points use their A variants
++// in the guest dispatcher. Nested syscalls use the free host stack BELOW
++// this frame, never the still-active outer host call.
++    .globl _linux_abi_call_guest
++    .p2align 2
++_linux_abi_call_guest:
++    stp     x29, x30, [sp, #-64]!
++    stp     x19, x20, [sp, #16]
++    stp     x21, x22, [sp, #32]
++    mov     x29, sp
++    mov     x19, x0
++    mov     x20, sp
++    ldr     x21, [x19, #296]
++    ldr     x22, [x19, #{callback_sp}]
++    str     x20, [x19, #296]
++    str     wzr, [x19, #{in_host}]
++    mov     sp, x22
++    mov     x0, x2
++    blr     x1
++    mov     sp, x20
++    mov     w16, #1
++    str     w16, [x19, #{in_host}]
++    str     x21, [x19, #296]
++    str     x22, [x19, #{callback_sp}]
++    ldp     x19, x20, [sp, #16]
++    ldp     x21, x22, [sp, #32]
++    ldp     x29, x30, [sp], #64
++    ret
+ 
+     // ---- full path ----
+     // x17 = the Rust function to call with the saved context: the
+--- a/crates/aim-linux-abi/src/hostcall.rs
++++ b/crates/aim-linux-abi/src/hostcall.rs
+@@ -12,6 +12,31 @@
+ //! registry, indexed by module id, with a retired id left empty.
+ 
+ use std::sync::atomic::{AtomicBool, Ordering};
++use std::sync::OnceLock;
++
++type GuestCallback = unsafe extern "C" fn(u64, u64) -> u64;
++type ExtensionCall = unsafe extern "C" fn(u32, u64, u64, GuestCallback) -> i64;
++static EXTENSION: OnceLock<ExtensionCall> = OnceLock::new();
++const EXTENSION_ID: u32 = 0x4d4c;
++
++/// Install the explicitly selected MacLauncher JNI boundary before guest entry.
++/// The dylib remains resident for the process lifetime, like every host module.
++pub fn load_extension(path: &std::path::Path) -> Result<(), String> {
++    use std::os::unix::ffi::OsStrExt;
++    let path = std::ffi::CString::new(path.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
++    unsafe {
++        let handle = libc::dlopen(path.as_ptr(), libc::RTLD_NOW | libc::RTLD_LOCAL);
++        if handle.is_null() { return Err(std::ffi::CStr::from_ptr(libc::dlerror()).to_string_lossy().into_owned()); }
++        let address = libc::dlsym(handle, c"maclauncher_art_host_call".as_ptr());
++        if address.is_null() {
++            let error = std::ffi::CStr::from_ptr(libc::dlerror()).to_string_lossy().into_owned();
++            libc::dlclose(handle); return Err(error);
++        }
++        let call: ExtensionCall = std::mem::transmute(address);
++        if EXTENSION.set(call).is_err() { libc::dlclose(handle); return Err("host module already installed".into()); }
++    }
++    Ok(())
++}
+ 
+ use aim_hostcall::{ABI_VERSION, FN_VERSION, HostModule, errno, module};
+ 
+@@ -74,6 +99,12 @@
+     let (Ok(module), Ok(func)) = (u32::try_from(module), u32::try_from(func)) else {
+         return -(errno::ENOSYS as i64);
+     };
++    if module == EXTENSION_ID {
++        let Some(call) = EXTENSION.get() else { return -(errno::ENOSYS as i64); };
++        if func == FN_VERSION { return 1; }
++        mark_used();
++        return unsafe { call(func, args, len, crate::context::call_guest) };
++    }
+     let Some(Some(m)) = MODULES.get(module as usize) else {
+         return -(errno::ENOSYS as i64);
+     };
+--- a/crates/aim-linux-abi/src/bin/linux-run.rs
++++ b/crates/aim-linux-abi/src/bin/linux-run.rs
+@@ -44,6 +44,7 @@
+   --display SOCKET       display server (aim-display) for the composer
+                          and input (/dev/input)
+   --trace                log every syscall
++  --host-module FILE     explicit MacLauncher JNI host boundary
+   --stdio-null           the guest's stdin, stdout and stderr are /dev/null
+                          (as init gives services); the layer's own messages
+                          still go to the original stderr
+@@ -133,6 +134,7 @@
+     // Unset: the default, looked up (and migrated) only when used.
+     let mut cache = None;
+     let mut trace = false;
++    let mut host_module: Option<PathBuf> = None;
+     let mut binder = None;
+     let mut gpu: Option<PathBuf> = None;
+     let mut vulkan: Option<PathBuf> = None;
+@@ -163,6 +165,7 @@
+             // The audio host module's CoreAudio process (docs/audio.md).
+             "--audio-io" => aim_host_audio::io::main(),
+             "--root" => root = PathBuf::from(value()),
++            "--host-module" => host_module = Some(PathBuf::from(value())),
+             "--cache" => cache = Some(Some(PathBuf::from(value()))),
+             "--no-cache" => cache = Some(None),
+             "--socket-receipts"=>socket_receipts=aim_linux_abi::sys::parse_socket_receipts(&value().to_string_lossy()).unwrap_or_else(|error|{eprintln!("linux-run: invalid socket receipt: errno {error}");std::process::exit(2)}),
+@@ -230,6 +233,12 @@
+     };
+     let cache = cache.unwrap_or_else(aim_linux_abi::cache::Cache::default_dir);
+     runtime_args.extend([cstring("--root"), cstring(root.as_os_str().as_bytes())]);
++    if let Some(path) = host_module {
++        aim_linux_abi::hostcall::load_extension(&path).unwrap_or_else(|error| {
++            eprintln!("linux-run: host module: {error}"); std::process::exit(127)
++        });
++        runtime_args.extend([cstring("--host-module"), cstring(path.as_os_str().as_bytes())]);
++    }
+     if let Some(path)=&posix_control{runtime_args.extend([cstring("--posix-control"),cstring(path.as_os_str().as_bytes())]);}
+     match &cache {
+         Some(c) => runtime_args.extend([cstring("--cache"), cstring(c.as_os_str().as_bytes())]),

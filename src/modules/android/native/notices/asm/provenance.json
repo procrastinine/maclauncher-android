@@ -1,0 +1,38 @@
+{
+  "version": "9.10.1",
+  "artifact": "org.ow2.asm:asm:9.10.1",
+  "url": "https://repo.maven.apache.org/maven2/org/ow2/asm/asm/9.10.1/asm-9.10.1.jar",
+  "license": "BSD-3-Clause",
+  "purpose": "Build-time classfile normalization only; not loaded in game processes",
+  "files": [
+    {
+      "path": "asm-9.10.1.jar",
+      "size": 126151,
+      "sha256": "ed825d10ab1399c8c0cb669e688cf0c8c82629b4c8399b58352b68e92ca10fcb"
+    },
+    {
+      "path": "asm-commons-9.10.1.jar",
+      "size": 74840,
+      "sha256": "6d0abefb7cbf972ea16edb37ec14835372505063a45f976ab7ea889ed9497895",
+      "url": "https://repo.maven.apache.org/maven2/org/ow2/asm/asm-commons/9.10.1/asm-commons-9.10.1.jar"
+    },
+    {
+      "path": "asm-tree-9.10.1.jar",
+      "size": 51958,
+      "sha256": "3dfb0d5b6a106cd40b5b250e39935fbf2f927f4477546a5369a3ac609cf0506b",
+      "url": "https://repo.maven.apache.org/maven2/org/ow2/asm/asm-tree/9.10.1/asm-tree-9.10.1.jar"
+    },
+    {
+      "path": "asm-analysis-9.10.1.jar",
+      "size": 35140,
+      "sha256": "dede75a21306b65974ecd8f87114ff6970f09fb794157a4ca09ab25c888c2bfc",
+      "url": "https://repo.maven.apache.org/maven2/org/ow2/asm/asm-analysis/9.10.1/asm-analysis-9.10.1.jar"
+    }
+  ],
+  "artifacts": [
+    "org.ow2.asm:asm:9.10.1",
+    "org.ow2.asm:asm-commons:9.10.1",
+    "org.ow2.asm:asm-tree:9.10.1",
+    "org.ow2.asm:asm-analysis:9.10.1"
+  ]
+}

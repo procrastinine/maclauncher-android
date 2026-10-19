@@ -1,0 +1,27 @@
+#pragma once
+#include <mach/mach.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+/* Linux-sized IDs for Android callers; Darwin kernel IDs remain host-private. */
+int klj_thread_id(void);
+/* Adopt a lease reserved before pthread_create. The same retained Mach-thread
+ * owner retires adopted and lazily registered leases after kernel death. */
+int klj_thread_id_adopt(int);
+int klj_thread_id_reserve(void);
+/* Optional executor context belongs to this retained physical thread. It is
+ * retired only after kernel thread death, including later POSIX destructors. */
+void *klj_thread_memory_context(void);
+int klj_thread_memory_adopt(void *context, void (*retire)(void *));
+/* A retained right to a live thread in this process. Caller deallocates it. */
+thread_t klj_thread_acquire(int);
+/* Priority APIs return Darwin errno values; JNI/libc translate at their ABI. */
+int klj_thread_priority_set(int, int);
+int klj_thread_priority_get(int, int *);
+int klj_thread_priority_target(int);
+/* Linux scheduling policy and sched_param representation; errors are Darwin errno. */
+int klj_thread_scheduler_get(int, int *, int *, long *);
+int klj_thread_scheduler_set(int, int, int);
+#ifdef __cplusplus
+}
+#endif

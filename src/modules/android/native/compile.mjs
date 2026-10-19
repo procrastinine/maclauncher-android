@@ -1,0 +1,369 @@
+import {buildGraphicsLibrary} from './graphics-build.mjs';
+import {buildAlarm} from './alarm/build.mjs';
+import {buildPollableDescriptors} from './pollable-fds/build.mjs';
+import {preparePollableSources} from './pollable-fds/guest-sources.mjs';
+import {prepareImportRegistry} from './import-registry-source.mjs';
+import {prepareIoSources} from './io-sources.mjs';
+import {prepareAndroidLogSources,prepareAndroidLogAbi} from './android-log-source.mjs';
+import {prepareSignalCallers} from './signal-sources.mjs';
+import {prepareProcessAbi} from './process-abi/build.mjs';
+import {prepareProcessDatabase} from './process-abi/database.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {verifyBinaryInputs} from './binary-inputs.mjs';
+import {verifyGlesHeaders} from './gles-headers.mjs';
+import {generate} from './loader-generate-jni-calls.mjs';
+import {prepareLooperSource} from './looper-sources.mjs';
+import {buildFileEvents} from './file-events/build.mjs';
+import {prepareFileEventSources} from './file-events/guest-sources.mjs';
+import {prepareFileLockSource} from './file-lock-sources.mjs';
+import {prepareProcessIdentitySource} from './process-identity-sources.mjs';
+import {prepareGuestPathSource} from './guest-path-sources.mjs';
+import {prepareNetworkPolicy} from './network-policy-source.mjs';
+import {preparePlatformSyscalls} from './platform-syscalls.mjs';
+import {preparePropertySource} from './property-sources.mjs';
+import {prepareNativeSurfaceSources} from './native-surface-sources.mjs';
+import {prepareRegistrySource} from './registry-source.mjs';
+import {prepareLibraryNamespaces} from './library-namespace-source.mjs';
+import {prepareImageSource} from './image-source.mjs';
+import {prepareClockSources} from './native-clock/clock-sources.mjs';
+import {prepareNativeLifecycle} from './native-lifecycle/build.mjs';
+import {prepareNativeMath} from './native-math/build.mjs';
+import {prepareNativeCtype} from './native-ctype/build.mjs';
+import {prepareNativeTerminal} from './native-terminal/build.mjs';
+import {prepareNativeLocale} from './native-locale/build.mjs';
+import {prepareNativeSort} from './native-sort/build.mjs';
+import {prepareNativeExec} from './native-exec/build.mjs';
+import {prepareNonlocalJump} from './nonlocal-jump/build.mjs';
+import {prepareNativeSearch} from './native-search/build.mjs';
+import {claimNativeFamily} from './native-family-source.mjs';
+import {prepareGzip} from './gzip/build.mjs';
+import {prepareWideStdio} from './wide-stdio/build.mjs';
+import {prepareVariadicHandlers} from './variadic-handlers.mjs';
+import {preparePthreadAttributes} from './pthread-attributes/build.mjs';
+import {prepareActivityThread} from './activity-thread/build.mjs';
+import {prepareXrSources} from './xr-sources.mjs';
+import {prepareVulkanSource} from './vulkan-sources.mjs';
+import {prepareMpegSource} from './mpeg-source.mjs';
+import {prepareOpenSlIds} from './opensl-ids.mjs';
+import {prepareMediaSymbolSources} from './media-symbol-sources.mjs';
+import {preparePreferencesSource} from './preferences-source.mjs';
+import {prepareObbSource,prepareDirectoryCallers} from './obb-source.mjs';
+import {frameworkInputs} from './framework-base.mjs';
+import {buildFrameworkModules} from './framework-modules.mjs';
+import {buildFramework} from './framework-build.mjs';
+import {buildConverter} from './converter-build.mjs';
+import {compileHostLibrary,compileHostObject,compileHostExecutable} from './host-compile.mjs';
+import {buildNativeBinding} from './nativebinding-build.mjs';
+import {prepareX18Source} from './x18-source.mjs';
+import {extractFrameworkNative} from './framework-native.mjs';
+import {buildHostArchive} from './host-archive.mjs';
+import {prepareFrameworkGles} from './gles-framework-sources.mjs';
+import {generateEglSurfaceForward} from './egl-surface-forward.mjs';
+import {prepareKeyMapHeaders} from './keymap-sources.mjs';
+import {buildBinderRpc} from './binder-rpc/build.mjs';
+import {buildMediaFoundation} from './media-foundation/build.mjs';
+import {buildLibcore} from './libcore/build.mjs';
+import {buildConscrypt} from './conscrypt/build.mjs';
+import {prepareKeyStoreFoundation,buildKeyStore} from './keystore/build.mjs';
+import {stageAndroidFonts} from './fonts/build.mjs';
+import {stageAndroidSystemConfig} from './system-config.mjs';
+import {buildNdkGraphics} from './ndk-graphics/build.mjs';
+import {sourceInventory,productInventory,buildPathMappings} from './build-sources.mjs';
+import {completeBuildOptions} from './build-options.mjs';
+import {buildArm32} from './arm32/build.mjs';
+import {components as arm32Components,prepareArm32Components} from './arm32/components.mjs';
+import {prepareNdkJni} from './ndk-jni/build.mjs';
+import {prepareAllocator} from './allocator/build.mjs';
+import {buildExecutableMemory} from './executable-memory/build.mjs';
+
+const root=path.dirname(fileURLToPath(import.meta.url));
+const pins=JSON.parse(fs.readFileSync(path.join(root,'source-pins.json')));
+const fontSuppliers=JSON.parse(fs.readFileSync(path.join(root,'fonts/sources.json'))).map(supplier=>({...supplier,option:path.basename(supplier.path).slice('aosp-'.length)+'-source'}));
+const keyStoreSuppliers=JSON.parse(fs.readFileSync(path.join(root,'keystore/sources.json')));
+const args=process.argv.slice(2), options={};
+for(let i=0;i<args.length;i+=2){if(!args[i].startsWith('--')||!args[i+1])throw Error('Expected --option path pairs');options[args[i].slice(2)]=path.resolve(args[i+1]);}
+completeBuildOptions(root,options);
+if(!options['blueprint-parser']||!options['blueprint-parser-sources'])throw Error('The original Blueprint parser and source identity are required');
+process.env.ANDROID_BLUEPRINT_PARSER=options['blueprint-parser'];
+const angleManifest=options['angle-manifest']||path.join(root,'angle-binary.json');
+const angle=JSON.parse(fs.readFileSync(angleManifest));
+if(pins.angleVulkanVersion===1&&!(angle.buildArguments?.angle_enable_metal&&angle.buildArguments?.angle_enable_vulkan))throw Error('The Android Vulkan EGL source requires its combined ANGLE provider.');
+const framework=frameworkInputs(root,options.framework);
+const glesHeaders=verifyGlesHeaders(options['gles-headers']);
+const angleFiles=verifyBinaryInputs(options.angle,angle.files);
+const angleNoticeDirectory=path.join(path.dirname(angleManifest),'notices');
+const angleNotices=verifyBinaryInputs(fs.existsSync(angleNoticeDirectory)?angleNoticeDirectory:path.join(root,'notices/angle'),angle.notices,'file');
+const asmClasspath=verifyBinaryInputs(path.join(root,'tools'),JSON.parse(fs.readFileSync(path.join(root,'asm-binary.json'))).files).map(entry=>entry.file).join(path.delimiter);
+const apksig=verifyBinaryInputs(path.join(root,'tools'),JSON.parse(fs.readFileSync(path.join(root,'apksig-binary.json'))).files)[0];
+const run=(command,argv,extra={})=>execFileSync(command,argv,{stdio:'inherit',...extra});
+const read=(command,argv,extra={})=>execFileSync(command,argv,{encoding:'utf8',...extra}).trim();
+for(const [key,pin] of [['klepton',pins.klepton],['converter',pins.dex2jvm]]){
+  if(read('git',['-C',options[key],'rev-parse','HEAD'])!==pin)throw Error(key+' source revision does not match source-pins.json');
+  if(read('git',['-C',options[key],'status','--porcelain','--untracked-files=no']))throw Error(key+' source contains tracked changes');
+}
+const output=options.output;
+const ownedNativeProducts=new Set();
+const nativePathRoots=Object.entries(options).filter(([,value])=>fs.existsSync(value)&&fs.statSync(value).isDirectory()).map(([name,value])=>[value,'/src/'+name]);
+const copyNativeProduct=(source,target)=>{fs.copyFileSync(source,target);ownedNativeProducts.add(path.basename(target));};
+const sourceIdentity=JSON.parse(fs.readFileSync(path.join(output,'build-source.json')));
+// Existing publisher binaries remain inputs. Their bytes, complete supplied
+// header trees and pinned source revisions identify the compiled closure.
+const inputFile=file=>crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+const inputs={sourceHash:sourceIdentity.sourceHash,pins,framework:framework.definition,glesHeaders,angle:angle.files,
+  converter:inputFile(path.join(options.converter,'build/dex2jvm.jar')),
+  supplied:Object.fromEntries(['sdl','codecs','codec-notices','vulkan-headers','sndfile-headers',...(pins.arm32Version===1?['ndk-headers']:[])].map(name=>[name,sourceInventory(options[name],undefined,{links:true})])),
+  jdk:{version:read(path.join(options.jdk,'bin/java'),['--version']).split('\n')[0],release:inputFile(path.join(options.jdk,'release')),headers:sourceInventory(path.join(options.jdk,'include'))},
+  platformTools:{aidl:inputFile(options.aidl),aconfig:inputFile(options.aconfig),
+    rust:read(path.join(options['rust-toolchain'],'bin/rustc'),['--version']),cargo:read(path.join(options['rust-toolchain'],'bin/cargo'),['--version']),
+    python:read(options.python,['--version'])},
+  toolchain:{compiler:read('clang',['--version']).split('\n')[0],sdk:read('xcrun',['--show-sdk-version'])}};
+const native=path.join(output,'native'),build=options['build-work']?path.join(options['build-work'],'build'):path.join(output,'build');
+fs.mkdirSync(native);fs.mkdirSync(build,{recursive:true});
+const fonts=stageAndroidFonts({sources:Object.fromEntries(fontSuppliers.map(supplier=>[supplier.key,options[supplier.option]])),output:path.join(build,'fonts')});
+fs.cpSync(fonts.root,path.join(output,'android-root'),{recursive:true,verbatimSymlinks:true,mode:fs.constants.COPYFILE_FICLONE});
+fs.cpSync(fonts.notices,path.join(output,'notices/fonts'),{recursive:true});
+fs.copyFileSync(path.join(build,'fonts/font-resources.json'),path.join(output,'notices/fonts/provenance.json'));
+prepareNetworkPolicy(build);
+generateEglSurfaceForward(options['gles-headers'],path.join(build,'egl-surface-forward.h'));
+// Compile host callbacks against the original API before selecting native bridge bindings.
+const java=path.join(options.jdk,'bin/java'),jar=path.join(options.jdk,'bin/jar');
+const frameworkModules=await buildFrameworkModules({root,build,jdk:options.jdk,framework,
+  apacheHttpSource:options['apache-http-source'],statsdSource:options['statsd-source']});
+inputs.frameworkModules=frameworkModules.archives.map(file=>({name:path.basename(file),sha256:inputFile(file)}));
+for(const notice of frameworkModules.notices)fs.cpSync(notice.path,path.join(output,'notices',notice.name),{recursive:true});
+const frameworkGles=prepareFrameworkGles(options['framework-source'],pins.aospFramework,build,root,options['native-source'],pins.aospNative);
+const {frameworkTool,hostClasses}=await buildFramework({root,build,output,jdk:options.jdk,framework,
+  frameworkArchives:frameworkModules.archives,asmClasspath,graphicsRegistrations:path.join(build,'framework-gles/registrations.txt')});
+const includes=['','jni','libc','gfx','xr','media','guest','diag'].map(name=>'-I'+path.join(options.klepton,'runtime',name));
+const jni=['-I'+path.join(options.jdk,'include'),'-I'+path.join(options.jdk,'include/darwin')];
+const flags=['-I'+root,'-I'+path.join(options['gles-headers'],'include'),'-I'+build,'-I'+path.join(build,'jni'),'-arch','arm64','-mmacosx-version-min=13.0','-O1','-Wall','-Wextra','-Wno-unused-parameter',...includes,...jni,'-I'+options['vulkan-headers']];
+const sources=read('make',['-s','-f',path.join(root,'source-list.mk'),'maclauncher-source-list'],{cwd:options.klepton}).split('\n');
+if(sources.length<50||sources.some(file=>!file.startsWith('runtime/')||file.includes('..')||!fs.statSync(path.join(options.klepton,file)).isFile()))throw Error('Unexpected Klepton native source list');
+const frameworks=names=>names.flatMap(name=>['-framework',name]);
+const common=frameworks(['AudioToolbox','VideoToolbox','CoreMedia','CoreVideo','IOSurface','CoreFoundation','AVFoundation','Foundation','CoreAudio']);
+// Set the install name before another owned library links this output.
+const compile=(name,inputs,extra=[])=>{ownedNativeProducts.add(name);return compileHostLibrary({name,inputs,flags,extra,directory:path.join(build,'host-objects'),output:path.join(native,name),cwd:options.klepton,ninja:options.ninja,python:options.python,pathRoots:nativePathRoots});};
+const object=(name,input,extra=[],compiler='clang++')=>compileHostObject({name:name.replaceAll('/','_')+'.o',inputs:[input],flags:[...flags,...extra],directory:path.join(build,'host-objects'),cwd:options.klepton,ninja:options.ninja,python:options.python,compiler,pathRoots:nativePathRoots}).output;
+const executable=(name,inputs,flags,extra=[],compiler='clang')=>{ownedNativeProducts.add(name);return compileHostExecutable({name,inputs,flags,extra,directory:path.join(build,'host-objects'),output:path.join(native,name),cwd:options.klepton,ninja:options.ninja,python:options.python,compiler,pathRoots:nativePathRoots});};
+compile('libandroid-storage.dylib',[path.join(root,'native-storage.c')]);
+const executableMemory=buildExecutableMemory({source:options['aim-source'],revision:pins.aim,
+  output:path.join(build,'executable-memory'),rustToolchain:options['rust-toolchain']});
+fs.cpSync(executableMemory.notices,path.join(output,'notices/executable-memory'),{recursive:true});
+executable('android-application-icon',[path.join(root,'application-icon.m')],['-arch','arm64','-mmacosx-version-min=13.0','-O2','-fobjc-arc'],['-framework','AppKit']);
+const prefsSource=preparePreferencesSource(options.klepton,build);
+const obbSource=prepareObbSource(options.klepton,build);
+const ndkLooperSource=prepareLooperSource(options.klepton,build);
+const nativeSurfaceFlags=prepareNativeSurfaceSources(options.klepton,build);generate(build,options.jdk);
+nativeSurfaceFlags.push('-DKLEPTON_VARARGS_SOURCE='+JSON.stringify(path.join(options.klepton,'runtime/libc/kl_va_thunks.S')));
+const surfaceOverlays={'runtime/guest/kl_ndk.c':'asset-overlay.c','runtime/libc/kl_pthread.c':'pthread-lifetime-overlay.c','runtime/media/kl_aaudio.c':'aaudio-overlay.c','runtime/media/kl_audio.c':'audio-pause-overlay.c','runtime/media/kl_mediaplayer.c':'mpeg-player.c','runtime/media/kl_mediandk.c':'hardware-buffer-overlay.c'};
+const openSlIds=prepareOpenSlIds({wilhelmSource:options['wilhelm-source'],build,jni});
+fs.cpSync(openSlIds.notices,path.join(output,'notices/opensl-ids'),{recursive:true});
+const mediaSymbols=prepareMediaSymbolSources(options.klepton,build);
+nativeSurfaceFlags.push('-DKLEPTON_MEDIANDK_SOURCE='+JSON.stringify(mediaSymbols['runtime/media/kl_mediandk.c']));
+nativeSurfaceFlags.push('-DKLEPTON_MPEG_SOURCE='+JSON.stringify(prepareMpegSource(options.klepton,build)));
+fs.mkdirSync(path.join(build,'clock'),{recursive:true});
+const registrySource=prepareRegistrySource(options.klepton,build);
+const libraryNamespaces=prepareLibraryNamespaces({bionicSource:options['bionic-source'],artSource:options['art-source'],output:path.join(build,'library-namespaces')});
+const libraryNamespaceObject=object('library-namespace',path.join(root,'library-namespace.cpp'),['-std=c++20','-I'+libraryNamespaces.include]);
+const libraryGroupObject=object('library-group',path.join(root,'library-group.cpp'),['-std=c++20']);
+fs.cpSync(libraryNamespaces.notices,path.join(output,'notices/library-namespaces'),{recursive:true});
+const imageSource=prepareImageSource(options.klepton,build);
+const clocks=prepareClockSources(options.klepton,build,path.join(root,'legacy-cxx-shim.c'));
+const lifecycle=prepareNativeLifecycle({bionicSource:options['bionic-source'],klepton:options.klepton,build});
+nativeSurfaceFlags.push(...lifecycle.abiFlags);
+prepareImportRegistry(lifecycle.shim);
+let ndkDeclarations;
+prepareArm32Components(build);
+if(pins.arm32Version===1){
+  const arm32=await buildArm32({source:options['dynarmic-source'],output:path.join(build,'arm32'),jdk:options.jdk,ndkHeaders:options['ndk-headers'],python:options.python,bionicSource:options['bionic-source'],elfLinker:path.join(options['rust-toolchain'],'lib/rustlib/aarch64-apple-darwin/bin/rust-lld'),ownerHeaders:[...lifecycle.ownerHeaders,path.join(root,'image-unwind.h')],graphicsRegistry:path.join(options['gles-headers'],glesHeaders.registry.path)});
+  copyNativeProduct(arm32.library,path.join(native,arm32Components.bindings.jvm));
+  for(const item of arm32Components.preloads)fs.copyFileSync(arm32.preloads[item.name],path.join(native,item.file));
+  fs.cpSync(arm32.notices,path.join(output,'notices/arm32'),{recursive:true});
+  ndkDeclarations=arm32.importsDirectory;
+}
+const ndkJni=await prepareNdkJni({declarationsDirectory:ndkDeclarations,include:options['ndk-headers'],python:options.python,output:build});
+const allocator=prepareAllocator({include:options['ndk-headers'],output:build});
+prepareAndroidLogAbi({include:options['ndk-headers'],output:build});
+if(!ndkDeclarations)fs.cpSync(ndkJni.notices,path.join(output,'notices/android-ndk'),{recursive:true});
+prepareSignalCallers({pthread:clocks.pthread,slink:lifecycle.slink});
+prepareIoSources({shim:lifecycle.shim,slink:lifecycle.slink,libc:clocks.libc});
+const pollable=buildPollableDescriptors({bionicSource:options['bionic-source'],checkout:options['epoll-shim-source'],output:path.join(build,'pollable-fds'),ninja:options.ninja});
+lifecycle.objects.push(pollable.object,pollable.archive);
+fs.cpSync(pollable.notices,path.join(output,'notices/epoll-shim'),{recursive:true});
+preparePollableSources({slink:lifecycle.slink});
+const math=prepareNativeMath({bionicSource:options['bionic-source'],klepton:options.klepton,build,python:options.python,shim:lifecycle.shim});
+lifecycle.objects.push(...math.objects);
+const ctype=prepareNativeCtype({bionicSource:options['bionic-source'],build,ninja:options.ninja,python:options.python});
+lifecycle.objects.push(...ctype.objects);
+claimNativeFamily({shim:lifecycle.shim,table:path.join(math.output,'libc-table.h'),names:ctype.names});
+fs.cpSync(ctype.notices,path.join(output,'notices/bionic-ctype'),{recursive:true});
+const terminal=prepareNativeTerminal({bionicSource:options['bionic-source'],build,ninja:options.ninja,python:options.python,libc:clocks.libc});
+lifecycle.objects.push(...terminal.objects);
+claimNativeFamily({shim:lifecycle.shim,table:path.join(math.output,'libc-table.h'),names:terminal.names});
+fs.cpSync(terminal.notices,path.join(output,'notices/bionic-terminal'),{recursive:true});
+const locale=prepareNativeLocale({bionicSource:options['bionic-source'],build,ninja:options.ninja,python:options.python});
+lifecycle.objects.push(...locale.objects);
+claimNativeFamily({shim:lifecycle.shim,table:path.join(math.output,'libc-table.h'),names:locale.names});
+fs.cpSync(locale.notices,path.join(output,'notices/bionic-locale'),{recursive:true});
+const sort=prepareNativeSort({bionicSource:options['bionic-source'],build,ninja:options.ninja,python:options.python});
+lifecycle.objects.push(...sort.objects);
+claimNativeFamily({shim:lifecycle.shim,table:path.join(math.output,'libc-table.h'),names:sort.names});
+fs.cpSync(sort.notices,path.join(output,'notices/bionic-sort'),{recursive:true});
+const exec=prepareNativeExec({bionicSource:options['bionic-source'],klepton:options.klepton,build,ninja:options.ninja,python:options.python});
+lifecycle.objects.push(...exec.objects);
+claimNativeFamily({shim:lifecycle.shim,table:path.join(math.output,'libc-table.h'),names:exec.names});
+fs.cpSync(exec.notices,path.join(output,'notices/bionic-exec'),{recursive:true});
+const nonlocalJump=prepareNonlocalJump({bionicSource:options['bionic-source'],klepton:options.klepton,build});
+const nativeSearch=prepareNativeSearch({bionicSource:options['bionic-source'],build});
+lifecycle.objects.push(...nonlocalJump.objects,...nativeSearch.objects);
+claimNativeFamily({shim:lifecycle.shim,table:path.join(math.output,'libc-table.h'),names:[...nonlocalJump.names,...nativeSearch.names]});
+fs.cpSync(nonlocalJump.notices,path.join(output,'notices/bionic-nonlocal-jump'),{recursive:true});
+fs.cpSync(nativeSearch.notices,path.join(output,'notices/bionic-search'),{recursive:true});
+const gzip=prepareGzip({zlibSource:options['zlib-source'],klepton:options.klepton,build});
+lifecycle.objects.push(...gzip.objects);
+const wideStdio=prepareWideStdio({bionicSource:options['bionic-source'],compilerRtSource:options['compiler-rt-source'],klepton:options.klepton,build,shim:lifecycle.shim,libcSource:clocks.libc,table:path.join(math.output,'libc-table.h')});
+const variadicHandlers=prepareVariadicHandlers({klepton:options.klepton,build,wideStdio,additionalThunks:[exec.thunks]});
+lifecycle.objects.push(...wideStdio.objects);
+fs.cpSync(wideStdio.notices,path.join(output,'notices/bionic-wide-stdio'),{recursive:true});
+fs.cpSync(gzip.notices,path.join(output,'notices/zlib-gzip'),{recursive:true});
+fs.cpSync(math.notices,path.join(output,'notices/bionic-math'),{recursive:true});
+fs.cpSync(lifecycle.notices,path.join(output,'notices/bionic-lifecycle'),{recursive:true});
+const pthreadAttributes=preparePthreadAttributes({bionicSource:options['bionic-source'],build,pthreadSource:path.join(build,'pthread-source.c'),shimSource:lifecycle.shim});
+lifecycle.objects.push(pthreadAttributes.object);
+fs.cpSync(pthreadAttributes.notices,path.join(output,'notices/bionic-pthread-attributes'),{recursive:true});
+const platformSyscalls=preparePlatformSyscalls(clocks.libc,{bionicSource:options['bionic-source'],include:options['ndk-headers'],python:options.python,
+  importsDirectory:ndkJni.declarationsDirectory,output:path.join(build,'platform-syscalls')});
+fs.mkdirSync(path.join(output,'notices/platform-syscalls'),{recursive:true});
+fs.copyFileSync(platformSyscalls.notice,path.join(output,'notices/platform-syscalls/NOTICE'));
+preparePropertySource(clocks.libc);
+prepareDirectoryCallers(clocks.libc);
+prepareFileLockSource(clocks.libc);
+prepareProcessIdentitySource(clocks.libc);
+prepareProcessAbi({bionicSource:options['bionic-source'],build,libc:clocks.libc});
+const processDatabase=prepareProcessDatabase({bionicSource:options['bionic-source'],coreSource:options['system-core-source'],buildSource:options['build-source'],python:options.python,build});
+lifecycle.objects.push(...processDatabase.objects);
+fs.cpSync(processDatabase.notices,path.join(output,'notices/bionic-account-database'),{recursive:true});
+prepareGuestPathSource(clocks.libc);
+const fileEvents=buildFileEvents({checkout:options['inotify-source'],output:path.join(build,'file-events'),jdk:options.jdk});
+fs.cpSync(fileEvents.notices,path.join(output,'notices/file-events'),{recursive:true});
+flags.push('-I'+fileEvents.include);
+const fileVarargs=prepareFileEventSources({libc:clocks.libc,slink:lifecycle.slink,shim:lifecycle.shim,varargs:path.join(options.klepton,'runtime/libc/kl_va_handlers.c'),output:build});
+prepareAndroidLogSources({shim:lifecycle.shim,slink:lifecycle.slink,handlers:fileVarargs});
+const xr=prepareXrSources(options.klepton,build);
+const vulkanSource=prepareVulkanSource(options.klepton,build);
+const x18Source=prepareX18Source(options.klepton,build);
+const adapted=sources.map(file=>file==='runtime/libc/kl_va_handlers.c'?fileVarargs:file==='runtime/libc/kl_libc_slink.c'?lifecycle.slink:file==='runtime/kl_image.c'?imageSource:file==='runtime/kl_x18.c'?x18Source:file==='runtime/guest/kl_obbmap.c'?obbSource:file==='runtime/libc/kl_va_thunks.S'?path.join(root,'native-varargs.S'):file==='runtime/gfx/kl_glfb.c'?xr.glfb:file==='runtime/gfx/kl_vulkan.c'?vulkanSource:file==='runtime/kl_dl.c'?registrySource:file==='runtime/libc/kl_libc.c'?clocks.libc:file==='runtime/libc/kl_shim.c'?clocks.shim:file==='runtime/jni/kl_jni_prefs.c'?prefsSource:surfaceOverlays[file]?path.join(root,surfaceOverlays[file]):mediaSymbols[file]||file);
+lifecycle.objects.push(object('media-platform',path.join(root,'media-platform.mm'),['-std=c++20','-fobjc-arc']));
+lifecycle.objects.push(object('proc-maps',path.join(root,'proc-maps.c')));
+compile('libklepton-jvm.dylib',[libraryNamespaceObject,libraryGroupObject,path.join(root,'library-registry.c'),path.join(root,'native-import-registry.c'),path.join(root,'jni-invocation.c'),...fileEvents.objects,openSlIds.object,variadicHandlers.source,allocator.source,path.join(root,'platform-poll.m'),path.join(root,'media-format.c'),path.join(root,'media-surface.c'),path.join(root,'media-data-source.c'),path.join(root,'inline-syscall.c'),path.join(root,'inline-syscall.S'),path.join(root,'guest-paths.c'),path.join(root,'file-xattrs.c'),path.join(root,'process-identity.c'),path.join(root,'process-memory.c'),path.join(root,'process-ids.c'),path.join(root,'thread-identity.c'),path.join(root,'signal-bridge.c'),path.join(root,'executable-memory/jvm.c'),path.join(root,'elf-tls.c'),path.join(root,'elf-tls.S'),path.join(root,'poll-bridge.c'),path.join(root,'directory-bridge.c'),path.join(root,'network-policy.c'),path.join(root,'ndk-choreographer.c'),path.join(root,'audio-volume.c'),path.join(root,'audio-pcm.c'),path.join(root,'audio-device.c'),path.join(root,'audio-capture.c'),path.join(root,'bridge.c'),path.join(root,'android-log.c'),path.join(root,'web-links.c'),path.join(root,'web-links-platform.c'),path.join(root,'compat.c'),path.join(root,'connectivity.c'),path.join(root,'file-observer.c'),path.join(root,'parcel-fd.c'),path.join(root,'supervisor-channel.c'),clocks.bridge,...lifecycle.objects,...adapted],[...nativeSurfaceFlags,...lifecycle.linkFlags,executableMemory.archive,...executableMemory.linkFlags,'-DKLEPTON_NDK_SOURCE='+JSON.stringify(ndkLooperSource),'-DKL_SHIM_IMPLEMENTATION='+JSON.stringify(lifecycle.shim),'-include',path.join(root,'compat.h'),'-include',clocks.include,'-fblocks','-lz','-liconv','-lc++',...common,...frameworks(['Network','CoreServices','SystemConfiguration','AppKit'])]);
+const keyMapHeaders=prepareKeyMapHeaders({framework:options['framework-source'],native:options['native-source'],base:options['libbase-source'],fmt:options['fmt-source'],pins,build});
+const keyMapObject=object('framework-keymap',path.join(root,'framework-keymap.cpp'),['-std=c++20','-I'+keyMapHeaders]);
+const activityThread=prepareActivityThread({frameworkSource:options['framework-source'],bionicSource:options['bionic-source'],build});
+const activityObject=object('activity-thread',activityThread.unit,['-std=c++20','-Wno-writable-strings']);
+fs.cpSync(activityThread.notices,path.join(output,'notices/activity-thread'),{recursive:true});
+ownedNativeProducts.add('libnativebinding.dylib');
+buildNativeBinding({root,build,native,keyMapObject,activityObject,flags,cwd:options.klepton,ninja:options.ninja,python:options.python,pathRoots:nativePathRoots});
+buildGraphicsLibrary({root,build,options,frameworkGles,xr,object,compile});
+const audioRoutes=object('audio-routes',path.join(root,'audio-routes.mm'),['-std=c++17','-fobjc-arc']);
+const mediaInputs=object('media-inputs',path.join(root,'media-inputs.mm'),['-std=c++20','-fobjc-arc']);
+function nativeMachOFiles(){return fs.readdirSync(native).filter(name=>{
+  const file=path.join(native,name);if(!fs.statSync(file).isFile())return false;
+  const fd=fs.openSync(file,'r'),magic=Buffer.alloc(4);
+  try{return fs.readSync(fd,magic,0,4,0)===4&&[0xfeedfacf,0xcffaedfe,0xfeedface,0xcefaedfe,0xcafebabe,0xbebafeca,0xcafebabf,0xbfbafeca].includes(magic.readUInt32LE(0));}
+  finally{fs.closeSync(fd);}
+});}
+for(const file of nativeMachOFiles())run('install_name_tool',['-id','@rpath/'+file,path.join(native,file)]);
+run('install_name_tool',['-change','@rpath/libklepton-jvm.dylib','@loader_path/libklepton-jvm.dylib',path.join(native,'libnativebinding.dylib')]);
+run('install_name_tool',['-change','@rpath/libklepton-jvm.dylib','@loader_path/libklepton-jvm.dylib',path.join(native,'libklepton-graphics.dylib')]);
+executable('android-supervisor-send',[path.join(root,'supervisor-channel.c')],[...flags,'-DSUPERVISOR_SENDER']);
+executable('android-clipboard',[path.join(root,'clipboard-gesture.mm')],['-std=c++20','-fobjc-arc','-arch','arm64','-mmacosx-version-min=13.0'],frameworks(['AppKit','Carbon','CoreGraphics']),'clang++');
+for(const file of nativeMachOFiles())run('codesign',['--force','--sign','-',path.join(native,file)]);
+extractFrameworkNative(framework.input.file,framework.definition,native);
+const conscrypt=buildConscrypt({jdk:options.jdk,conscryptSource:options['conscrypt-source'],boringsslSource:options['boringssl-source'],nativehelperSource:options['nativehelper-source'],output:path.join(build,'conscrypt')});
+for(const library of conscrypt.libraries)copyNativeProduct(library,path.join(native,path.basename(library)));
+fs.cpSync(conscrypt.certificates,path.join(output,'android-root/system/etc/security/cacerts'),{recursive:true});
+fs.cpSync(path.join(build,'conscrypt/notices'),path.join(output,'notices/conscrypt'),{recursive:true});
+const keyStoreCheckouts=Object.fromEntries(keyStoreSuppliers.map(supplier=>[supplier.name,options[supplier.name+'-source']]));
+for(const [name,option] of Object.entries({libbase:'libbase-source',fmt:'fmt-source',core:'system-core-source',framework:'framework-source',native:'native-source',bionic:'bionic-source',boringssl:'boringssl-source'}))keyStoreCheckouts[name]=options[option];
+const keyStore=await prepareKeyStoreFoundation({output:path.join(build,'keystore'),checkouts:keyStoreCheckouts,boringssl:conscrypt.boringssl,
+  aidl:options.aidl,aconfig:options.aconfig,rustToolchain:options['rust-toolchain'],python:options.python,ninja:options.ninja,processLibrary:path.join(native,'libklepton-jvm.dylib')});
+const systemConfig=stageAndroidSystemConfig({source:keyStore.context.sources.framework,output:path.join(build,'system-config')});
+fs.cpSync(systemConfig.root,path.join(output,'android-root'),{recursive:true});
+fs.cpSync(systemConfig.notices,path.join(output,'notices/system-config'),{recursive:true});
+const binderRpc=buildBinderRpc({nativeSource:options['native-source'],systemCore:options['system-core-source'],output:path.join(build,'binder-rpc'),ninja:options.ninja,python:options.python,ashmem:{source:options['aim-source'],cargo:path.join(options['rust-toolchain'],'bin/cargo'),rustc:path.join(options['rust-toolchain'],'bin/rustc')},jni:{publisher:path.join(native,'libandroid_runtime.dylib'),javaFramework:options['java-framework-source'],processLibrary:path.join(native,'libklepton-jvm.dylib'),framework:options['framework-source'],libbase:options['libbase-source'],nativehelper:options['nativehelper-source'],bionic:options['bionic-source']},services:{aidl:options.aidl,foundation:keyStore.foundation}});
+copyNativeProduct(binderRpc.library,path.join(native,path.basename(binderRpc.library)));
+fs.cpSync(path.join(build,'binder-rpc/notices'),path.join(output,'notices/binder-rpc'),{recursive:true});
+const ndkGraphics=buildNdkGraphics({loggingSource:keyStore.foundation.sources.logging,output:path.join(build,'ndk-graphics'),frameworkSource:options['java-framework-source'],skiaSource:options['skia-source'],nativeSource:options['native-source'],incfsSource:options['incfs-source'],ziparchiveSource:options['ziparchive-source'],fmtSource:keyStore.foundation.sources.fmt,jdk:options.jdk,publisher:path.join(native,'libandroid_runtime.dylib'),binder:binderRpc,processLibrary:path.join(native,'libklepton-jvm.dylib')});
+copyNativeProduct(ndkGraphics.library,path.join(native,'libandroid-ndk-graphics.dylib'));
+fs.cpSync(ndkGraphics.notices,path.join(output,'notices/ndk-graphics'),{recursive:true});
+run('codesign',['--force','--sign','-',path.join(native,'libandroid-ndk-graphics.dylib')]);
+const keyStoreService=await buildKeyStore({...keyStore.context,binder:binderRpc});
+copyNativeProduct(keyStoreService.library,path.join(native,path.basename(keyStoreService.library)));
+fs.cpSync(keyStoreService.notices,path.join(output,'notices/keystore'),{recursive:true});
+const libcore=buildLibcore({libcoreSource:options['libcore-source'],artSource:options['art-source'],binder:binderRpc,output:path.join(build,'libcore'),ninja:options.ninja,python:options.python});
+copyNativeProduct(libcore.library,path.join(native,path.basename(libcore.library)));
+fs.cpSync(path.join(build,'libcore/notices'),path.join(output,'notices/libcore'),{recursive:true});
+const alarm=buildAlarm({frameworkSource:options['java-framework-source'],binder:binderRpc,pollable,processLibrary:path.join(native,'libklepton-jvm.dylib'),output:path.join(build,'alarm'),ninja:options.ninja,python:options.python});
+copyNativeProduct(alarm.library,path.join(native,path.basename(alarm.library)));
+fs.cpSync(alarm.notices,path.join(output,'notices/alarm'),{recursive:true});
+const media=buildMediaFoundation({avSource:options['av-source'],frameworkSource:options['framework-source'],aidl:options.aidl,klepton:options.klepton,libvpxSource:options['libvpx-source'],binder:binderRpc,output:path.join(build,'media-foundation'),processLibrary:path.join(native,'libklepton-jvm.dylib'),ninja:options.ninja,python:options.python});
+copyNativeProduct(media.library,path.join(native,path.basename(media.library)));
+fs.cpSync(path.join(build,'media-foundation/notices'),path.join(output,'notices/aosp-av'),{recursive:true});
+compile('libklepton-audio.dylib',[path.join(root,'audio.m'),path.join(root,'audio-track.c'),audioRoutes,mediaInputs],['-std=gnu11','-fobjc-arc','-I'+options['sndfile-headers'],path.join(options.codecs,'libsndfile.1.0.37.dylib'),'-L'+native,'-lklepton-jvm','-landroid-media','-Wl,-rpath,@loader_path','-lc++',...frameworks(['Foundation','AVFoundation','CoreAudio','CoreMedia','CoreVideo'])]);
+run('install_name_tool',['-change','@rpath/libklepton-jvm.dylib','@loader_path/libklepton-jvm.dylib',path.join(native,'libklepton-audio.dylib')]);
+run('install_name_tool',['-change','@rpath/libsndfile.1.0.37.dylib','@loader_path/codecs/libsndfile.1.0.37.dylib',path.join(native,'libklepton-audio.dylib')]);
+run('install_name_tool',['-change','@rpath/libandroid-media.dylib','@loader_path/libandroid-media.dylib',path.join(native,'libklepton-audio.dylib')]);
+run('install_name_tool',['-id','@rpath/libklepton-audio.dylib',path.join(native,'libklepton-audio.dylib')]);
+run('codesign',['--force','--sign','-',path.join(native,'libklepton-audio.dylib')]);
+for(const name of ownedNativeProducts){const file=path.join(native,name);run('strip',['-S',file]);run('codesign',['--force','--sign','-',file]);}
+// Runtime linkage uses the version's canonical install name. Emit that complete
+// version once; SDK framework aliases do not duplicate libraries or headers in
+// the portable payload. The receipt now describes exactly what staging ships.
+const sdlVersions=path.join(options.sdl,'Versions');
+for(const version of fs.readdirSync(sdlVersions,{withFileTypes:true}))
+  if(version.isDirectory())fs.cpSync(path.join(sdlVersions,version.name),path.join(native,'SDL3.framework/Versions',version.name),{recursive:true,verbatimSymlinks:true,mode:fs.constants.COPYFILE_FICLONE});
+fs.cpSync(options.codecs,path.join(native,'codecs'),{recursive:true,verbatimSymlinks:true,mode:fs.constants.COPYFILE_FICLONE});
+fs.mkdirSync(path.join(native,'angle'));
+for(const entry of angleFiles)fs.copyFileSync(entry.file,path.join(native,'angle',entry.name),fs.constants.COPYFILE_FICLONE);
+fs.mkdirSync(path.join(output,'notices/angle'),{recursive:true});
+for(const entry of angleNotices)fs.copyFileSync(entry.file,path.join(output,'notices/angle',entry.name));
+fs.copyFileSync(angleManifest,path.join(output,'notices/angle/provenance.json'));
+for(const name of ['aosp-framework','aosp-apache-http','aosp-native','aosp-libbase','aosp-fmt','aosp-framework-base','xmlpull','apksig','asm','robolectric-portability'])fs.cpSync(path.join(root,'notices',name),path.join(output,'notices',name),{recursive:true});
+fs.copyFileSync(path.join(root,'framework-binary.json'),path.join(output,'notices/aosp-framework-base/provenance.json'));
+fs.copyFileSync(path.join(root,'platform-boundaries.json'),path.join(output,'notices/aosp-framework-base/platform-boundaries.json'));
+fs.copyFileSync(path.join(root,'apksig-binary.json'),path.join(output,'notices/apksig/provenance.json'));
+fs.copyFileSync(apksig.file,path.join(output,'apksig.jar'));
+fs.mkdirSync(path.join(output,'notices/gles-headers'));
+for(const entry of glesHeaders.files)fs.copyFileSync(path.join(options['gles-headers'],entry.path),path.join(output,'notices/gles-headers',path.basename(entry.path)+'.txt'));
+fs.copyFileSync(path.join(root,'notices/GLES-SGI-B-2.0.txt'),path.join(output,'notices/gles-headers/SGI-B-2.0.txt'));
+fs.copyFileSync(path.join(root,'gles-headers.json'),path.join(output,'notices/gles-headers/provenance.json'));
+fs.cpSync(options['codec-notices'],path.join(output,'notices/codecs'),{recursive:true});
+for(const [input,name] of [['klepton','Klepton'],['converter','dex2jvm']]){
+  fs.mkdirSync(path.join(output,'notices',name));
+  for(const file of ['LICENSE','NOTICE'])if(fs.existsSync(path.join(options[input],file)))fs.copyFileSync(path.join(options[input],file),path.join(output,'notices',name,file));
+}
+fs.copyFileSync(path.join(options.sdl,'Resources/LICENSE.txt'),path.join(output,'notices/SDL3.txt'));
+const nativeDependencies=[];
+function auditNative(directory){for(const entry of fs.readdirSync(directory,{withFileTypes:true})){
+  const file=path.join(directory,entry.name);
+  if(entry.isDirectory()){auditNative(file);continue;}
+  if(!entry.isFile())continue;
+  const fd=fs.openSync(file,'r'),header=Buffer.alloc(4);let bytes;
+  try{bytes=fs.readSync(fd,header,0,4,0);}finally{fs.closeSync(fd);}
+  if(bytes!==4||![0xfeedfacf,0xcffaedfe,0xfeedface,0xcefaedfe,0xcafebabe,0xbebafeca,0xcafebabf,0xbfbafeca].includes(header.readUInt32LE(0)))continue;
+  const installNames=new Set(read('otool',['-D',file]).split('\n').slice(1).filter(line=>line&&!line.endsWith(':')).map(line=>line.trim()));
+  const dependencies=read('otool',['-L',file]).split('\n').slice(1).filter(line=>/^\s/.test(line)).map(line=>line.trim().split(' (')[0]).filter(value=>!installNames.has(value));
+  for(const dependency of dependencies)if(!dependency.startsWith('@')&&!dependency.startsWith('/System/Library/')&&!dependency.startsWith('/usr/lib/'))throw Error('Native dependency is not portable: '+path.relative(output,file)+' → '+dependency);
+  nativeDependencies.push({path:path.relative(output,file),dependencies});
+}}
+auditNative(native);
+buildHostArchive({root,output,build,hostClasses,frameworkTool,frameworkInput:framework.input.file,asmClasspath,java,jar});
+const {apiHeaders}=await buildConverter({root,build,output,jdk:options.jdk,checkout:options.converter,apksig:apksig.file,asmClasspath});
+run(java,['-cp',[frameworkTool,asmClasspath].join(path.delimiter),'ConversionHeaders',path.join(output,'android-api-metadata.jar'),path.join(output,'android-host.jar'),path.join(output,'android-framework.jar'),apiHeaders]);
+const inputHash=crypto.createHash('sha256').update(JSON.stringify(inputs)).digest('hex');
+fs.writeFileSync(path.join(output,'build-receipt.json'),JSON.stringify({schemaVersion:2,pins,framework:framework.definition,glesHeaders,angle:angle.files,nativeDependencies,...sourceIdentity,inputs,inputHash,pathMappings:buildPathMappings({source:root,build,output,options}),products:productInventory(output)},null,2)+'\n');
+console.log('Android host, converter overlay and SDK-free metadata built in '+output);

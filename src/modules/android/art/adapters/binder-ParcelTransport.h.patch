@@ -1,0 +1,38 @@
+--- a/ParcelTransport.h
++++ b/ParcelTransport.h
+@@ -2,15 +2,33 @@
+ #include <binder/IBinder.h>
+ #include <binder/Parcel.h>
+ #include <binder/RpcSession.h>
++#include <string>
+ 
+ namespace android {
+ // Private to the two owned RPC endpoints; removed before original Binder dispatch.
+ inline constexpr uint32_t kHostParcelEnvelope = 0x40000000;
+ class HostParcelTransport {
+ public:
+-    static status_t encode(const Parcel&, const sp<RpcSession>&, Parcel*);
+-    static status_t decode(const Parcel&, Parcel*);
++    struct Caller {int32_t pid=0;uint32_t uid=0;std::string sid;bool hasSid=false,trusted=false;};
++    static status_t encode(const Parcel&, const sp<RpcSession>&, Parcel*, bool caller = true);
++    static status_t decode(const Parcel&, Parcel*, Caller* = nullptr);
+     static status_t encodeReply(const Parcel&, const Parcel&, Parcel*);
++    static sp<IBinder> exportBinder(sp<IBinder>, const sp<RpcSession>&);
+     static status_t transact(IBinder*, uint32_t, const Parcel&, Parcel*, uint32_t);
++    static status_t writeSnapshot(const Parcel&,Parcel*);
++    static status_t readSnapshot(const Parcel&,Parcel*);
++    template<class Dispatch>
++    static status_t incoming(const Parcel& data,Parcel* reply,uint32_t flags,Dispatch&& dispatch){
++        if(!(flags&kHostParcelEnvelope))return dispatch(data,reply,flags,nullptr);
++        Parcel original,originalReply;
++        Caller caller;
++        if(flags&IBinder::FLAG_CLEAR_BUF){original.markSensitive();originalReply.markSensitive();}
++        status_t status=decode(data,&original,&caller);
++        if(status!=OK)return status;
++        status=dispatch(original,reply?&originalReply:nullptr,flags&~kHostParcelEnvelope,
++                        caller.trusted?&caller:nullptr);
++        if(reply){status_t encoded=encodeReply(data,originalReply,reply);if(encoded!=OK)return encoded;}
++        return status;
++    }
+ };
+ }

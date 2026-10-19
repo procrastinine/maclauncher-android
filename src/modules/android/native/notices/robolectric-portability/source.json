@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/robolectric/robolectric",
+  "commit": "83b71974f00edaef78b72e212d60168b4bc4a70a",
+  "license": "MIT",
+  "upstreamPath": "sandbox/src/main/java/org/robolectric/interceptors/AndroidInterceptors.java",
+  "upstreamSha256": "0ced2827c89bf40ad702d1b56469a6d5f2b6f20439828cae755388a315ff4539",
+  "implementation": "Build-time callsite normalization across the complete executable AOSP archive; no Robolectric test runtime or shadows",
+  "families": [
+    {
+      "category": "array-allocation",
+      "source": "dalvik.system.VMRuntime.newUnpaddedArray(Class,int)",
+      "target": "java.lang.reflect.Array.newInstance; receiver evaluation/null behavior retained",
+      "origin": "Host bridge for actual AOSP ART allocation boundary"
+    },
+    {
+      "category": "array-copy",
+      "source": "java.lang.System.arraycopy primitive-array overloads",
+      "target": "Java 21 System.arraycopy(Object,int,Object,int,int)"
+    },
+    {
+      "category": "collections",
+      "source": "java.util.LinkedHashMap.eldest()",
+      "target": "Existing first entry or null for an empty map",
+      "origin": "Robolectric LinkedHashMapEldestInterceptor"
+    },
+    {
+      "category": "locale",
+      "source": "java.util.Locale.adjustLanguageCode(String)",
+      "target": "Robolectric language-code normalization",
+      "origin": "Robolectric LocaleAdjustLanguageCodeInterceptor"
+    },
+    {
+      "category": "diagnostic-logging",
+      "source": "java.lang.System.logE/logW(String[,Throwable])",
+      "target": "Actual stderr; format before emission with at most 8192 UTF-16 code units buffered per diagnostic",
+      "origin": "Robolectric SystemLogInterceptor"
+    },
+    {
+      "category": "cleaner",
+      "source": "sun.misc.Cleaner types and create/clean calls throughout the AOSP archive",
+      "target": "JvmCleaner delegates registration and at-most-once cleanup to Java 21 java.lang.ref.Cleaner",
+      "origin": "Owned JVM portability bridge; no copied reference queue or simulated cleanup"
+    },
+    {
+      "category": "native-memory",
+      "source": "NativeAllocationRegistry private registerNativeAllocation/registerNativeFree callsites and class initialization",
+      "target": "JvmNativeMemory lazily connects native finalizers and uses Java 21 direct-memory accounting",
+      "origin": "Owned ART-to-JVM allocation boundary; original AOSP registry lifecycle and native free callback retained"
+    }
+  ],
+  "unchanged": [
+    "Native method declarations and unmapped instructions",
+    "System.nanoTime/currentTimeMillis real host clocks",
+    "SystemClock existing native clock owner",
+    "Klepton native loading and FD/socket ownership",
+    "Nonmovable arrays, raw object addresses and unimplemented device services"
+  ],
+  "excluded": "NoOpInterceptor, simulated clocks/devices, null socket facade and native default-return instrumentation are not included",
+  "resourcePortability": {
+    "source": "framework/ResourcePortability.java",
+    "arrayTransport": "AOSP TypedArray pooling uses JDK int arrays; AssetManager nativeApplyStyleWithArray receives arrays without fabricated ART addresses.",
+    "osConstants": {
+      "repository": "https://github.com/robolectric/robolectric",
+      "commit": "83b71974f00edaef78b72e212d60168b4bc4a70a",
+      "path": "shadows/framework/src/main/java/org/robolectric/shadows/ShadowOsConstants.java",
+      "sha256": "29bd8554dc60b5593728e36b0d2ad55c1c7c774258c3a3a09f39c5961c72b7f4",
+      "license": "MIT",
+      "scope": "544 Linux ABI constant assignments only; no shadow execution or simulated file permissions.",
+      "additionalConstants": {
+        "source": "https://raw.githubusercontent.com/torvalds/linux/v6.12/include/uapi/asm-generic/mman-common.h",
+        "scope": "24 API36 MADV integer constants",
+        "sha256": "bc57ba898adce4b1659d93715f4de1279ae3b82ffbefb04d0d3f565771dedd9a"
+      }
+    }
+  },
+  "filesystemPortability": {
+    "source": "framework/FilesystemPortability.java",
+    "host": "java/maclauncher/android/framework/HostFilesystem.java",
+    "scope": "Original AOSP Environment directory and volume algorithms with explicit host roots, private current-user volume lookup and global-storage permission boundaries. The same standard-UTF8 path mapping serves native libcore filesystem calls; sandbox permissions are unchanged."
+  },
+  "propertyAccessPortability": {
+    "source": "framework/UiPortability.java",
+    "repository": "https://github.com/robolectric/robolectric",
+    "commit": "83b71974f00edaef78b72e212d60168b4bc4a70a",
+    "path": "shadows/framework/src/main/java/org/robolectric/shadows/ShadowPropertyValuesHolder.java",
+    "sha256": "dd9d16b8d99d473c46474dee37d6c51aa956b6632bba31d544dc8695f211b6e1",
+    "license": "MIT",
+    "scope": "Reuse the public-Method accessibility strategy at the return of original PropertyValuesHolder.setupSetterOrGetter. Original AOSP lookup, numeric conversion, getter/setter algorithms and Method caches remain intact; no shadow class or parallel animation state."
+  }
+}

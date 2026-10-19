@@ -1,0 +1,953 @@
+--- a/crates/aim-host-gpu/src/lib.rs
++++ b/crates/aim-host-gpu/src/lib.rs
+@@ -25,6 +25,7 @@
+ mod fence;
+ mod metal;
+ mod present;
++mod opaque;
+ #[rustfmt::skip]
+ mod table;
+ 
+@@ -36,7 +37,7 @@
+ 
+ use aim_hostcall::gpu::{
+     FN_FENCE, FN_IMPORT_BUFFER, FN_INIT, FN_PRESENT, FN_TABLE_BASE, Fence, ImportBuffer, Init,
+-    Present, VERSION,
++    Present, OpaqueSurface, FN_OPAQUE_SURFACE, VERSION,
+ };
+ use aim_hostcall::{HostModule, args_mut, errno, module};
+ 
+@@ -175,6 +176,20 @@
+                 regs[0] = display::host(handle) as u64;
+             }
+             let mut r = darwin_gpu_forward(f, regs.as_ptr(), stack, ns as u64);
++            if let Some(directory) = std::env::var_os("AIM_EGL_TRACE") {
++                if matches!(e.name.to_bytes(), b"eglCreateContext" | b"eglChooseConfig" | b"eglGetConfigs" | b"eglGetConfigAttrib" | b"eglGetError") {
++                    use std::io::Write;
++                    static TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
++                    if TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 2048 {
++                        let mut detail=String::new();
++                        let attribute_pointer=if e.name==c"eglCreateContext" { regs[3] } else if e.name==c"eglChooseConfig" { regs[1] } else {0};
++                        if attribute_pointer!=0 {let mut items=Vec::new();for j in 0..64 {let key=(attribute_pointer as *const i32).add(j*2).read();if key==0x3038 {break;}let value=(attribute_pointer as *const i32).add(j*2+1).read();items.push(format!("{key:#x}={value:#x}"));}detail.push_str(&format!(" attrs=[{}]",items.join(",")));}
++                        if r as u32==1 && (e.name==c"eglChooseConfig" || e.name==c"eglGetConfigs") {let(countp,configp,size)=if e.name==c"eglChooseConfig"{(regs[4],regs[2],regs[3] as i32)}else{(regs[3],regs[1],regs[2] as i32)};if countp!=0 {let count=(countp as *const i32).read();detail.push_str(&format!(" count={count}"));if configp!=0&&size>0{let values=std::slice::from_raw_parts(configp as *const usize,(count.min(size).max(0) as usize).min(32));detail.push_str(&format!(" configs={values:x?}"));}}}
++                        if r as u32==1&&e.name==c"eglGetConfigAttrib"&&regs[3]!=0 {detail.push_str(&format!(" value={:#x}",(regs[3] as *const i32).read()));}
++                        let path=PathBuf::from(directory).join(format!("egl-{}.log",std::process::id()));if let Ok(mut file)=std::fs::OpenOptions::new().create(true).append(true).open(path){let _=writeln!(file,"{} args={:x?} result={r:#x}{detail}",e.name.to_string_lossy(),&regs[..nx]);}
++                    }
++                }
++            }
+             if e.name == c"eglGetCurrentDisplay" {
+                 r = display::guest(r as usize) as u64;
+             } else if e.name == c"eglInitialize" && r as u32 == 1 {
+@@ -315,6 +330,10 @@
+         },
+         FN_IMPORT_BUFFER => match unsafe { args_mut::<ImportBuffer>(args, len) } {
+             Ok(a) => metal::import_buffer(a),
++            Err(e) => e,
++        },
++        FN_OPAQUE_SURFACE => match unsafe { args_mut::<OpaqueSurface>(args, len) } {
++            Ok(a) => opaque::create(a),
+             Err(e) => e,
+         },
+         FN_PRESENT => match unsafe { args_mut::<Present>(args, len) } {
+--- a/crates/aim-host-gpu/src/present.rs
++++ b/crates/aim-host-gpu/src/present.rs
+@@ -37,6 +37,7 @@
+     get_current_context: unsafe extern "C" fn() -> usize,
+     query_context: unsafe extern "C" fn(usize, usize, i32, *mut i32) -> u32,
+     get_integerv: unsafe extern "C" fn(u32, *mut i32),
++    get_string: unsafe extern "C" fn(u32) -> *const i8,
+     is_enabled: unsafe extern "C" fn(u32) -> u8,
+     enable: unsafe extern "C" fn(u32),
+     disable: unsafe extern "C" fn(u32),
+@@ -73,6 +74,7 @@
+                 get_current_context: entry(c"eglGetCurrentContext")?,
+                 query_context: entry(c"eglQueryContext")?,
+                 get_integerv: entry(c"glGetIntegerv")?,
++                get_string: entry(c"glGetString")?,
+                 is_enabled: entry(c"glIsEnabled")?,
+                 enable: entry(c"glEnable")?,
+                 disable: entry(c"glDisable")?,
+@@ -101,6 +103,7 @@
+     fbo: u32,
+     /// The context's client version.
+     version: i32,
++    flip_y: bool,
+ }
+ 
+ /// Framebuffers in use, and those whose image was destroyed, which their
+@@ -127,7 +130,7 @@
+ ///
+ /// # Safety
+ /// ANGLE's GL on this thread's current context `context`.
+-unsafe fn target(g: &Gl, display: usize, context: usize, image: usize) -> (u32, i32) {
++unsafe fn target(g: &Gl, display: usize, context: usize, image: usize) -> (u32, i32, bool) {
+     let mut t = TARGETS.lock().unwrap();
+     let (live, dead) = &mut *t;
+     let (mine, others): (Vec<Target>, Vec<Target>) =
+@@ -144,9 +147,14 @@
+         .iter()
+         .find(|x| x.context == context && x.image == image)
+     {
+-        return (x.fbo, x.version);
++        return (x.fbo, x.version, x.flip_y);
+     }
+     let (mut texture, mut fbo, mut version, mut bound) = (0, 0, 0, 0);
++    // An exported GL entry point need not have its extension enabled. Older
++    // Metal ANGLE builds expose the symbol without MESA_framebuffer_flip_y.
++    let extensions = unsafe { (g.get_string)(0x1f03) };
++    let flip_y = !extensions.is_null() && unsafe { CStr::from_ptr(extensions) }
++        .to_bytes().split(|&c| c == b' ').any(|x| x == b"GL_MESA_framebuffer_flip_y");
+     // SAFETY: caller contract; the texture binding is restored.
+     unsafe {
+         (g.query_context)(display, context, EGL_CONTEXT_CLIENT_VERSION, &mut version);
+@@ -164,7 +172,7 @@
+             texture,
+             0,
+         );
+-        (g.framebuffer_parameter)(GL_DRAW_FRAMEBUFFER, GL_FRAMEBUFFER_FLIP_Y_MESA, 1);
++        if flip_y { (g.framebuffer_parameter)(GL_DRAW_FRAMEBUFFER, GL_FRAMEBUFFER_FLIP_Y_MESA, 1); }
+     }
+     live.push(Target {
+         context,
+@@ -172,8 +180,9 @@
+         texture,
+         fbo,
+         version,
++        flip_y,
+     });
+-    (fbo, version)
++    (fbo, version, flip_y)
+ }
+ 
+ pub fn present(p: &mut Present) -> i64 {
+@@ -196,7 +205,7 @@
+         (g.get_integerv)(GL_READ_FRAMEBUFFER_BINDING, &mut read);
+         let scissor = (g.is_enabled)(GL_SCISSOR_TEST) != 0;
+ 
+-        let (fbo, version) = target(g, display, context, p.image as usize);
++        let (fbo, version, flip_y) = target(g, display, context, p.image as usize);
+         (g.bind_framebuffer)(GL_DRAW_FRAMEBUFFER, fbo);
+         (g.bind_framebuffer)(GL_READ_FRAMEBUFFER, 0);
+         if scissor {
+@@ -210,7 +219,10 @@
+             } else {
+                 GL_LINEAR
+             };
+-            (g.blit)(0, 0, sw, sh, 0, 0, dw, dh, GL_COLOR_BUFFER_BIT, filter);
++            // Core ES3 blits can reverse the destination rectangle when the
++            // provider lacks MESA's framebuffer-origin extension.
++            let (y0, y1) = if flip_y { (0, dh) } else { (dh, 0) };
++            (g.blit)(0, 0, sw, sh, 0, y0, dw, y1, GL_COLOR_BUFFER_BIT, filter);
+         } else {
+             // ANGLE_framebuffer_blit copies without scaling.
+             let (w, h) = (sw.min(dw), sh.min(dh));
+--- a/crates/aim-hostcall/src/lib.rs
++++ b/crates/aim-hostcall/src/lib.rs
+@@ -153,7 +153,7 @@
+ /// Module [`module::GPU`]: EGL and OpenGL ES over the host's ANGLE on
+ /// Metal, for the guest GLES driver (`docs/gles-driver.md`).
+ pub mod gpu {
+-    pub const VERSION: u32 = 2;
++    pub const VERSION: u32 = 3;
+ 
+     /// Load ANGLE and resolve the forwarded entry points ([`Init`]).
+     /// Returns 0, `-ENODEV` when the host has no GPU libraries, or
+@@ -171,6 +171,8 @@
+     /// Returns the new sync_file's guest fd, or `-EINVAL` without a current
+     /// context.
+     pub const FN_FENCE: u32 = 4;
++    /// Create a real opaque RGBX window framebuffer over an IOSurface.
++    pub const FN_OPAQUE_SURFACE: u32 = 5;
+     /// Forwarded entry point `i` of the generated table
+     /// (`tools/gen-gpu-thunks.py`) is function `FN_TABLE_BASE + i`. Its
+     /// argument block is the callee's register image, 8 bytes per value:
+@@ -224,6 +226,19 @@
+         /// Out: a sync_file fd that signals when the copy is done.
+         pub fence: i32,
+         pub _reserved: u32,
++    }
++
++    /// Argument block of [`FN_OPAQUE_SURFACE`].
++    #[repr(C)]
++    #[derive(Clone, Copy, Debug, Default)]
++    pub struct OpaqueSurface {
++        pub display: u64,
++        pub config: u64,
++        pub width: u32,
++        pub height: u32,
++        pub colorspace: i32,
++        pub _reserved: u32,
++        pub surface: u64,
+     }
+ 
+     /// Argument block of [`FN_FENCE`].
+@@ -1388,6 +1403,11 @@
+         call_with(module::GPU, gpu::FN_PRESENT, args).map(drop)
+     }
+ 
++    /// Create an opaque IOSurface-backed window framebuffer.
++    pub fn gpu_opaque_surface(args: &mut gpu::OpaqueSurface) -> Result<(), Errno> {
++        call_with(module::GPU, gpu::FN_OPAQUE_SURFACE, args).map(drop)
++    }
++
+     /// A native fence for the current context's commands; returns its fd.
+     pub fn gpu_fence(args: &mut gpu::Fence) -> Result<i32, Errno> {
+         call_with(module::GPU, gpu::FN_FENCE, args).map(|fd| fd as i32)
+--- a/crates/aim-linux-abi/src/sys/net/socket_scm.rs
++++ b/crates/aim-linux-abi/src/sys/net/socket_scm.rs
+@@ -74,16 +74,16 @@
+ struct Reply { descriptor: Option<PrivateFd>, receipt: Option<aim_storage::socket_inode::Receipt>, class: u32 }
+ fn initialize(state: &mut Channel) -> Result<(), Errno> {
+     if state.endpoint.is_none() {
+-        let endpoint = binder::socket_scm_endpoint()?;
++        let endpoint = binder::socket_scm_endpoint().map_err(|e| { crate::diag!("AIM carrier endpoint: errno {e}"); e })?;
+         let descriptor = PrivateFd::allocate(|| {
+             let descriptor = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0) };
+             if descriptor < 0 { return Err(std::io::Error::last_os_error()); }
+             let descriptor=unsafe { OwnedFd::from_raw_fd(descriptor) };
+             if unsafe { libc::fcntl(descriptor.as_raw_fd(),libc::F_SETFD,libc::FD_CLOEXEC) }<0{return Err(std::io::Error::last_os_error());}
+             Ok(descriptor)
+-        }).map_err(io)?;
+-        connect(descriptor.as_raw_fd(), &endpoint).map_err(|error| { eprintln!("socket carrier reconnect connect: errno {error}"); error })?;
+-        aim_binder_host::socket_scm::authenticate(descriptor.as_raw_fd(), &endpoint).map_err(|error| { eprintln!("socket carrier reconnect authenticate: {error}"); io(error) })?;
++        }).map_err(|e| { crate::diag!("AIM carrier private allocation: {e}"); io(e) })?;
++        connect(descriptor.as_raw_fd(), &endpoint).map_err(|error| { crate::diag!("socket carrier reconnect connect: errno {error}"); error })?;
++        aim_binder_host::socket_scm::authenticate(descriptor.as_raw_fd(), &endpoint).map_err(|error| { crate::diag!("socket carrier reconnect authenticate: {error}"); io(error) })?;
+         state.endpoint = Some(descriptor);
+     }
+     Ok(())
+--- a/crates/aim-linux-abi/src/sys/poll.rs
++++ b/crates/aim-linux-abi/src/sys/poll.rs
+@@ -107,6 +107,41 @@
+     let err = errno::last();
+     restore_sigmask(old);
+     if n < 0 { -(err as i64) } else { n as i64 }
++}
++// Darwin poll omits pipe EOF when its data direction was not requested.
++// Linux always returns HUP/ERR. This per-wait queue observes only those
++// terminal events on the same retained descriptors; it is no new fd owner.
++struct PipeEnds {queue:std::os::fd::OwnedFd,events:Vec<libc::kevent>}
++impl PipeEnds {
++ fn watch(fds:&[libc::pollfd])->Result<Option<Self>,i64>{
++  use std::os::fd::FromRawFd;
++  let mut changes=Vec::new();
++  for (index,p) in fds.iter().enumerate(){
++   if p.fd<0{continue;}
++   let mut stat:libc::stat=unsafe{std::mem::zeroed()};
++   if unsafe{libc::fstat(p.fd,&mut stat)}<0{return Err(-(errno::last()as i64));}
++   if stat.st_mode&libc::S_IFMT!=libc::S_IFIFO{continue;}
++   let flags=unsafe{libc::fcntl(p.fd,libc::F_GETFL)};if flags<0{return Err(-(errno::last()as i64));}
++   let read=flags&libc::O_ACCMODE==libc::O_RDONLY;
++   if (read&&p.events&(POLLIN|POLLRDNORM)!=0)||(!read&&p.events&(POLLOUT|libc::POLLWRNORM)!=0){continue;}
++   changes.push(libc::kevent{ident:p.fd as usize,filter:if read{libc::EVFILT_READ}else{libc::EVFILT_WRITE},flags:libc::EV_ADD|libc::EV_CLEAR,fflags:libc::NOTE_LOWAT,data:isize::MAX,udata:index as*mut libc::c_void});
++  }
++  if changes.is_empty(){return Ok(None);}
++  let raw=unsafe{libc::kqueue()};if raw<0{return Err(-(errno::last()as i64));}
++  let queue=unsafe{std::os::fd::OwnedFd::from_raw_fd(raw)};
++  if unsafe{libc::kevent(raw,changes.as_ptr(),changes.len()as i32,std::ptr::null_mut(),0,std::ptr::null())}<0{return Err(-(errno::last()as i64));}
++  Ok(Some(Self{queue,events:vec![unsafe{std::mem::zeroed()};changes.len()]}))
++ }
++ fn collect(&mut self,fds:&mut [libc::pollfd])->Result<(),i64>{
++  let zero=libc::timespec{tv_sec:0,tv_nsec:0};
++  let count=unsafe{libc::kevent(self.queue.as_raw_fd(),std::ptr::null(),0,self.events.as_mut_ptr(),self.events.len()as i32,&zero)};
++  if count<0{return Err(-(errno::last()as i64));}
++  for event in &self.events[..count as usize]{
++   if event.flags&libc::EV_ERROR!=0{return Err(-(event.data as i64));}
++   if event.flags&libc::EV_EOF!=0{fds[event.udata as usize].revents|=if event.filter==libc::EVFILT_READ{POLLHUP}else{POLLERR};}
++  }
++  Ok(())
++ }
+ }
+ #[cfg(test)]
+ thread_local!{pub(super) static BEFORE_WAIT:std::cell::RefCell<Option<Box<dyn FnOnce()>>>=const{std::cell::RefCell::new(None)};}
+@@ -146,6 +181,8 @@
+         pins.push(pin);
+         ptys.push(pty);
+     }
++    let mut pipe_ends=match PipeEnds::watch(&host){Ok(watch)=>watch,Err(error)=>return error};
++    if let Some(watch)=&pipe_ends{host.push(libc::pollfd{fd:watch.queue.as_raw_fd(),events:libc::POLLIN,revents:0});}
+     for watch in ptys.iter().flatten(){
+         let Some(notification)=watch.observation.notification()else{return -(crate::errno::EIO as i64);};
+         host.push(libc::pollfd{fd:notification.as_raw_fd(),events:libc::POLLIN,revents:0});
+@@ -166,6 +203,7 @@
+         if n < 0 {
+             return n;
+         }
++        if let Some(watch)=&mut pipe_ends{if let Err(error)=watch.collect(&mut host){return error;}}
+         let mut ready = 0;
+         for (((g, h), pin),pty) in guest.iter_mut().zip(&mut host).zip(&pins).zip(&ptys) {
+             if g.fd >= 0 && pin.is_none()&&pty.is_none() { g.revents = POLLNVAL; ready += 1; continue; }
+@@ -307,4 +345,21 @@
+         super::super::fdtab::withdraw_guest(read.as_raw_fd()).unwrap();
+         assert_eq!(pselect6([(fd + 1) as u64, selected.as_mut_ptr() as u64, 0, 0, timeout.as_ptr() as u64, 0]), -(EBADF as i64));
+     }
+-}
++    #[test]
++    fn zero_interest_pipe_terminal_events_are_unconditional() {
++        if super::super::fdtab::isolated_kernel_test("sys::poll::pin_tests::zero_interest_pipe_terminal_events_are_unconditional"){return;}
++        let(_view,_root)=crate::vfs::test_view();
++        for observe_write in [false,true]{
++            let mut fds=[-1i32;2];assert_eq!(super::super::fs::pipe2([fds.as_mut_ptr()as u64,0,0,0,0,0]),0);
++            let mut entry=libc::pollfd{fd:fds[usize::from(observe_write)],events:0,revents:0};let zero=[0i64;2];
++            assert_eq!(ppoll([&mut entry as*mut _ as u64,1,zero.as_ptr()as u64,0,0,0]),0);
++            let closing=fds[usize::from(!observe_write)];
++            BEFORE_WAIT.with(|hook|*hook.borrow_mut()=Some(Box::new(move||{assert_eq!(super::super::fs::close([closing as u64,0,0,0,0,0]),0);})));
++            let bounded=[1i64,0];
++            assert_eq!(ppoll([&mut entry as*mut _ as u64,1,bounded.as_ptr()as u64,0,0,0]),1);
++            assert_eq!(entry.revents,if observe_write{POLLERR}else{POLLHUP});
++            assert_eq!(super::super::fs::close([entry.fd as u64,0,0,0,0,0]),0);
++        }
++    }
++
++}
+--- a/hal/gles/src/egl.rs
++++ b/hal/gles/src/egl.rs
+@@ -22,7 +22,10 @@
+ use std::ffi::CString;
+ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+ 
+-use aim_hostcall::gpu::{Init, Present};
++use aim_hostcall::gpu::{Init, Present, OpaqueSurface};
++
++#[path = "configs.rs"]
++mod configs;
+ 
+ use crate::buffers::{self, NativeBuffer};
+ use crate::thunks::{PROCS, TABLE_HASH, TABLE_LEN, host};
+@@ -90,6 +93,7 @@
+         fence: c_int,
+     ) -> c_int;
+     fn ANativeWindow_setSwapInterval(w: *mut NativeWindow, interval: c_int) -> c_int;
++    fn ANativeWindow_setBuffersGeometry(w: *mut NativeWindow, width: c_int, height: c_int, format: c_int) -> c_int;
+     fn ANativeWindow_setBuffersTimestamp(w: *mut NativeWindow, timestamp: i64) -> c_int;
+ }
+ 
+@@ -241,24 +245,8 @@
+     size: EGLint,
+     count: *mut EGLint,
+ ) -> EGLBoolean {
+-    let mut list = Vec::new();
+-    // SAFETY: a NONE-terminated list of pairs, or null.
+-    unsafe {
+-        let mut p = attribs;
+-        while !p.is_null() && *p != EGL_NONE {
+-            let (k, v) = (*p, *p.add(1));
+-            if !matches!(
+-                k,
+-                EGL_RECORDABLE_ANDROID | EGL_FRAMEBUFFER_TARGET_ANDROID | EGL_NATIVE_VISUAL_ID
+-            ) {
+-                list.extend([k, v]);
+-            }
+-            p = p.add(2);
+-        }
+-    }
+-    list.push(EGL_NONE);
+-    // SAFETY: forwarded with the filtered list.
+-    unsafe { host::eglChooseConfig(dpy, list.as_ptr(), configs, size, count) }
++    // SAFETY: EGL caller supplies the attribute and output storage.
++    unsafe { configs::choose(dpy, attribs, configs, size, count) }
+ }
+ 
+ fn config_attrib(dpy: EGLDisplay, config: EGLConfig, attr: EGLint) -> Option<EGLint> {
+@@ -298,9 +286,9 @@
+ ) -> EGLBoolean {
+     let v = match attr {
+         EGL_RECORDABLE_ANDROID | EGL_FRAMEBUFFER_TARGET_ANDROID => EGL_TRUE as EGLint,
+-        EGL_NATIVE_VISUAL_ID => native_visual(dpy, config),
++        EGL_NATIVE_VISUAL_ID => if configs::owner(config).is_some() { 2 } else { native_visual(dpy, config) },
+         // SAFETY: forwarded.
+-        _ => return unsafe { host::eglGetConfigAttrib(dpy, config, attr, value) },
++        _ => return unsafe { configs::query(dpy, config, attr, value) },
+     };
+     if value.is_null() {
+         return fail(EGL_BAD_PARAMETER, EGL_FALSE);
+@@ -308,6 +296,58 @@
+     // SAFETY: checked non-null.
+     unsafe { *value = v };
+     EGL_TRUE
++}
++
++/// # Safety
++/// EGL's contract.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn eglGetConfigs(dpy: EGLDisplay, values: *mut EGLConfig, size: EGLint, count: *mut EGLint) -> EGLBoolean {
++    unsafe { configs::get(dpy, values, size, count) }
++}
++
++fn context_configs() -> &'static Mutex<HashMap<usize, EGLint>> {
++    static CONFIGS: OnceLock<Mutex<HashMap<usize, EGLint>>> = OnceLock::new();
++    CONFIGS.get_or_init(Default::default)
++}
++
++/// # Safety
++/// EGL's contract.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn eglCreateContext(dpy: EGLDisplay, config: EGLConfig, share: EGLContext, attrs: *const EGLint) -> EGLContext {
++    let context = unsafe { host::eglCreateContext(dpy, configs::raw(config), share, attrs) };
++    if !context.is_null() {
++        if let Some(owner) = configs::owner(config) { context_configs().lock().unwrap().insert(context as usize, owner.id); }
++    }
++    context
++}
++
++/// # Safety
++/// EGL's contract.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn eglDestroyContext(dpy: EGLDisplay, context: EGLContext) -> EGLBoolean {
++    let okay = unsafe { host::eglDestroyContext(dpy, context) };
++    if okay == EGL_TRUE { context_configs().lock().unwrap().remove(&(context as usize)); }
++    okay
++}
++
++/// # Safety
++/// EGL's contract.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn eglQueryContext(dpy: EGLDisplay, context: EGLContext, attr: EGLint, value: *mut EGLint) -> EGLBoolean {
++    let okay = unsafe { host::eglQueryContext(dpy, context, attr, value) };
++    if okay == EGL_TRUE && attr == configs::CONFIG_ID {
++        if let Some(id) = context_configs().lock().unwrap().get(&(context as usize)) { unsafe { *value = *id }; }
++    }
++    okay
++}
++
++/// # Safety
++/// EGL's contract.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn eglCreatePbufferSurface(dpy: EGLDisplay, config: EGLConfig, attrs: *const EGLint) -> EGLSurface {
++    // RGBX aliases are window-only: standalone pbuffer configs remain raw.
++    if configs::owner(config).is_some() { return fail(configs::BAD_MATCH, std::ptr::null_mut()); }
++    unsafe { host::eglCreatePbufferSurface(dpy, config, attrs) }
+ }
+ 
+ // Window surfaces.
+@@ -352,6 +392,17 @@
+ 
+ impl Window {
+     fn create_pbuffer(&self, width: i32, height: i32) -> EGLSurface {
++        if let Some(owner) = configs::owner(self.config) {
++            let mut a = OpaqueSurface {
++                display: self.display as u64, config: owner.raw as u64,
++                width: width as u32, height: height as u32,
++                colorspace: self.colorspace.unwrap_or(0), ..Default::default()
++            };
++            return match aim_hostcall::guest::gpu_opaque_surface(&mut a) {
++                Ok(()) => a.surface as EGLSurface,
++                Err(_) => fail(EGL_BAD_ALLOC, std::ptr::null_mut()),
++            };
++        }
+         let mut attribs = vec![EGL_WIDTH, width, EGL_HEIGHT, height];
+         if let Some(c) = self.colorspace {
+             attribs.extend([EGL_GL_COLORSPACE, c]);
+@@ -389,6 +440,13 @@
+     };
+     if width <= 0 || height <= 0 {
+         return fail(EGL_BAD_NATIVE_WINDOW, std::ptr::null_mut());
++    }
++    if configs::owner(config).is_some() {
++        // The queued native buffers have the same opaque RGBX semantics as
++        // the default framebuffer. Their existing import treats alpha as one.
++        if unsafe { ANativeWindow_setBuffersGeometry(native, 0, 0, 2) } != 0 {
++            return fail(EGL_BAD_NATIVE_WINDOW, std::ptr::null_mut());
++        }
+     }
+     let mut w = Window {
+         display: dpy,
+@@ -697,8 +755,16 @@
+     attr: EGLint,
+     value: *mut EGLint,
+ ) -> EGLBoolean {
+-    // SAFETY: forwarded with the host surface.
+-    unsafe { host::eglQuerySurface(dpy, host_surface(surface), attr, value) }
++    // SAFETY: forwarded with the host surface and validated output storage.
++    let okay = unsafe { host::eglQuerySurface(dpy, host_surface(surface), attr, value) };
++    if okay == EGL_TRUE && attr == configs::CONFIG_ID {
++        if let Some(w) = window(surface) {
++            if let Some(owner) = configs::owner(w.lock().unwrap().config) {
++                unsafe { *value = owner.id };
++            }
++        }
++    }
++    okay
+ }
+ 
+ /// # Safety
+--- a/hal/gles/src/thunks.rs
++++ b/hal/gles/src/thunks.rs
+@@ -4713,10 +4713,6 @@
+     unsafe { host::eglCopyMetalSharedEventANGLE(dpy, sync) }
+ }
+ #[unsafe(no_mangle)]
+-pub unsafe extern "C" fn eglCreateContext(dpy: EGLDisplay, config: EGLConfig, share_context: EGLContext, attrib_list: *const EGLint) -> EGLContext {
+-    unsafe { host::eglCreateContext(dpy, config, share_context, attrib_list) }
+-}
+-#[unsafe(no_mangle)]
+ pub unsafe extern "C" fn eglCreateDeviceANGLE(device_type: EGLint, native_device: *mut c_void, attrib_list: *const EGLAttrib) -> EGLDeviceEXT {
+     unsafe { host::eglCreateDeviceANGLE(device_type, native_device, attrib_list) }
+ }
+@@ -4729,10 +4725,6 @@
+     unsafe { host::eglCreatePbufferFromClientBuffer(dpy, buftype, buffer, config, attrib_list) }
+ }
+ #[unsafe(no_mangle)]
+-pub unsafe extern "C" fn eglCreatePbufferSurface(dpy: EGLDisplay, config: EGLConfig, attrib_list: *const EGLint) -> EGLSurface {
+-    unsafe { host::eglCreatePbufferSurface(dpy, config, attrib_list) }
+-}
+-#[unsafe(no_mangle)]
+ pub unsafe extern "C" fn eglCreatePixmapSurface(dpy: EGLDisplay, config: EGLConfig, pixmap: EGLNativePixmapType, attrib_list: *const EGLint) -> EGLSurface {
+     unsafe { host::eglCreatePixmapSurface(dpy, config, pixmap, attrib_list) }
+ }
+@@ -4753,10 +4745,6 @@
+     unsafe { host::eglCreateStreamProducerD3DTextureANGLE(dpy, stream, attrib_list) }
+ }
+ #[unsafe(no_mangle)]
+-pub unsafe extern "C" fn eglDestroyContext(dpy: EGLDisplay, ctx: EGLContext) -> EGLBoolean {
+-    unsafe { host::eglDestroyContext(dpy, ctx) }
+-}
+-#[unsafe(no_mangle)]
+ pub unsafe extern "C" fn eglDestroyStreamKHR(dpy: EGLDisplay, stream: EGLStreamKHR) -> EGLBoolean {
+     unsafe { host::eglDestroyStreamKHR(dpy, stream) }
+ }
+@@ -4777,10 +4765,6 @@
+     unsafe { host::eglGetCompositorTimingSupportedANDROID(dpy, surface, name) }
+ }
+ #[unsafe(no_mangle)]
+-pub unsafe extern "C" fn eglGetConfigs(dpy: EGLDisplay, configs: *mut EGLConfig, config_size: EGLint, num_config: *mut EGLint) -> EGLBoolean {
+-    unsafe { host::eglGetConfigs(dpy, configs, config_size, num_config) }
+-}
+-#[unsafe(no_mangle)]
+ pub unsafe extern "C" fn eglGetCurrentContext() -> EGLContext {
+     unsafe { host::eglGetCurrentContext() }
+ }
+@@ -4859,10 +4843,6 @@
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn eglQueryAPI() -> EGLenum {
+     unsafe { host::eglQueryAPI() }
+-}
+-#[unsafe(no_mangle)]
+-pub unsafe extern "C" fn eglQueryContext(dpy: EGLDisplay, ctx: EGLContext, attribute: EGLint, value: *mut EGLint) -> EGLBoolean {
+-    unsafe { host::eglQueryContext(dpy, ctx, attribute, value) }
+ }
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn eglQueryDebugKHR(attribute: EGLint, value: *mut EGLAttrib) -> EGLBoolean {
+@@ -8239,13 +8219,13 @@
+     Proc { name: "eglClientWaitSyncKHR", addr: crate::sync::eglClientWaitSyncKHR as *const c_void, id: -1 },
+     Proc { name: "eglCopyBuffers", addr: eglCopyBuffers as *const c_void, id: 6 },
+     Proc { name: "eglCopyMetalSharedEventANGLE", addr: eglCopyMetalSharedEventANGLE as *const c_void, id: 7 },
+-    Proc { name: "eglCreateContext", addr: eglCreateContext as *const c_void, id: 8 },
++    Proc { name: "eglCreateContext", addr: crate::egl::eglCreateContext as *const c_void, id: -1 },
+     Proc { name: "eglCreateDeviceANGLE", addr: eglCreateDeviceANGLE as *const c_void, id: 9 },
+     Proc { name: "eglCreateImage", addr: crate::egl::eglCreateImage as *const c_void, id: -1 },
+     Proc { name: "eglCreateImageKHR", addr: crate::egl::eglCreateImageKHR as *const c_void, id: -1 },
+     Proc { name: "eglCreateNativeClientBufferANDROID", addr: eglCreateNativeClientBufferANDROID as *const c_void, id: 12 },
+     Proc { name: "eglCreatePbufferFromClientBuffer", addr: eglCreatePbufferFromClientBuffer as *const c_void, id: 13 },
+-    Proc { name: "eglCreatePbufferSurface", addr: eglCreatePbufferSurface as *const c_void, id: 14 },
++    Proc { name: "eglCreatePbufferSurface", addr: crate::egl::eglCreatePbufferSurface as *const c_void, id: -1 },
+     Proc { name: "eglCreatePixmapSurface", addr: eglCreatePixmapSurface as *const c_void, id: 15 },
+     Proc { name: "eglCreatePlatformPixmapSurface", addr: eglCreatePlatformPixmapSurface as *const c_void, id: 16 },
+     Proc { name: "eglCreatePlatformPixmapSurfaceEXT", addr: eglCreatePlatformPixmapSurfaceEXT as *const c_void, id: 17 },
+@@ -8257,7 +8237,7 @@
+     Proc { name: "eglCreateSyncKHR", addr: crate::sync::eglCreateSyncKHR as *const c_void, id: -1 },
+     Proc { name: "eglCreateWindowSurface", addr: crate::egl::eglCreateWindowSurface as *const c_void, id: -1 },
+     Proc { name: "eglDebugMessageControlKHR", addr: crate::egl::eglDebugMessageControlKHR as *const c_void, id: -1 },
+-    Proc { name: "eglDestroyContext", addr: eglDestroyContext as *const c_void, id: 25 },
++    Proc { name: "eglDestroyContext", addr: crate::egl::eglDestroyContext as *const c_void, id: -1 },
+     Proc { name: "eglDestroyImage", addr: crate::egl::eglDestroyImage as *const c_void, id: -1 },
+     Proc { name: "eglDestroyImageKHR", addr: crate::egl::eglDestroyImageKHR as *const c_void, id: -1 },
+     Proc { name: "eglDestroyStreamKHR", addr: eglDestroyStreamKHR as *const c_void, id: 28 },
+@@ -8270,7 +8250,7 @@
+     Proc { name: "eglGetCompositorTimingANDROID", addr: eglGetCompositorTimingANDROID as *const c_void, id: 35 },
+     Proc { name: "eglGetCompositorTimingSupportedANDROID", addr: eglGetCompositorTimingSupportedANDROID as *const c_void, id: 36 },
+     Proc { name: "eglGetConfigAttrib", addr: crate::egl::eglGetConfigAttrib as *const c_void, id: -1 },
+-    Proc { name: "eglGetConfigs", addr: eglGetConfigs as *const c_void, id: 38 },
++    Proc { name: "eglGetConfigs", addr: crate::egl::eglGetConfigs as *const c_void, id: -1 },
+     Proc { name: "eglGetCurrentContext", addr: eglGetCurrentContext as *const c_void, id: 39 },
+     Proc { name: "eglGetCurrentDisplay", addr: eglGetCurrentDisplay as *const c_void, id: 40 },
+     Proc { name: "eglGetCurrentSurface", addr: crate::egl::eglGetCurrentSurface as *const c_void, id: -1 },
+@@ -8301,7 +8281,7 @@
+     Proc { name: "eglProgramCacheQueryANGLE", addr: eglProgramCacheQueryANGLE as *const c_void, id: 65 },
+     Proc { name: "eglProgramCacheResizeANGLE", addr: eglProgramCacheResizeANGLE as *const c_void, id: 66 },
+     Proc { name: "eglQueryAPI", addr: eglQueryAPI as *const c_void, id: 67 },
+-    Proc { name: "eglQueryContext", addr: eglQueryContext as *const c_void, id: 68 },
++    Proc { name: "eglQueryContext", addr: crate::egl::eglQueryContext as *const c_void, id: -1 },
+     Proc { name: "eglQueryDebugKHR", addr: eglQueryDebugKHR as *const c_void, id: 69 },
+     Proc { name: "eglQueryDeviceAttribEXT", addr: eglQueryDeviceAttribEXT as *const c_void, id: 70 },
+     Proc { name: "eglQueryDeviceStringEXT", addr: eglQueryDeviceStringEXT as *const c_void, id: 71 },
+--- a/crates/aim-guest-init/src/unixsock.rs
++++ b/crates/aim-guest-init/src/unixsock.rs
+@@ -21,7 +21,7 @@
+ }
+ 
+ /// Runs `f` with `dir` as this thread's working directory.
+-fn in_directory<T>(dir: &Path, f: impl FnOnce() -> io::Result<T>) -> io::Result<T> {
++pub(crate) fn in_directory<T>(dir: &Path, f: impl FnOnce() -> io::Result<T>) -> io::Result<T> {
+     let c_dir = CString::new(dir.as_os_str().as_bytes()).map_err(io::Error::other)?;
+     // SAFETY: open/close of a directory fd; pthread_fchdir_np only changes
+     // this thread's cwd and is undone before returning.
+--- a/crates/aim-host-display/src/lib.rs
++++ b/crates/aim-host-display/src/lib.rs
+@@ -95,15 +95,22 @@
+     r.unwrap_or_else(|e| e)
+ }
+ 
++#[path="../../aim-guest-init/src/unixsock.rs"]
++#[allow(dead_code)]
++mod unixsock;
++
+ fn private_connect(path:&Path)->std::io::Result<PrivateFd>{
+     use std::os::unix::ffi::OsStrExt;
+-    let bytes=path.as_os_str().as_bytes();let mut address:libc::sockaddr_un=unsafe{std::mem::zeroed()};
++    let directory=path.parent().ok_or_else(||std::io::Error::from_raw_os_error(libc::EINVAL))?;
++    let bytes=path.file_name().ok_or_else(||std::io::Error::from_raw_os_error(libc::EINVAL))?.as_bytes();let mut address:libc::sockaddr_un=unsafe{std::mem::zeroed()};
+     if bytes.contains(&0)||bytes.len()>=address.sun_path.len(){return Err(std::io::Error::from_raw_os_error(libc::ENAMETOOLONG));}
+     address.sun_family=libc::AF_UNIX as u8;address.sun_len=(2+bytes.len()+1)as u8;
+     for(out,byte)in address.sun_path.iter_mut().zip(bytes){*out=*byte as libc::c_char;}
+     let descriptor=PrivateFd::allocate(||{let fd=unsafe{libc::socket(libc::AF_UNIX,libc::SOCK_STREAM,0)};if fd<0{return Err(std::io::Error::last_os_error());}let fd=unsafe{OwnedFd::from_raw_fd(fd)};if unsafe{libc::fcntl(fd.as_raw_fd(),libc::F_SETFD,libc::FD_CLOEXEC)}<0{return Err(std::io::Error::last_os_error());}Ok(fd)})?;
+     // Only allocation/adoption holds the descriptor lifecycle admission.
+-    if unsafe{libc::connect(descriptor.as_raw_fd(),(&address as *const libc::sockaddr_un).cast(),address.sun_len as libc::socklen_t)}<0{return Err(std::io::Error::last_os_error());}
++    unixsock::in_directory(directory,||{
++        if unsafe{libc::connect(descriptor.as_raw_fd(),(&address as *const libc::sockaddr_un).cast(),address.sun_len as libc::socklen_t)}<0{return Err(std::io::Error::last_os_error());}Ok(())
++    })?;
+     Ok(descriptor)
+ }
+ 
+diff --git a/crates/aim-host-gpu/src/opaque.rs b/crates/aim-host-gpu/src/opaque.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/aim-host-gpu/src/opaque.rs
+@@ -0,0 +1,85 @@
++//! RGBX window backing over ANGLE's existing RGB IOSurface attachment.
++//! ANGLE initializes alpha to one and masks subsequent alpha writes, so the
++//! default framebuffer has real opaque RGB semantics, not just config labels.
++
++use std::ffi::c_void;
++use aim_hostcall::gpu::OpaqueSurface;
++use crate::{EINVAL, display, metal, resolved};
++
++type Ref = *const c_void;
++
++aim_hostcall::dylib! {
++    static CF = c"/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation" {
++        static kCFTypeDictionaryKeyCallBacks: c_void;
++        static kCFTypeDictionaryValueCallBacks: c_void;
++        fn CFDictionaryCreateMutable(allocator: Ref, capacity: isize, keys: Ref, values: Ref) -> Ref;
++        fn CFDictionarySetValue(dictionary: Ref, key: Ref, value: Ref);
++        fn CFNumberCreate(allocator: Ref, kind: isize, value: Ref) -> Ref;
++        fn CFRelease(value: Ref);
++    }
++}
++aim_hostcall::dylib! {
++    static IOSURFACE = c"/System/Library/Frameworks/IOSurface.framework/IOSurface" {
++        static kIOSurfaceWidth: Ref;
++        static kIOSurfaceHeight: Ref;
++        static kIOSurfaceBytesPerElement: Ref;
++        static kIOSurfaceBytesPerRow: Ref;
++        static kIOSurfacePixelFormat: Ref;
++        fn IOSurfaceAlignProperty(key: Ref, value: usize) -> usize;
++        fn IOSurfaceCreate(properties: Ref) -> Ref;
++    }
++}
++
++pub fn create(a: &mut OpaqueSurface) -> i64 {
++    let address = resolved(c"eglCreatePbufferFromClientBuffer");
++    let query = resolved(c"eglGetConfigAttrib");
++    if address == 0 || query == 0 || a.width == 0 || a.height == 0 {
++        return EINVAL;
++    }
++    let pool = metal::pool_push();
++    // SAFETY: CF and EGL signatures below match the platform declarations;
++    // the dictionary retains values, and ANGLE retains a successful IOSurface.
++    unsafe {
++        let dictionary = CFDictionaryCreateMutable(std::ptr::null(), 5,
++            kCFTypeDictionaryKeyCallBacks().cast(), kCFTypeDictionaryValueCallBacks().cast());
++        let row = IOSurfaceAlignProperty(*kIOSurfaceBytesPerRow(), a.width as usize * 4);
++        for (key, value) in [
++            (*kIOSurfaceWidth(), a.width as i64),
++            (*kIOSurfaceHeight(), a.height as i64),
++            (*kIOSurfaceBytesPerElement(), 4),
++            (*kIOSurfaceBytesPerRow(), row as i64),
++            (*kIOSurfacePixelFormat(), 0x52474241), // 'RGBA' physical backing.
++        ] {
++            let number = CFNumberCreate(std::ptr::null(), 4, (&raw const value).cast());
++            CFDictionarySetValue(dictionary, key, number);
++            CFRelease(number);
++        }
++        let storage = IOSurfaceCreate(dictionary);
++        CFRelease(dictionary);
++        if storage.is_null() {
++            metal::pool_pop(pool);
++            return EINVAL;
++        }
++        let dpy = display::host(a.display as usize);
++        let get: unsafe extern "C" fn(usize, usize, i32, *mut i32) -> u32 = std::mem::transmute(query);
++        let mut target = 0;
++        if get(dpy, a.config as usize, 0x348d, &mut target) == 0 {
++            CFRelease(storage);
++            metal::pool_pop(pool);
++            return EINVAL;
++        }
++        let mut attributes = vec![
++            0x3057, a.width as i32, 0x3056, a.height as i32, // WIDTH, HEIGHT.
++            0x345a, 0, // IOSURFACE_PLANE_ANGLE.
++            0x3081, target, 0x3080, 0x305e, // TEXTURE_TARGET, TEXTURE_RGBA.
++            0x345c, 0x1401, 0x345d, 0x1907, // UNSIGNED_BYTE, RGB attachment.
++        ];
++        if a.colorspace != 0 { attributes.extend([0x309d, a.colorspace]); }
++        attributes.push(0x3038);
++        let create: unsafe extern "C" fn(usize, u32, Ref, usize, *const i32) -> usize = std::mem::transmute(address);
++        a.surface = create(dpy, 0x3454, storage, a.config as usize, attributes.as_ptr()) as u64;
++        CFRelease(storage);
++    }
++    metal::pool_pop(pool);
++    0
++}
+diff --git a/hal/gles/src/configs.rs b/hal/gles/src/configs.rs
+new file mode 100644
+--- /dev/null
++++ b/hal/gles/src/configs.rs
+@@ -0,0 +1,161 @@
++//! Android window config projection over the provider's real framebuffer types.
++//! Opaque RGBX aliases use an RGB IOSurface attachment; raw configs are retained.
++
++use super::*;
++use std::collections::HashMap;
++use std::sync::{Mutex, OnceLock};
++
++pub const CONFIG_ID: EGLint = 0x3028;
++const BUFFER_SIZE: EGLint = 0x3020;
++const SURFACE_TYPE: EGLint = 0x3033;
++const WINDOW: EGLint = 4;
++const PBUFFER: EGLint = 1;
++const DONT_CARE: EGLint = -1;
++pub const BAD_MATCH: EGLint = 0x3009;
++const BAD_CONFIG: EGLint = 0x3005;
++
++#[derive(Clone, Copy)]
++pub struct Opaque { display: usize, pub raw: usize, pub id: EGLint }
++
++fn aliases() -> &'static Mutex<HashMap<usize, Box<Opaque>>> {
++    static ALIASES: OnceLock<Mutex<HashMap<usize, Box<Opaque>>>> = OnceLock::new();
++    ALIASES.get_or_init(Default::default)
++}
++
++pub fn owner(config: EGLConfig) -> Option<Opaque> {
++    aliases().lock().unwrap().get(&(config as usize)).map(|x| **x)
++}
++pub fn raw(config: EGLConfig) -> EGLConfig {
++    owner(config).map_or(config, |o| o.raw as EGLConfig)
++}
++
++fn attribute(dpy: EGLDisplay, config: EGLConfig, name: EGLint) -> Option<EGLint> {
++    let mut value = 0;
++    // SAFETY: valid output storage and a provider config.
++    (unsafe { host::eglGetConfigAttrib(dpy, config, name, &mut value) } == EGL_TRUE).then_some(value)
++}
++
++fn list(dpy: EGLDisplay) -> Option<Vec<EGLConfig>> {
++    let mut count = 0;
++    // SAFETY: EGL allows a null array for a count query.
++    if unsafe { host::eglGetConfigs(dpy, std::ptr::null_mut(), 0, &mut count) } == EGL_FALSE {
++        return None;
++    }
++    let mut native = vec![std::ptr::null_mut(); count as usize];
++    // SAFETY: storage for all configs reported by this display.
++    if unsafe { host::eglGetConfigs(dpy, native.as_mut_ptr(), count, &mut count) } == EGL_FALSE {
++        return None;
++    }
++    native.truncate(count as usize);
++    let maximum = native.iter().filter_map(|&c| attribute(dpy, c, CONFIG_ID)).max().unwrap_or(0);
++    let mut result = Vec::with_capacity(native.len() * 2);
++    for (index, &config) in native.iter().enumerate() {
++        if [EGL_RED_SIZE, EGL_GREEN_SIZE, EGL_BLUE_SIZE, EGL_ALPHA_SIZE]
++            .iter().all(|&key| attribute(dpy, config, key) == Some(8))
++            && attribute(dpy, config, SURFACE_TYPE).is_some_and(|x| x & PBUFFER != 0)
++        {
++            let mut all = aliases().lock().unwrap();
++            let identity = match all.iter().find(|(_, x)| x.display == dpy as usize && x.raw == config as usize) {
++                Some((&identity, _)) => identity,
++                None => {
++                    let value = Box::new(Opaque { display: dpy as usize, raw: config as usize, id: maximum + index as i32 + 1 });
++                    let identity = (&*value as *const Opaque) as usize;
++                    all.insert(identity, value);
++                    identity
++                }
++            };
++            result.push(identity as EGLConfig);
++        }
++        result.push(config);
++    }
++    Some(result)
++}
++
++unsafe fn output(values: &[EGLConfig], out: *mut EGLConfig, size: EGLint, count: *mut EGLint) -> EGLBoolean {
++    // SAFETY: checked by callers; EGL output contract.
++    unsafe {
++        *count = if out.is_null() { values.len() } else { values.len().min(size as usize) } as EGLint;
++        if !out.is_null() { std::ptr::copy_nonoverlapping(values.as_ptr(), out, *count as usize); }
++    }
++    EGL_TRUE
++}
++
++pub unsafe fn get(dpy: EGLDisplay, out: *mut EGLConfig, size: EGLint, count: *mut EGLint) -> EGLBoolean {
++    if count.is_null() || size < 0 { return fail(EGL_BAD_PARAMETER, EGL_FALSE); }
++    match list(dpy) {
++        // SAFETY: EGL caller provides output storage.
++        Some(values) => unsafe { output(&values, out, size, count) },
++        None => EGL_FALSE,
++    }
++}
++
++pub unsafe fn query(dpy: EGLDisplay, config: EGLConfig, name: EGLint, value: *mut EGLint) -> EGLBoolean {
++    if value.is_null() { return fail(EGL_BAD_PARAMETER, EGL_FALSE); }
++    let projected = owner(config);
++    if projected.is_some_and(|x| x.display != dpy as usize) { return fail(BAD_CONFIG, EGL_FALSE); }
++    // SAFETY: validated output; pass through all provider attributes first.
++    let okay = unsafe { host::eglGetConfigAttrib(dpy, raw(config), name, value) };
++    if okay == EGL_FALSE { return okay; }
++    if let Some(o) = projected {
++        // SAFETY: output is non-null.
++        unsafe { match name {
++            EGL_ALPHA_SIZE => *value = 0,
++            BUFFER_SIZE => *value -= 8,
++            CONFIG_ID => *value = o.id,
++            SURFACE_TYPE => *value = WINDOW,
++            EGL_NATIVE_VISUAL_ID => *value = 2,
++            _ => {},
++        } }
++    }
++    okay
++}
++
++pub unsafe fn choose(dpy: EGLDisplay, attrs: *const EGLint, out: *mut EGLConfig, size: EGLint, count: *mut EGLint) -> EGLBoolean {
++    if count.is_null() || size < 0 { return fail(EGL_BAD_PARAMETER, EGL_FALSE); }
++    let Some(all) = list(dpy) else { return EGL_FALSE; };
++    let (mut requested, mut alpha, mut buffer, mut surface, mut visual) = (DONT_CARE, 0, 0, WINDOW, DONT_CARE);
++    let mut selected_owner = None;
++    let mut native_attrs = Vec::new();
++    let mut has_surface = false;
++    // SAFETY: EGL's terminated attribute-pair list.
++    unsafe {
++        let mut p = attrs;
++        while !p.is_null() && *p != EGL_NONE {
++            let (key, mut value) = (*p, *p.add(1));
++            p = p.add(2);
++            match key {
++                EGL_RECORDABLE_ANDROID | EGL_FRAMEBUFFER_TARGET_ANDROID => continue,
++                EGL_NATIVE_VISUAL_ID => { visual = value; continue; },
++                EGL_ALPHA_SIZE => alpha = value,
++                BUFFER_SIZE => buffer = value,
++                SURFACE_TYPE => { has_surface = true; surface = value; if value != DONT_CARE && value & WINDOW != 0 { value = (value & !WINDOW) | PBUFFER; } },
++                CONFIG_ID => {
++                    requested = value;
++                    selected_owner = all.iter().filter_map(|&c| owner(c)).find(|o| o.id == value);
++                    if let Some(o) = selected_owner { value = attribute(dpy, o.raw as EGLConfig, CONFIG_ID).unwrap_or(value); }
++                },
++                _ => {},
++            }
++            native_attrs.extend([key, value]);
++        }
++        if !has_surface { native_attrs.extend([SURFACE_TYPE, PBUFFER]); }
++        native_attrs.push(EGL_NONE);
++        let mut n = 0;
++        if host::eglChooseConfig(dpy, native_attrs.as_ptr(), std::ptr::null_mut(), 0, &mut n) == EGL_FALSE { return EGL_FALSE; }
++        let mut native = vec![std::ptr::null_mut(); n as usize];
++        if host::eglChooseConfig(dpy, native_attrs.as_ptr(), native.as_mut_ptr(), n, &mut n) == EGL_FALSE { return EGL_FALSE; }
++        native.truncate(n as usize);
++        let opaque_matches = selected_owner.is_some() || ((alpha == DONT_CARE || alpha == 0)
++            && (buffer == DONT_CARE || buffer <= 24)
++            && (surface == DONT_CARE || surface & !WINDOW == 0)
++            && (visual == DONT_CARE || visual == 2));
++        let mut result = Vec::new();
++        for config in native {
++            if opaque_matches {
++                if let Some(&alias) = all.iter().find(|&&c| owner(c).is_some_and(|o| o.raw == config as usize && (requested == DONT_CARE || requested == o.id))) { result.push(alias); }
++            }
++            if selected_owner.is_none() && (visual == DONT_CARE || native_visual(dpy, config) == visual) { result.push(config); }
++        }
++        output(&result, out, size, count)
++    }
++}
+--- a/crates/aim-linux-abi/src/hostcall.rs
++++ b/crates/aim-linux-abi/src/hostcall.rs
+@@ -105,6 +105,15 @@
+         mark_used();
+         return unsafe { call(func, args, len, crate::context::call_guest) };
+     }
++    // The selected MacLauncher physical backend serves the unchanged original
++    // audio HAL protocol. There is exactly one audio backend in this process.
++    if module == module::AUDIO {
++        if let Some(call) = EXTENSION.get() {
++            if func == FN_VERSION { return aim_hostcall::audio::VERSION as i64; }
++            mark_used();
++            return unsafe { call(0x10000 + func, args, len, crate::context::call_guest) };
++        }
++    }
+     let Some(Some(m)) = MODULES.get(module as usize) else {
+         return -(errno::ENOSYS as i64);
+     };
+--- a/crates/aim-binder-host/src/socket_scm.rs
++++ b/crates/aim-binder-host/src/socket_scm.rs
+@@ -5,6 +5,9 @@
+ use std::os::unix::ffi::OsStrExt;
+ use crate::proxy_file::{send,receive_flags};
+ #[path="socket_scm_pipe_token.rs"] mod pipe_token;
++#[path="../../aim-guest-init/src/unixsock.rs"]
++#[allow(dead_code)]
++mod unixsock;
+ pub const CLASS:u32=5;
+ struct Entry {reader:pipe_token::Reader,backing:OwnedFd,receipt:Receipt}
+ static REGISTRY:LazyLock<Mutex<HashMap<(u64,u64),Entry>>>=LazyLock::new(Default::default);
+@@ -51,7 +54,7 @@
+  pub(crate) fn encode(&self)->Vec<u8>{let mut writer=crate::wire::Writer::default();writer.bytes(&self.path).i32(self.process.host_pid).u64(self.process.start_seconds).u64(self.process.start_microseconds).u32(self.uid).bytes(&self.nonce);writer.0}
+  pub(crate) fn decode(reader:&mut crate::wire::Reader<'_>)->Result<Self,i32>{
+   let path=reader.bytes()?.to_vec();let pid=reader.i32()?;let sec=reader.u64()?;let us=reader.u64()?;let uid=reader.u32()?;let nonce=reader.bytes()?.try_into().map_err(|_|crate::wire::EPROTO)?;
+-  if path.is_empty()||path.len()>=104||path[0]!=b'/'||path.contains(&0)||pid<=0||us>=1_000_000{return Err(crate::wire::EPROTO);}
++  if path.is_empty()||path[0]!=b'/'||path.contains(&0)||pid<=0||us>=1_000_000{return Err(crate::wire::EPROTO);}
+   Ok(Self{path,process:aim_storage::process_namespace::ProcessIdentity{host_pid:pid,start_seconds:sec,start_microseconds:us},uid,nonce})
+  }
+ }
+@@ -61,7 +64,9 @@
+   use std::os::unix::fs::{PermissionsExt,MetadataExt};
+   let mut nonce=[0;16];unsafe{libc::arc4random_buf(nonce.as_mut_ptr().cast(),nonce.len());}
+   let directory=std::env::temp_dir().join(format!("aim-scm-{}-{}",std::process::id(),nonce.iter().map(|byte|format!("{byte:02x}")).collect::<String>()));std::fs::create_dir(&directory)?;std::fs::set_permissions(&directory,std::fs::Permissions::from_mode(0o700))?;
+-  let listener=std::os::unix::net::UnixListener::bind(directory.join("s"))?;listener.set_nonblocking(true)?;
++  let socket=unixsock::bind_at(&directory,"s",libc::SOCK_STREAM)?;
++  if unsafe{libc::listen(socket.as_raw_fd(),128)}<0{return Err(io::Error::last_os_error());}
++  let listener=std::os::unix::net::UnixListener::from(socket);listener.set_nonblocking(true)?;
+   use std::os::unix::ffi::OsStrExt;
+   let endpoint=Endpoint{path:directory.join("s").as_os_str().as_bytes().to_vec(),process:aim_storage::process_namespace::ProcessIdentity::running(std::process::id()as i32)?,uid:unsafe{libc::geteuid()},nonce};
+   let stat=std::fs::metadata(&directory)?;let identity=(stat.dev(),stat.ino());
+@@ -86,7 +91,7 @@
+  pub fn endpoint(&self)->&Endpoint{&self.endpoint}
+ }
+ impl Drop for Service{fn drop(&mut self){
+- self.stop.store(true,std::sync::atomic::Ordering::Release);let _=UnixStream::connect(std::path::Path::new(std::ffi::OsStr::from_bytes(&self.endpoint.path)));
++ self.stop.store(true,std::sync::atomic::Ordering::Release);let _=unixsock::connect_at(&self.directory,"s");
+  if let Some(thread)=self.thread.take(){if thread.join().is_err(){eprintln!("socket SCM listener unwound");}}
+  for stream in self.streams.lock().unwrap().drain(..){let _=stream.shutdown(std::net::Shutdown::Both);}
+  for worker in self.workers.lock().unwrap().drain(..){if worker.join().is_err(){eprintln!("socket SCM worker unwound");}}
+--- a/crates/aim-linux-abi/src/sys/net/socket_scm.rs
++++ b/crates/aim-linux-abi/src/sys/net/socket_scm.rs
+@@ -34,15 +34,16 @@
+     let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+     if flags < 0 { return Err(errno::last()); }
+     if unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 { return Err(errno::last()); }
+-    let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+-    if endpoint.path.is_empty() || endpoint.path.len() >= address.sun_path.len() || endpoint.path.contains(&0) { return Err(errno::EINVAL); }
+-    address.sun_family = libc::AF_UNIX as _;
+-    address.sun_len = (2 + endpoint.path.len() + 1) as u8;
+-    for (target, source) in address.sun_path.iter_mut().zip(&endpoint.path) { *target = *source as _; }
+-    let result = unsafe { libc::connect(fd, (&address as *const libc::sockaddr_un).cast(), address.sun_len as _) };
++    use std::os::unix::ffi::OsStrExt;
++    let path=std::path::Path::new(std::ffi::OsStr::from_bytes(&endpoint.path));
++    let directory=path.parent().ok_or(errno::EINVAL)?;
++    let name=path.file_name().ok_or(errno::EINVAL)?.as_bytes();
++    if name.is_empty()||name.len()>=104||name.contains(&0){return Err(errno::EINVAL);}
++    let target=super::Target::UnixAt{dir:directory.into(),name:name.into()};
++    let result=super::with_target(&target,|address,length|unsafe{libc::connect(fd,address,length)as i64});
+     if result < 0 {
+-        let error = std::io::Error::last_os_error().raw_os_error().unwrap_or(libc::EIO);
+-        if error != libc::EINPROGRESS && error != libc::EAGAIN { return Err(errno::from_darwin(error)); }
++        let error=(-result)as Errno;
++        if error!=errno::from_darwin(libc::EINPROGRESS)&&error!=errno::EAGAIN{return Err(error);}
+         let start = std::time::Instant::now();
+         loop {
+             let remaining = 1000i32 - start.elapsed().as_millis().min(1000) as i32;

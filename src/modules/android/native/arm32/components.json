@@ -1,0 +1,9 @@
+{
+  "bindings": {"jvm": "libandroid-arm32.dylib", "art": "libandroid-native-bridge.so"},
+  "cpu": {
+    "archive": "libandroid-arm32-cpu.a",
+    "dependencies": ["dynarmic/src/dynarmic/libdynarmic.a", "dynarmic/externals/mcl/src/libmcl.a", "dynarmic/externals/fmt/libfmt.a"]
+  },
+  "preloads": [{"name": "arm32Builtins", "file": "libandroid-arm32-builtins.so", "build": "compiler-runtime/libandroid-arm32-builtins.so"}],
+  "notices": "notices"
+}

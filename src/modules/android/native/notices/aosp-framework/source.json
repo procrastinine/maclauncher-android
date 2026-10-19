@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://android.googlesource.com/platform/frameworks/base",
+  "commit": "4e43ad12e1b211f15152e9c5b16b0fe88e6b93f3",
+  "license": "Apache-2.0",
+  "files": [],
+  "apiReferences": [
+    {
+      "path": "core/java/android/net/Uri.java",
+      "use": "URI authority and encoded path-segment contracts for the owned Java URI implementation."
+    },
+    {
+      "path": "core/java/android/os/StrictMode.java",
+      "use": "Thread-local policy, disk diagnostics and synchronous explicit network-penalty contracts."
+    },
+    {
+      "path": "core/java/android/content/Context.java",
+      "use": "Typed service lookup delegates through the supported service name and virtual string lookup. Same-package context identity, code-loading flags and unavailable package exceptions."
+    },
+    {
+      "path": "core/java/android/os/UserManager.java",
+      "use": "Active local-user unlocked state without Android Direct Boot or a remote user service."
+    },
+    {
+      "path": "core/java/android/app/SystemServiceRegistry.java",
+      "use": "Names for the service classes implemented by this host."
+    }
+  ],
+  "activityThreadJni": {
+    "unit": "core/jni/android_app_ActivityThread.cpp",
+    "adaptation": "activity-thread/build.mjs",
+    "allocatorBoundary": "Darwin malloc_zone_pressure_relief; Android zygote heap profiling has no standalone JVM backend."
+  },
+  "graphicsJni": {
+    "directory": "core/jni",
+    "families": [
+      "android_opengl_GLES*.cpp",
+      "android_opengl_EGL*.cpp",
+      "com_google_android_gles_jni_EGLImpl.cpp",
+      "com_google_android_gles_jni_GLImpl.cpp"
+    ],
+    "adaptation": "codec2/surface/gles-source.mjs",
+    "nativeKeyboardOwner": "core/jni/android_view_KeyCharacterMap.cpp",
+    "supplier": "Original libandroid_runtime and libhwui selected through the shared component composition"
+  }
+}

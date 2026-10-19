@@ -1,0 +1,93 @@
+import maclauncher.android.portability.PortableCalls;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.zip.*;
+
+/** Full executable AOSP framework with narrow JVM/libcore callsite normalization. */
+public final class FrameworkArchive {
+ public static void main(String[] args)throws Exception {
+  if(args.length<2)throw new IllegalArgumentException("Expected framework input, output and optional module JARs");
+  int classes=0,changed=0;long bytes=0;PortableCalls portability=new PortableCalls();
+  var inputs=new ArrayList<ZipFile>();
+  try{
+   for(int i=0;i<args.length;i++)if(i!=1)inputs.add(new ZipFile(args[i]));
+   // A class has one implementation owner. Identical publisher copies can be
+   // coalesced, but archive ordering must never select between different APIs
+   // or bodies. Resolve composition before creating the output archive.
+   Map<String,ZipFile> owners=new HashMap<>();
+   Map<String,LinkedHashSet<String>> services=new HashMap<>();
+   for(var input:inputs)for(var entry:Collections.list(input.entries())){
+    String name=entry.getName();
+    if(!entry.isDirectory()&&name.startsWith("META-INF/services/")){
+     var providers=services.computeIfAbsent(name,key->new LinkedHashSet<>());
+     try(var stream=input.getInputStream(entry)){
+      for(String line:new String(stream.readAllBytes(),StandardCharsets.UTF_8).split("\\R")){
+       int comment=line.indexOf('#');String provider=(comment<0?line:line.substring(0,comment)).trim();
+       if(!provider.isEmpty())providers.add(provider);
+      }
+     }
+    }
+    if(entry.isDirectory()||!name.endsWith(".class")||name.startsWith("native/")||name.startsWith("java/"))continue;
+    var previous=owners.putIfAbsent(name,input);
+    if(previous!=null){
+     try(var first=previous.getInputStream(previous.getEntry(name));var next=input.getInputStream(entry)){
+      if(!Arrays.equals(first.readAllBytes(),next.readAllBytes()))
+       throw new IllegalArgumentException("Conflicting framework class owners for "+name+": "+previous.getName()+" and "+input.getName());
+     }
+    }
+   }
+   try(var output=new ZipOutputStream(Files.newOutputStream(Path.of(args[1]),StandardOpenOption.CREATE_NEW))){
+   DexPortability.initialize(inputs);
+   GraphicsPortability.initialize(inputs,(name,original)->adaptBoundaries(name,original,new PortableCalls()));
+   output.setLevel(6);
+   Set<String> written=new HashSet<>();
+   for(var input:inputs){
+   for(var entry:Collections.list(input.entries()).stream().sorted(Comparator.comparing(ZipEntry::getName)).toList()){
+    String name=entry.getName();
+    // Linux JNI is incompatible with macOS; java.* belongs to the JDK module.
+    // Every other framework class remains available, without a class allowlist.
+    if(entry.isDirectory()||name.startsWith("native/")||name.startsWith("java/"))continue;
+    if(name.startsWith("/")||name.contains("../"))throw new IllegalArgumentException("Invalid framework archive entry");
+    // Different class implementations were resolved above. ServiceLoader
+    // declarations preserve all suppliers even when their original archives
+    // use the same service configuration filename.
+    if(!written.add(name))continue;
+    var target=new ZipEntry(name);target.setTime(0);output.putNextEntry(target);
+    try(var stream=input.getInputStream(entry)){
+     if(services.containsKey(name)){
+      byte[] providers=(String.join("\n",services.get(name))+"\n").getBytes(StandardCharsets.UTF_8);
+      output.write(providers);bytes+=providers.length;
+     }else if(name.endsWith(".class")){
+      byte[] original=stream.readAllBytes(),normalized=adapt(name,original,portability);
+      if(normalized!=original)changed++;output.write(normalized);bytes+=normalized.length;classes++;
+     }else bytes+=stream.transferTo(output);
+    }
+    output.closeEntry();
+   }
+   }
+  }
+  }finally{for(var input:inputs)input.close();}
+  System.out.println("AOSP framework: "+classes+" classes, "+bytes+" uncompressed bytes, "+changed+" classes with JVM portability calls");
+  for(var entry:portability.counts.entrySet())System.out.println("  "+entry.getKey()+" = "+entry.getValue());
+ }
+ private static byte[] adapt(String name,byte[] bytes,PortableCalls calls){
+  return GraphicsPortability.transform(name,adaptBoundaries(name,bytes,calls));
+ }
+ private static byte[] adaptBoundaries(String name,byte[] bytes,PortableCalls calls){
+  byte[] adapted=NativeBindings.transform(bytes);
+  adapted=GlesPortability.transform(name,adapted);
+  adapted=calls.normalize(adapted);
+  adapted=SurfacePortability.transform(name,adapted);
+  adapted=ResourcePortability.transform(name,adapted);
+  adapted=CharsetPortability.transform(name,adapted);
+  adapted=FilesystemPortability.transform(name,adapted);
+  adapted=DescriptorPortability.transform(name,adapted);
+  adapted=ServicePortability.transform(name,adapted);
+  adapted=MessageQueuePortability.transform(name,adapted);
+  adapted=UiPortability.transform(name,adapted);
+  adapted=DexPortability.transform(name,adapted);
+  return TaskPortability.transform(name,adapted);
+ }
+
+}

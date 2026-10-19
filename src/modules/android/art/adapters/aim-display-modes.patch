@@ -1,0 +1,218 @@
+--- a/crates/aim-hostcall/src/lib.rs
++++ b/crates/aim-hostcall/src/lib.rs
+@@ -296,6 +296,8 @@
+     /// mode, docs/layers.md). Returns 0, `-EBADF` for a bad fence,
+     /// `-EINVAL` for a bad array or `-ENOTCONN`.
+     pub const FN_LAYERS: u32 = 8;
++    /// Query/commit a native window mode through the same display owner.
++    pub const FN_MODE: u32 = 9;
+ 
+     /// Argument block of [`FN_CONNECT`].
+     #[repr(C)]
+@@ -1414,6 +1416,10 @@
+     }
+ 
+     /// Connect to the display server; returns the event fd.
++    pub fn display_mode(args: &mut display::Connect) -> Result<(), Errno> {
++        call_with(module::DISPLAY, display::FN_MODE, args).map(drop)
++    }
++
+     pub fn display_connect(args: &mut display::Connect) -> Result<i32, Errno> {
+         call_with(module::DISPLAY, display::FN_CONNECT, args).map(|fd| fd as i32)
+     }
+--- a/crates/aim-host-display/src/lib.rs
++++ b/crates/aim-host-display/src/lib.rs
+@@ -65,6 +65,7 @@
+ unsafe fn call(func: u32, args: u64, len: u64) -> i64 {
+     // SAFETY (all arms): the registry passes the guest's argument block.
+     let r = match func {
++        aim_hostcall::display::FN_MODE => unsafe { args_mut::<Connect>(args, len) }.map(mode),
+         FN_CONNECT => unsafe { args_mut::<Connect>(args, len) }.map(connect),
+         FN_IMPORT => unsafe { args_mut::<Import>(args, len) }.map(|i| import(i)),
+         FN_PRESENT => unsafe { args_mut::<Present>(args, len) }.map(present),
+@@ -153,6 +154,12 @@
+     (hooks.publish)(stream.as_fd(),stream.receipt).map(|fd|fd as i64).map_err(neg)
+ }
+ 
++fn mode(out: &mut Connect) -> i64 {
++    let hello=Request{op:wire::OP_MODE,id:wire::VERSION,flag:out.display,
++        import:Import{width:out.width,height:out.height,..Default::default()},..Default::default()};
++    match open::<Connect>(&hello){Ok((_stream,info))=>{*out=info;0},Err(error)=>error}
++}
++
+ fn connect(out: &mut Connect) -> i64 {
+     let hello = Request {
+         op: wire::OP_HELLO,
+--- a/crates/aim-host-display/src/wire.rs
++++ b/crates/aim-host-display/src/wire.rs
+@@ -78,6 +78,9 @@
+ /// server answers with its mode (a `u32`), then both ends exchange
+ /// frames.
+ pub const OP_TEXT_INPUT: u32 = 13;
++/// MacLauncher native window mode query/selection. Reply: Connect.
++/// Keep the embedding extension separate from upstream protocol operations.
++pub const OP_MODE: u32 = 0x4d4c0001;
+ 
+ /// [`Host::op`] values.
+ pub mod host {
+--- a/hal/graphics/composer/src/host.rs
++++ b/hal/graphics/composer/src/host.rs
+@@ -10,6 +10,8 @@
+ /// The connected display: its mode, and the fd its events arrive on.
+ pub struct Host {
+     pub info: Connect,
++    pub alternate: Connect,
++    pub initial_config:i32,
+     events: OwnedFd,
+ }
+ 
+@@ -19,9 +21,18 @@
+         let fd = guest::display_connect(&mut info)?;
+         // SAFETY: the host call returned a new fd that we now own.
+         let events = unsafe { OwnedFd::from_raw_fd(fd) };
+-        Ok(Host { info, events })
++        let current=info;let mut info=Connect::default();guest::display_mode(&mut info)?;
++        let mut alternate=Connect{display:1,..Default::default()};
++        guest::display_mode(&mut alternate)?;
++        let initial_config=if current.width==info.width&&current.height==info.height{0}else{1};
++        Ok(Host { info, alternate, initial_config, events })
+     }
+ 
++    pub fn set_mode(&self,config:i32)->Result<(),Errno>{
++        let mut value=if config==0{self.info}else{self.alternate};value.display=config as u32;
++        guest::display_mode(&mut value)
++    }
++
+     /// Give the server the buffer behind `fd`, named by its buffer id.
+     pub fn import(&self, fd: BorrowedFd, h: &Handle) -> Result<(), Errno> {
+         let layout = h.layout().ok_or(Errno(libc::EINVAL))?;
+--- a/hal/graphics/composer/src/client.rs
++++ b/hal/graphics/composer/src/client.rs
+@@ -1,7 +1,7 @@
+ //! `IComposerClient`: display 0, the macOS window, with one configuration
+ //! (the window's size, the screen's density and refresh period).
+ 
+-use std::sync::atomic::{AtomicBool, Ordering};
++use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+ use std::sync::{Arc, Mutex};
+ 
+ use aim_hostcall::display::mode;
+@@ -84,16 +84,18 @@
+     pub display: Mutex<Display>,
+     pub callback: Mutex<Option<Strong<dyn IComposerCallback>>>,
+     pub vsync: AtomicBool,
++    active:AtomicI32,
+ }
+ 
+ impl Shared {
+     pub fn new(host: Host) -> Arc<Shared> {
+         let display = Mutex::new(Display::new(host.info.mode == mode::WINDOWS));
+         Arc::new(Shared {
+-            host,
+             display,
+             callback: Mutex::new(None),
+             vsync: AtomicBool::new(false),
++            active:AtomicI32::new(host.initial_config),
++            host,
+         })
+     }
+ 
+@@ -113,6 +115,11 @@
+         });
+     }
+ 
++    fn configuration(&self,config:i32)->binder::Result<&aim_hostcall::display::Connect>{
++        match config {0=>Ok(&self.host.info),1 if self.host.info.width!=self.host.alternate.width||self.host.info.height!=self.host.alternate.height=>Ok(&self.host.alternate),_=>Err(error(EX_BAD_CONFIG))}
++    }
++    fn configurations(&self)->Vec<i32>{if self.configuration(1).is_ok(){vec![0,1]}else{vec![0]}}
++
+     fn period(&self) -> i32 {
+         self.host.info.vsync_period_ns as i32
+     }
+@@ -311,7 +318,7 @@
+ 
+     fn getActiveConfig(&self, display: i64) -> binder::Result<i32> {
+         check_display(display)?;
+-        Ok(CONFIG)
++        Ok(self.0.active.load(Ordering::Acquire))
+     }
+ 
+     fn getColorModes(&self, display: i64) -> binder::Result<Vec<ColorMode>> {
+@@ -334,17 +341,14 @@
+         attribute: DisplayAttribute,
+     ) -> binder::Result<i32> {
+         check_display(display)?;
+-        if config != CONFIG {
+-            return Err(error(EX_BAD_CONFIG));
+-        }
+-        let info = &self.0.host.info;
++        let info=self.0.configuration(config)?;
+         Ok(match attribute {
+             DisplayAttribute::WIDTH => info.width as i32,
+             DisplayAttribute::HEIGHT => info.height as i32,
+             DisplayAttribute::VSYNC_PERIOD => self.0.period(),
+             DisplayAttribute::DPI_X => info.dpi_x_milli as i32,
+             DisplayAttribute::DPI_Y => info.dpi_y_milli as i32,
+-            DisplayAttribute::CONFIG_GROUP => 0,
++            DisplayAttribute::CONFIG_GROUP => config,
+             _ => return Err(error(EX_BAD_PARAMETER)),
+         })
+     }
+@@ -356,7 +360,7 @@
+ 
+     fn getDisplayConfigs(&self, display: i64) -> binder::Result<Vec<i32>> {
+         check_display(display)?;
+-        Ok(vec![CONFIG])
++        Ok(self.0.configurations())
+     }
+ 
+     fn getDisplayConnectionType(&self, display: i64) -> binder::Result<DisplayConnectionType> {
+@@ -459,19 +463,19 @@
+ 
+     fn setActiveConfig(&self, display: i64, config: i32) -> binder::Result<()> {
+         check_display(display)?;
+-        if config == CONFIG {
+-            Ok(())
+-        } else {
+-            Err(error(EX_BAD_CONFIG))
+-        }
++        self.0.configuration(config)?;
++        if self.0.active.load(Ordering::Acquire)==config{return Ok(())}
++        self.0.host.set_mode(config).map_err(|_|error(EX_BAD_CONFIG))?;
++        self.0.active.store(config,Ordering::Release);Ok(())
+     }
+ 
+     fn setActiveConfigWithConstraints(
+         &self,
+         display: i64,
+         config: i32,
+-        _constraints: &VsyncPeriodChangeConstraints,
++        constraints: &VsyncPeriodChangeConstraints,
+     ) -> binder::Result<VsyncPeriodChangeTimeline> {
++        if constraints.seamlessRequired&&self.0.active.load(Ordering::Acquire)!=config{return Err(error(android_hardware_graphics_composer3::aidl::android::hardware::graphics::composer3::IComposerClient::EX_SEAMLESS_NOT_ALLOWED));}
+         self.setActiveConfig(display, config)?;
+         Ok(VsyncPeriodChangeTimeline {
+             newVsyncAppliedTimeNanos: monotonic_ns(),
+@@ -589,18 +593,17 @@
+         _max_frame_interval_ns: i32,
+     ) -> binder::Result<Vec<DisplayConfiguration>> {
+         check_display(display)?;
+-        let info = &self.0.host.info;
+         let (x, y) = self.0.dpi();
+-        Ok(vec![DisplayConfiguration {
+-            configId: CONFIG,
++        self.0.configurations().into_iter().map(|config|{let info=self.0.configuration(config)?;Ok(DisplayConfiguration {
++            configId: config,
+             width: info.width as i32,
+             height: info.height as i32,
+             dpi: Some(Dpi { x, y }),
+-            configGroup: 0,
++            configGroup: config,
+             vsyncPeriod: self.0.period(),
+             vrrConfig: None,
+             hdrOutputType: OutputType::SYSTEM,
+-        }])
++        })}).collect()
+     }
+ 
+     fn notifyExpectedPresent(

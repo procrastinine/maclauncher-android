@@ -1,0 +1,679 @@
+import maclauncher.android.portability.PortableCalls;
+import org.objectweb.asm.*;
+import org.objectweb.asm.tree.*;
+
+/** Uses the supplied host runtime's array ABI instead of ART movable-heap addresses. */
+final class ResourcePortability implements Opcodes {
+    private static final String ARRAY="android/content/res/TypedArray",ASSETS="android/content/res/AssetManager";
+    private static final String OLD="(JIILandroid/content/res/XmlBlock$Parser;[IJJ)V";
+    private static final String ARRAYS="(JIILandroid/content/res/XmlBlock$Parser;[I[I[I)V";
+    static byte[] transform(String name,byte[] bytes){
+        String type=name.endsWith(".class")?name.substring(0,name.length()-6):name;
+        if(!type.equals(ARRAY)&&!type.equals(ASSETS)&&!type.equals("android/content/res/ResourcesImpl$ThemeImpl")&&!type.equals("android/system/OsConstants"))return bytes;
+        ClassReader reader=new ClassReader(bytes);ClassWriter writer=new ClassWriter(reader,ClassWriter.COMPUTE_MAXS);
+        MethodNode style=null;
+        if(type.equals(ASSETS)){
+            ClassNode source=new ClassNode();reader.accept(source,ClassReader.EXPAND_FRAMES);
+            for(MethodNode method:source.methods)if(method.name.equals("applyStyle")&&method.desc.equals(OLD))style=method;
+        }
+        MethodNode originalStyle=style;
+        boolean[] bridge={false};
+        reader.accept(new ClassVisitor(ASM9,writer){
+            @Override public MethodVisitor visitMethod(int access,String method,String descriptor,String signature,String[] exceptions){
+                if(type.equals(ASSETS)&&method.equals("applyStyle")&&descriptor.equals(ARRAYS))bridge[0]=true;
+                MethodVisitor m=super.visitMethod(access,method,descriptor,signature,exceptions);
+                if(type.equals(ARRAY))return new MethodVisitor(ASM9,m){
+                    @Override public void visitFieldInsn(int opcode,String owner,String field,String desc){
+                        // HotSpot can move arrays. The original allocation/reuse algorithm
+                        // tests array presence; native style application receives arrays below.
+                        if(opcode==GETFIELD&&owner.equals(ARRAY)&&field.equals("mDataAddress")&&desc.equals("J")){
+                            super.visitFieldInsn(GETFIELD,owner,"mData","[I");
+                            super.visitMethodInsn(INVOKESTATIC,"java/util/Objects","nonNull","(Ljava/lang/Object;)Z",false);
+                            super.visitInsn(I2L);
+                        }else super.visitFieldInsn(opcode,owner,field,desc);
+                    }
+                    @Override public void visitMethodInsn(int opcode,String owner,String name,String desc,boolean iface){
+                        if(opcode==INVOKEVIRTUAL&&owner.equals("dalvik/system/VMRuntime")&&name.equals("newNonMovableArray")&&desc.equals("(Ljava/lang/Class;I)Ljava/lang/Object;")){
+                            super.visitMethodInsn(INVOKESTATIC,PortableCalls.HELPER,"newUnpaddedArray","(Ljava/lang/Object;Ljava/lang/Class;I)Ljava/lang/Object;",false);
+                        }else if(opcode==INVOKEVIRTUAL&&owner.equals("dalvik/system/VMRuntime")&&name.equals("addressOf")&&desc.equals("(Ljava/lang/Object;)J")){
+                            // No raw JVM heap address escapes to native code. Keep the
+                            // upstream fields and instructions, with no invented pointer.
+                            super.visitInsn(POP2);super.visitInsn(LCONST_0);
+                        }else super.visitMethodInsn(opcode,owner,name,desc,iface);
+                    }
+                };
+                if(type.equals("android/system/OsConstants")&&method.equals("<clinit>"))return new MethodVisitor(ASM9,m){
+                    @Override public void visitMethodInsn(int op,String owner,String name,String desc,boolean iface){
+                        if(op==INVOKESTATIC&&owner.equals(type)&&name.equals("initConstants")&&desc.equals("()V")){
+                            for(var entry:LINUX_CONSTANTS.entrySet()){super.visitLdcInsn(entry.getValue());super.visitFieldInsn(PUTSTATIC,type,entry.getKey(),"I");}
+                        }else super.visitMethodInsn(op,owner,name,desc,iface);
+                    }
+                };
+                if(!type.equals("android/content/res/ResourcesImpl$ThemeImpl"))return m;
+                return new MethodVisitor(ASM9,m){
+                    @Override public void visitFieldInsn(int opcode,String owner,String field,String desc){
+                        if(opcode==GETFIELD&&owner.equals(ARRAY)&&desc.equals("J")&&(field.equals("mDataAddress")||field.equals("mIndicesAddress")))
+                            super.visitFieldInsn(opcode,owner,field.equals("mDataAddress")?"mData":"mIndices","[I");
+                        else super.visitFieldInsn(opcode,owner,field,desc);
+                    }
+                    @Override public void visitMethodInsn(int opcode,String owner,String method,String desc,boolean iface){
+                        super.visitMethodInsn(opcode,owner,method,owner.equals(ASSETS)&&method.equals("applyStyle")&&desc.equals(OLD)?ARRAYS:desc,iface);
+                    }
+                };
+            }
+            @Override public void visitEnd(){
+                if(type.equals(ASSETS)&&!bridge[0]){
+                    if(originalStyle==null)throw new IllegalStateException("Android native style boundary is unavailable");
+                    apply(originalStyle,super.visitMethod(originalStyle.access,"applyStyle",ARRAYS,originalStyle.signature,originalStyle.exceptions.toArray(String[]::new)));
+                }
+                super.visitEnd();
+            }
+        },0);return writer.toByteArray();
+    }
+    // Linux ABI values from Robolectric ShadowOsConstants at 83b71974f00edaef78b72e212d60168b4bc4a70a.
+    // MIT, Copyright (c) 2010 Xtreme Labs, Pivotal Labs and Google Inc.
+    // API36 MADV values follow Linux v6.12 include/uapi/asm-generic/mman-common.h.
+    // This imports constant data only, never its simulated file-mode or shadow runtime.
+    private static final java.util.Map<String,Integer> LINUX_CONSTANTS=constants();
+    private static java.util.Map<String,Integer> constants(){
+        var values=new java.util.LinkedHashMap<String,Integer>();
+        for(String line:("""
+AF_INET=0x0000002
+AF_INET6=0x000000a
+AF_NETLINK=0x0000010
+AF_PACKET=0x0000011
+AF_UNIX=0x0000001
+AF_VSOCK=0x0000028
+AF_UNSPEC=0x0000000
+AI_ADDRCONFIG=0x0000400
+AI_ALL=0x0000100
+AI_CANONNAME=0x0000002
+AI_NUMERICHOST=0x0000004
+AI_NUMERICSERV=0x0000008
+AI_PASSIVE=0x0000001
+AI_V4MAPPED=0x0000800
+ARPHRD_ETHER=0x0000001
+VMADDR_PORT_ANY=0xffffffff
+VMADDR_CID_ANY=0xffffffff
+VMADDR_CID_LOCAL=0x0000001
+VMADDR_CID_HOST=0x0000002
+ARPHRD_LOOPBACK=0x0000304
+CAP_AUDIT_CONTROL=0x000001e
+CAP_AUDIT_WRITE=0x000001d
+CAP_BLOCK_SUSPEND=0x0000024
+CAP_CHOWN=0x0000000
+CAP_DAC_OVERRIDE=0x0000001
+CAP_DAC_READ_SEARCH=0x0000002
+CAP_FOWNER=0x0000003
+CAP_FSETID=0x0000004
+CAP_IPC_LOCK=0x000000e
+CAP_IPC_OWNER=0x000000f
+CAP_KILL=0x0000005
+CAP_LAST_CAP=0x0000028
+CAP_LEASE=0x000001c
+CAP_LINUX_IMMUTABLE=0x0000009
+CAP_MAC_ADMIN=0x0000021
+CAP_MAC_OVERRIDE=0x0000020
+CAP_MKNOD=0x000001b
+CAP_NET_ADMIN=0x000000c
+CAP_NET_BIND_SERVICE=0x000000a
+CAP_NET_BROADCAST=0x000000b
+CAP_NET_RAW=0x000000d
+CAP_SETFCAP=0x000001f
+CAP_SETGID=0x0000006
+CAP_SETPCAP=0x0000008
+CAP_SETUID=0x0000007
+CAP_SYS_ADMIN=0x0000015
+CAP_SYS_BOOT=0x0000016
+CAP_SYS_CHROOT=0x0000012
+CAP_SYSLOG=0x0000022
+CAP_SYS_MODULE=0x0000010
+CAP_SYS_NICE=0x0000017
+CAP_SYS_PACCT=0x0000014
+CAP_SYS_PTRACE=0x0000013
+CAP_SYS_RAWIO=0x0000011
+CAP_SYS_RESOURCE=0x0000018
+CAP_SYS_TIME=0x0000019
+CAP_SYS_TTY_CONFIG=0x000001a
+CAP_WAKE_ALARM=0x0000023
+E2BIG=0x0000007
+EACCES=0x000000d
+EADDRINUSE=0x0000062
+EADDRNOTAVAIL=0x0000063
+EAFNOSUPPORT=0x0000061
+EAGAIN=0x000000b
+EAI_AGAIN=0x0000002
+EAI_BADFLAGS=0x0000003
+EAI_FAIL=0x0000004
+EAI_FAMILY=0x0000005
+EAI_MEMORY=0x0000006
+EAI_NODATA=0x0000007
+EAI_NONAME=0x0000008
+EAI_OVERFLOW=0x000000e
+EAI_SERVICE=0x0000009
+EAI_SOCKTYPE=0x000000a
+EAI_SYSTEM=0x000000b
+EALREADY=0x0000072
+EBADF=0x0000009
+EBADMSG=0x000004a
+EBUSY=0x0000010
+ECANCELED=0x000007d
+ECHILD=0x000000a
+ECONNABORTED=0x0000067
+ECONNREFUSED=0x000006f
+ECONNRESET=0x0000068
+EDEADLK=0x0000023
+EDESTADDRREQ=0x0000059
+EDOM=0x0000021
+EDQUOT=0x000007a
+EEXIST=0x0000011
+EFAULT=0x000000e
+EFBIG=0x000001b
+EHOSTUNREACH=0x0000071
+EIDRM=0x000002b
+EILSEQ=0x0000054
+EINPROGRESS=0x0000073
+EINTR=0x0000004
+EINVAL=0x0000016
+EIO=0x0000005
+EISCONN=0x000006a
+EISDIR=0x0000015
+ELOOP=0x0000028
+EMFILE=0x0000018
+EMLINK=0x000001f
+EMSGSIZE=0x000005a
+EMULTIHOP=0x0000048
+ENAMETOOLONG=0x0000024
+ENETDOWN=0x0000064
+ENETRESET=0x0000066
+ENETUNREACH=0x0000065
+ENFILE=0x0000017
+ENOBUFS=0x0000069
+ENODATA=0x000003d
+ENODEV=0x0000013
+ENOENT=0x0000002
+ENOEXEC=0x0000008
+ENOLCK=0x0000025
+ENOLINK=0x0000043
+ENOMEM=0x000000c
+ENOMSG=0x000002a
+ENONET=0x0000040
+ENOPROTOOPT=0x000005c
+ENOSPC=0x000001c
+ENOSR=0x000003f
+ENOSTR=0x000003c
+ENOSYS=0x0000026
+ENOTCONN=0x000006b
+ENOTDIR=0x0000014
+ENOTEMPTY=0x0000027
+ENOTSOCK=0x0000058
+ENOTSUP=0x000005f
+ENOTTY=0x0000019
+ENXIO=0x0000006
+EOPNOTSUPP=0x000005f
+EOVERFLOW=0x000004b
+EPERM=0x0000001
+EPIPE=0x0000020
+EPROTO=0x0000047
+EPROTONOSUPPORT=0x000005d
+EPROTOTYPE=0x000005b
+ERANGE=0x0000022
+EROFS=0x000001e
+ESPIPE=0x000001d
+ESRCH=0x0000003
+ESTALE=0x0000074
+ETH_P_ALL=0x0000003
+ETH_P_ARP=0x0000806
+ETH_P_IP=0x0000800
+ETH_P_IPV6=0x00086dd
+ETIME=0x000003e
+ETIMEDOUT=0x000006e
+ETXTBSY=0x000001a
+EUSERS=0x0000057
+EXDEV=0x0000012
+EXIT_FAILURE=0x0000001
+EXIT_SUCCESS=0x0000000
+FD_CLOEXEC=0x0000001
+FIONREAD=0x000541b
+F_DUPFD=0x0000000
+F_DUPFD_CLOEXEC=0x0000406
+F_GETFD=0x0000001
+F_GETFL=0x0000003
+F_GETLK=0x0000005
+F_GETLK64=0x0000005
+F_GETOWN=0x0000009
+F_OK=0x0000000
+F_RDLCK=0x0000000
+F_SETFD=0x0000002
+F_SETFL=0x0000004
+F_SETLK=0x0000006
+F_SETLK64=0x0000006
+F_SETLKW=0x0000007
+F_SETLKW64=0x0000007
+F_SETOWN=0x0000008
+F_UNLCK=0x0000002
+F_WRLCK=0x0000001
+ICMP_ECHO=0x0000008
+ICMP_ECHOREPLY=0x0000000
+ICMP6_ECHO_REQUEST=0x0000080
+ICMP6_ECHO_REPLY=0x0000081
+IFA_F_DADFAILED=0x0000008
+IFA_F_DEPRECATED=0x0000020
+IFA_F_HOMEADDRESS=0x0000010
+IFA_F_MANAGETEMPADDR=0x0000100
+IFA_F_NODAD=0x0000002
+IFA_F_NOPREFIXROUTE=0x0000200
+IFA_F_OPTIMISTIC=0x0000004
+IFA_F_PERMANENT=0x0000080
+IFA_F_SECONDARY=0x0000001
+IFA_F_TEMPORARY=0x0000001
+IFA_F_TENTATIVE=0x0000040
+IFF_ALLMULTI=0x0000200
+IFF_AUTOMEDIA=0x0004000
+IFF_BROADCAST=0x0000002
+IFF_DEBUG=0x0000004
+IFF_DYNAMIC=0x0008000
+IFF_LOOPBACK=0x0000008
+IFF_MASTER=0x0000400
+IFF_MULTICAST=0x0001000
+IFF_NOARP=0x0000080
+IFF_NOTRAILERS=0x0000020
+IFF_POINTOPOINT=0x0000010
+IFF_PORTSEL=0x0002000
+IFF_PROMISC=0x0000100
+IFF_RUNNING=0x0000040
+IFF_SLAVE=0x0000800
+IFF_UP=0x0000001
+IPPROTO_ICMP=0x0000001
+IPPROTO_ICMPV6=0x000003a
+IPPROTO_IP=0x0000000
+IPPROTO_IPV6=0x0000029
+IPPROTO_RAW=0x00000ff
+IPPROTO_TCP=0x0000006
+IPPROTO_UDP=0x0000011
+IPPROTO_ESP=0x0000032
+IPV6_CHECKSUM=0x0000007
+IPV6_MULTICAST_HOPS=0x0000012
+IPV6_MULTICAST_IF=0x0000011
+IPV6_MULTICAST_LOOP=0x0000013
+IPV6_PKTINFO=0x0000032
+IPV6_RECVDSTOPTS=0x000003a
+IPV6_RECVHOPLIMIT=0x0000033
+IPV6_RECVHOPOPTS=0x0000035
+IPV6_RECVPKTINFO=0x0000031
+IPV6_RECVRTHDR=0x0000038
+IPV6_RECVTCLASS=0x0000042
+IPV6_TCLASS=0x0000043
+IPV6_UNICAST_HOPS=0x0000010
+IPV6_V6ONLY=0x000001a
+IP_MULTICAST_ALL=0x0000031
+IP_MULTICAST_IF=0x0000020
+IP_MULTICAST_LOOP=0x0000022
+IP_MULTICAST_TTL=0x0000021
+IP_RECVTOS=0x000000d
+IP_TOS=0x0000001
+IP_TTL=0x0000002
+MADV_NORMAL=0
+MADV_RANDOM=1
+MADV_SEQUENTIAL=2
+MADV_WILLNEED=3
+MADV_DONTNEED=4
+MADV_REMOVE=9
+MADV_DONTFORK=10
+MADV_DOFORK=11
+MADV_HWPOISON=100
+MADV_MERGEABLE=12
+MADV_UNMERGEABLE=13
+MADV_SOFT_OFFLINE=101
+MADV_HUGEPAGE=14
+MADV_NOHUGEPAGE=15
+MADV_COLLAPSE=25
+MADV_DONTDUMP=16
+MADV_DODUMP=17
+MADV_FREE=8
+MADV_WIPEONFORK=18
+MADV_KEEPONFORK=19
+MADV_COLD=20
+MADV_PAGEOUT=21
+MADV_POPULATE_READ=22
+MADV_POPULATE_WRITE=23
+_LINUX_CAPABILITY_VERSION_3=0x20080522
+MAP_FIXED=0x0000010
+MAP_ANONYMOUS=0x0000020
+MAP_POPULATE=0x0008000
+MAP_PRIVATE=0x0000002
+MAP_SHARED=0x0000001
+MCAST_JOIN_GROUP=0x000002a
+MCAST_LEAVE_GROUP=0x000002d
+MCAST_JOIN_SOURCE_GROUP=0x000002e
+MCAST_LEAVE_SOURCE_GROUP=0x000002f
+MCAST_BLOCK_SOURCE=0x000002b
+MCAST_UNBLOCK_SOURCE=0x000002c
+MCL_CURRENT=0x0000001
+MCL_FUTURE=0x0000002
+MFD_CLOEXEC=0x0000001
+MSG_CTRUNC=0x0000008
+MSG_DONTROUTE=0x0000004
+MSG_EOR=0x0000080
+MSG_OOB=0x0000001
+MSG_PEEK=0x0000002
+MSG_TRUNC=0x0000020
+MSG_WAITALL=0x0000100
+MS_ASYNC=0x0000001
+MS_INVALIDATE=0x0000002
+MS_SYNC=0x0000004
+NETLINK_NETFILTER=0x000000c
+NETLINK_ROUTE=0x0000000
+NETLINK_INET_DIAG=0x0000004
+NETLINK_XFRM=0x0000006
+NI_DGRAM=0x0000010
+NI_NAMEREQD=0x0000004
+NI_NOFQDN=0x0000001
+NI_NUMERICHOST=0x0000002
+NI_NUMERICSERV=0x0000008
+O_ACCMODE=0x0000003
+O_APPEND=0x0000400
+O_CLOEXEC=0x0080000
+O_CREAT=0x0000040
+O_DIRECT=0x0004000
+O_EXCL=0x0000080
+O_NOCTTY=0x0000100
+O_NOFOLLOW=0x0020000
+O_NONBLOCK=0x0000800
+O_RDONLY=0x0000000
+O_RDWR=0x0000002
+O_SYNC=0x0101000
+O_DSYNC=0x0001000
+O_TRUNC=0x0000200
+O_WRONLY=0x0000001
+POLLERR=0x0000008
+POLLHUP=0x0000010
+POLLIN=0x0000001
+POLLNVAL=0x0000020
+POLLOUT=0x0000004
+POLLPRI=0x0000002
+POLLRDBAND=0x0000080
+POLLRDNORM=0x0000040
+POLLWRBAND=0x0000200
+POLLWRNORM=0x0000100
+PR_CAP_AMBIENT=0x000002f
+PR_CAP_AMBIENT_RAISE=0x0000002
+PR_GET_DUMPABLE=0x0000003
+PR_SET_DUMPABLE=0x0000004
+PR_SET_NO_NEW_PRIVS=0x0000026
+PROT_EXEC=0x0000004
+PROT_NONE=0x0000000
+PROT_READ=0x0000001
+PROT_WRITE=0x0000002
+R_OK=0x0000004
+RLIMIT_NOFILE=0x0000007
+RLIMIT_RTPRIO=0x000000e
+RT_SCOPE_HOST=0x00000fe
+RT_SCOPE_LINK=0x00000fd
+RT_SCOPE_NOWHERE=0x00000ff
+RT_SCOPE_SITE=0x00000c8
+RT_SCOPE_UNIVERSE=0x0000000
+RTMGRP_IPV4_IFADDR=0x0000010
+RTMGRP_IPV4_MROUTE=0x0000020
+RTMGRP_IPV4_ROUTE=0x0000040
+RTMGRP_IPV4_RULE=0x0000080
+RTMGRP_IPV6_IFADDR=0x0000100
+RTMGRP_IPV6_IFINFO=0x0000800
+RTMGRP_IPV6_MROUTE=0x0000200
+RTMGRP_IPV6_PREFIX=0x0020000
+RTMGRP_IPV6_ROUTE=0x0000400
+RTMGRP_LINK=0x0000001
+RTMGRP_NEIGH=0x0000004
+RTMGRP_NOTIFY=0x0000002
+RTMGRP_TC=0x0000008
+SEEK_CUR=0x0000001
+SEEK_END=0x0000002
+SEEK_SET=0x0000000
+SHUT_RD=0x0000000
+SHUT_RDWR=0x0000002
+SHUT_WR=0x0000001
+SIGABRT=0x0000006
+SIGALRM=0x000000e
+SIGBUS=0x0000007
+SIGCHLD=0x0000011
+SIGCONT=0x0000012
+SIGFPE=0x0000008
+SIGHUP=0x0000001
+SIGILL=0x0000004
+SIGINT=0x0000002
+SIGIO=0x000001d
+SIGKILL=0x0000009
+SIGPIPE=0x000000d
+SIGPROF=0x000001b
+SIGPWR=0x000001e
+SIGQUIT=0x0000003
+SIGRTMAX=0x0000040
+SIGRTMIN=0x0000029
+SIGSEGV=0x000000b
+SIGSTKFLT=0x0000010
+SIGSTOP=0x0000013
+SIGSYS=0x000001f
+SIGTERM=0x000000f
+SIGTRAP=0x0000005
+SIGTSTP=0x0000014
+SIGTTIN=0x0000015
+SIGTTOU=0x0000016
+SIGURG=0x0000017
+SIGUSR1=0x000000a
+SIGUSR2=0x000000c
+SIGVTALRM=0x000001a
+SIGWINCH=0x000001c
+SIGXCPU=0x0000018
+SIGXFSZ=0x0000019
+SIOCGIFADDR=0x0008915
+SIOCGIFBRDADDR=0x0008919
+SIOCGIFDSTADDR=0x0008917
+SIOCGIFNETMASK=0x000891b
+SOCK_CLOEXEC=0x0080000
+SOCK_DGRAM=0x0000002
+SOCK_NONBLOCK=0x0000800
+SOCK_RAW=0x0000003
+SOCK_SEQPACKET=0x0000005
+SOCK_STREAM=0x0000001
+SOL_SOCKET=0x0000001
+SOL_UDP=0x0000011
+SOL_PACKET=0x0000107
+SO_BINDTODEVICE=0x0000019
+SO_BROADCAST=0x0000006
+SO_DEBUG=0x0000001
+SO_DOMAIN=0x0000027
+SO_DONTROUTE=0x0000005
+SO_ERROR=0x0000004
+SO_KEEPALIVE=0x0000009
+SO_LINGER=0x000000d
+SO_OOBINLINE=0x000000a
+SO_PASSCRED=0x0000010
+SO_PEERCRED=0x0000011
+SO_PROTOCOL=0x0000026
+SO_RCVBUF=0x0000008
+SO_RCVLOWAT=0x0000012
+SO_RCVTIMEO=0x0000014
+SO_REUSEADDR=0x0000002
+SO_SNDBUF=0x0000007
+SO_SNDLOWAT=0x0000013
+SO_SNDTIMEO=0x0000015
+SO_TYPE=0x0000003
+PACKET_IGNORE_OUTGOING=0x0000017
+SPLICE_F_MOVE=0x0000001
+SPLICE_F_NONBLOCK=0x0000002
+SPLICE_F_MORE=0x0000004
+STDERR_FILENO=0x0000002
+STDIN_FILENO=0x0000000
+STDOUT_FILENO=0x0000001
+ST_MANDLOCK=0x0000040
+ST_NOATIME=0x0000400
+ST_NODEV=0x0000004
+ST_NODIRATIME=0x0000800
+ST_NOEXEC=0x0000008
+ST_NOSUID=0x0000002
+ST_RDONLY=0x0000001
+ST_RELATIME=0x0001000
+ST_SYNCHRONOUS=0x0000010
+S_IFBLK=0x0006000
+S_IFCHR=0x0002000
+S_IFDIR=0x0004000
+S_IFIFO=0x0001000
+S_IFLNK=0x000a000
+S_IFMT=0x000f000
+S_IFREG=0x0008000
+S_IFSOCK=0x000c000
+S_IRGRP=0x0000020
+S_IROTH=0x0000004
+S_IRUSR=0x0000100
+S_IRWXG=0x0000038
+S_IRWXO=0x0000007
+S_IRWXU=0x00001c0
+S_ISGID=0x0000400
+S_ISUID=0x0000800
+S_ISVTX=0x0000200
+S_IWGRP=0x0000010
+S_IWOTH=0x0000002
+S_IWUSR=0x0000080
+S_IXGRP=0x0000008
+S_IXOTH=0x0000001
+S_IXUSR=0x0000040
+TCP_NODELAY=0x0000001
+TCP_USER_TIMEOUT=0x0000012
+UDP_GRO=0x0000068
+UDP_SEGMENT=0x0000067
+TIOCOUTQ=0x0005411
+UDP_ENCAP=0x0000064
+UDP_ENCAP_ESPINUDP_NON_IKE=0x0000001
+UDP_ENCAP_ESPINUDP=0x0000002
+UNIX_PATH_MAX=0x000006c
+WCONTINUED=0x0000008
+WEXITED=0x0000004
+WNOHANG=0x0000001
+WNOWAIT=0x1000000
+WSTOPPED=0x0000002
+WUNTRACED=0x0000002
+W_OK=0x0000002
+XATTR_CREATE=0x0000001
+XATTR_REPLACE=0x0000002
+X_OK=0x0000001
+_SC_2_CHAR_TERM=0x0000010
+_SC_2_C_BIND=0x000000d
+_SC_2_C_DEV=0x000000e
+_SC_2_C_VERSION=0x000000f
+_SC_2_FORT_DEV=0x0000011
+_SC_2_FORT_RUN=0x0000012
+_SC_2_LOCALEDEF=0x0000013
+_SC_2_SW_DEV=0x0000014
+_SC_2_UPE=0x0000015
+_SC_2_VERSION=0x0000016
+_SC_AIO_LISTIO_MAX=0x000002e
+_SC_AIO_MAX=0x000002f
+_SC_AIO_PRIO_DELTA_MAX=0x0000030
+_SC_ARG_MAX=0x0000000
+_SC_ASYNCHRONOUS_IO=0x0000039
+_SC_ATEXIT_MAX=0x0000025
+_SC_AVPHYS_PAGES=0x0000063
+_SC_BC_BASE_MAX=0x0000001
+_SC_BC_DIM_MAX=0x0000002
+_SC_BC_SCALE_MAX=0x0000003
+_SC_BC_STRING_MAX=0x0000004
+_SC_CHILD_MAX=0x0000005
+_SC_CLK_TCK=0x0000006
+_SC_COLL_WEIGHTS_MAX=0x0000007
+_SC_DELAYTIMER_MAX=0x0000031
+_SC_EXPR_NEST_MAX=0x0000008
+_SC_FSYNC=0x000003a
+_SC_GETGR_R_SIZE_MAX=0x0000047
+_SC_GETPW_R_SIZE_MAX=0x0000048
+_SC_IOV_MAX=0x0000026
+_SC_JOB_CONTROL=0x0000017
+_SC_LINE_MAX=0x0000009
+_SC_LOGIN_NAME_MAX=0x0000049
+_SC_MAPPED_FILES=0x000003b
+_SC_MEMLOCK=0x000003c
+_SC_MEMLOCK_RANGE=0x000003d
+_SC_MEMORY_PROTECTION=0x000003e
+_SC_MESSAGE_PASSING=0x000003f
+_SC_MQ_OPEN_MAX=0x0000032
+_SC_MQ_PRIO_MAX=0x0000033
+_SC_NGROUPS_MAX=0x000000a
+_SC_NPROCESSORS_CONF=0x0000060
+_SC_NPROCESSORS_ONLN=0x0000061
+_SC_OPEN_MAX=0x000000b
+_SC_PAGESIZE=0x0000027
+_SC_PAGE_SIZE=0x0000028
+_SC_PASS_MAX=0x000000c
+_SC_PHYS_PAGES=0x0000062
+_SC_PRIORITIZED_IO=0x0000040
+_SC_PRIORITY_SCHEDULING=0x0000041
+_SC_REALTIME_SIGNALS=0x0000042
+_SC_RE_DUP_MAX=0x000001a
+_SC_RTSIG_MAX=0x0000034
+_SC_SAVED_IDS=0x0000018
+_SC_SEMAPHORES=0x0000043
+_SC_SEM_NSEMS_MAX=0x0000035
+_SC_SEM_VALUE_MAX=0x0000036
+_SC_SHARED_MEMORY_OBJECTS=0x0000044
+_SC_SIGQUEUE_MAX=0x0000037
+_SC_STREAM_MAX=0x000001b
+_SC_SYNCHRONIZED_IO=0x0000045
+_SC_THREADS=0x000004f
+_SC_THREAD_ATTR_STACKADDR=0x0000050
+_SC_THREAD_ATTR_STACKSIZE=0x0000051
+_SC_THREAD_DESTRUCTOR_ITERATIONS=0x000004a
+_SC_THREAD_KEYS_MAX=0x000004b
+_SC_THREAD_PRIORITY_SCHEDULING=0x0000052
+_SC_THREAD_PRIO_INHERIT=0x0000053
+_SC_THREAD_PRIO_PROTECT=0x0000054
+_SC_THREAD_SAFE_FUNCTIONS=0x0000055
+_SC_THREAD_STACK_MIN=0x000004c
+_SC_THREAD_THREADS_MAX=0x000004d
+_SC_TIMERS=0x0000046
+_SC_TIMER_MAX=0x0000038
+_SC_TTY_NAME_MAX=0x000004e
+_SC_TZNAME_MAX=0x000001c
+_SC_VERSION=0x0000019
+_SC_XBS5_ILP32_OFF32=0x000002a
+_SC_XBS5_ILP32_OFFBIG=0x000002b
+_SC_XBS5_LP64_OFF64=0x000002c
+_SC_XBS5_LPBIG_OFFBIG=0x000002d
+_SC_XOPEN_CRYPT=0x000001d
+_SC_XOPEN_ENH_I18N=0x000001e
+_SC_XOPEN_LEGACY=0x0000024
+_SC_XOPEN_REALTIME=0x0000022
+_SC_XOPEN_REALTIME_THREADS=0x0000023
+_SC_XOPEN_SHM=0x000001f
+_SC_XOPEN_UNIX=0x0000029
+_SC_XOPEN_VERSION=0x0000020
+_SC_XOPEN_XCU_VERSION=0x0000021
+""").split("\n")){if(line.isBlank())continue;int split=line.indexOf('=');String n=line.substring(split+1);values.put(line.substring(0,split),(int)(n.startsWith("0x")?Long.parseUnsignedLong(n.substring(2),16):Long.parseLong(n)));}
+        return values;
+    }
+    /** Retain upstream validation, synchronization and control flow in the array-ABI overload. */
+    private static void apply(MethodNode source,MethodVisitor output){
+        source.accept(new MethodVisitor(ASM9,output){
+            private int slot(int original){return original>=11?original-2:original>=9?original-1:original;}
+            @Override public void visitVarInsn(int opcode,int index){
+                super.visitVarInsn((index==7||index==9)&&opcode==LLOAD?ALOAD:opcode,slot(index));
+            }
+            @Override public void visitIincInsn(int index,int increment){super.visitIincInsn(slot(index),increment);}
+            @Override public void visitLocalVariable(String name,String descriptor,String signature,Label start,Label end,int index){
+                super.visitLocalVariable(name,(index==7||index==9)&&descriptor.equals("J")?"[I":descriptor,signature,start,end,slot(index));
+            }
+            @Override public void visitFrame(int type,int count,Object[] locals,int stackCount,Object[] stack){
+                Object[] adapted=java.util.Arrays.copyOf(locals,count);
+                for(int entry=0,index=0;entry<count;entry++){
+                    Object value=locals[entry];
+                    if((index==7||index==9)&&value.equals(LONG))adapted[entry]="[I";
+                    index+=value.equals(LONG)||value.equals(DOUBLE)?2:1;
+                }
+                super.visitFrame(type,count,adapted,stackCount,stack);
+            }
+            @Override public void visitMethodInsn(int opcode,String owner,String name,String descriptor,boolean iface){
+                if(opcode==INVOKESTATIC&&owner.equals(ASSETS)&&name.equals("nativeApplyStyle")&&descriptor.equals("(JJIIJ[IJJ)V")){
+                    super.visitMethodInsn(opcode,owner,"nativeApplyStyleWithArray","(JJIIJ[I[I[I)V",iface);
+                }else super.visitMethodInsn(opcode,owner,name,descriptor,iface);
+            }
+        });
+    }
+}

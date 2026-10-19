@@ -1,0 +1,2 @@
+# Original service algorithms retain their bodies. Shared service destinations
+# are bound by PendingIntentCalls using the same contract as the JVM build.

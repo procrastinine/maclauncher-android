@@ -1,0 +1,11 @@
+{
+  "repository": "https://android.googlesource.com/platform/system/libbase",
+  "revision": "0ac7ea4a65d981166d6e5617e1e4ef0572f774e5",
+  "files": [
+    "include/android-base/result.h",
+    "include/android-base/expected.h",
+    "include/android-base/errors.h",
+    "include/android-base/format.h"
+  ],
+  "usage": "Unmodified Android native result and expected headers for the publisher input ABI."
+}

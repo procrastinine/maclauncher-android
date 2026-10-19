@@ -1,0 +1,183 @@
+[
+  {
+    "name": "security",
+    "checkout": "aosp-security",
+    "url": "https://android.googlesource.com/platform/system/security",
+    "revision": "ce2aa0ef49158d0d45fb133fd42ab1deff210f8c",
+    "trees": [
+      "keystore",
+      "keystore2",
+      "NOTICE"
+    ]
+  },
+  {
+    "name": "keymaster",
+    "checkout": "aosp-keymaster",
+    "url": "https://android.googlesource.com/platform/system/keymaster",
+    "revision": "1d26bd0ab27ccf3ed1af84e6514026ea4167bf3f",
+    "trees": [
+      "."
+    ]
+  },
+  {
+    "name": "libcppbor",
+    "checkout": "aosp-libcppbor",
+    "url": "https://android.googlesource.com/platform/system/libcppbor",
+    "revision": "a1cda453ee51c4bbf20b30c6cf00796c983d23ce",
+    "trees": [
+      "."
+    ]
+  },
+  {
+    "name": "libhardware",
+    "checkout": "aosp-libhardware",
+    "url": "https://android.googlesource.com/platform/hardware/libhardware",
+    "revision": "cd2b68d71a1dd9a45668ddd9a507000ccd7ff114",
+    "trees": [
+      "include_all",
+      "include_vendor",
+      "NOTICE"
+    ]
+  },
+  {
+    "name": "logging",
+    "checkout": "aosp-logging",
+    "url": "https://android.googlesource.com/platform/system/logging",
+    "revision": "d78b713380007d3c0dde14712cbcbec27f491ad9",
+    "trees": [
+      "liblog",
+      "rust",
+      "NOTICE"
+    ]
+  },
+  {
+    "name": "hardware-interfaces",
+    "checkout": "aosp-hardware-interfaces",
+    "url": "https://android.googlesource.com/platform/hardware/interfaces",
+    "revision": "5688f7eb1e117ed26e642a695de300b7683acb87",
+    "trees": [
+      "security",
+      "confirmationui",
+      "NOTICE"
+    ]
+  },
+  {
+    "name": "system-hardware",
+    "checkout": "aosp-system-hardware",
+    "url": "https://android.googlesource.com/platform/system/hardware/interfaces",
+    "revision": "f3d42be8ff32eb4ff00873bf2762d13c013d314a",
+    "trees": [
+      "keystore2",
+      "NOTICE"
+    ]
+  },
+  {
+    "name": "apex",
+    "checkout": "aosp-apex",
+    "url": "https://android.googlesource.com/platform/system/apex",
+    "revision": "9921a73777f97def1d8851dd0a1529f1c45bcc72",
+    "trees": [
+      "apexd",
+      "NOTICE"
+    ]
+  },
+  {
+    "name": "rustutils",
+    "checkout": "aosp-rustutils",
+    "url": "https://android.googlesource.com/platform/system/librustutils",
+    "revision": "1110a8083ad83dc1b77c1cd03d39665555a34521",
+    "trees": [
+      "."
+    ]
+  },
+  {
+    "name": "selinux",
+    "checkout": "aosp-selinux",
+    "url": "https://android.googlesource.com/platform/external/selinux",
+    "revision": "89fe589e4b91ea164f01788724d7e3dd73949a44",
+    "trees": [
+      "libselinux"
+    ]
+  },
+  {
+    "name": "sepolicy",
+    "checkout": "aosp-sepolicy",
+    "url": "https://android.googlesource.com/platform/system/sepolicy",
+    "revision": "d4a7f392598cee96d9479a8ac0f84259c19b043a",
+    "trees": [
+      "public",
+      "private",
+      "build/soong/policy.go",
+      "flagging/flagging_macros",
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "aidl",
+    "checkout": "aosp-aidl",
+    "url": "https://android.googlesource.com/platform/system/tools/aidl",
+    "revision": "5bde6fcffe8e3ac6feca449f7bc3502eed5fc0f5",
+    "trees": [
+      "build/aidl_rust_glue.py",
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "build",
+    "checkout": "aosp-build",
+    "url": "https://android.googlesource.com/platform/build",
+    "revision": "874fa586c48ae230ebfcff0df1b9c1b004fa8f7c",
+    "trees": [
+      "tools/aconfig",
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "release",
+    "checkout": "aosp-build-release",
+    "url": "https://android.googlesource.com/platform/build/release",
+    "revision": "5da94f17b7a143d754a3b250c08bff210d3b046b",
+    "trees": [
+      "."
+    ]
+  },
+  {
+    "name": "rust-crates",
+    "checkout": "aosp-rust-crates",
+    "url": "https://android.googlesource.com/platform/external/rust/android-crates-io",
+    "revision": "c991cad10330f37e93d82926bd6dae7f4f6647f6",
+    "trees": [
+      "crates"
+    ],
+    "filePatterns": [
+      "**/Cargo.toml",
+      "**/Android.bp"
+    ]
+  },
+  {
+    "name": "rust-cxx",
+    "checkout": "aosp-rust-cxx",
+    "url": "https://android.googlesource.com/platform/external/rust/cxx",
+    "revision": "686b428d8a630aecfd8328389cd8e6ef304e6f72",
+    "trees": [
+      "."
+    ],
+    "filePatterns": [
+      "**/Cargo.toml",
+      "**/Android.bp"
+    ]
+  },
+  {
+    "name": "java-framework",
+    "checkout": "aosp-framework-java",
+    "url": "https://android.googlesource.com/platform/frameworks/base",
+    "revision": "99b01a65cc4c104933788b3143285ab6bae65827",
+    "trees": [
+      "AconfigFlags.bp",
+      "core/java",
+      "data/etc",
+      "keystore/aaid",
+      "NOTICE"
+    ]
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "repository": "https://android.googlesource.com/platform/frameworks/native",
+  "revision": "2827a4a16b0340ecd07c2d5a6c89991799b362bb",
+  "files": [
+    "include/input/KeyCharacterMap.h"
+  ],
+  "usage": "Native input keyboard map object declarations; algorithms execute in the pinned Android native framework."
+}
