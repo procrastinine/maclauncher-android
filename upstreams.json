@@ -502,7 +502,7 @@
       "path": "src/external/aosp-build",
       "revision": "874fa586c48ae230ebfcff0df1b9c1b004fa8f7c",
       "licensePaths": [
-        "NOTICE"
+        "tools/fs_config/Android.bp"
       ],
       "usage": "Android runtime build source.",
       "pinRefs": [
@@ -511,7 +511,8 @@
           "path": "src/modules/android/native/keystore/sources.json",
           "property": "12.revision"
         }
-      ]
+      ],
+      "licenseStatus": "Original source header or build license declaration"
     },
     {
       "id": "aosp-build-release",
@@ -537,6 +538,7 @@
       "path": "src/external/aosp-compiler-rt",
       "revision": "9f188da05921b58660238d25bea57d7cf4977602",
       "licensePaths": [
+        "LICENSE.TXT",
         "NOTICE"
       ],
       "usage": "Android runtime build source.",
@@ -727,7 +729,8 @@
       "path": "src/external/aosp-incremental-delivery",
       "revision": "c999e3e207ec7633a172d773dda162746b6eaf18",
       "licensePaths": [
-        "NOTICE"
+        "incfs/NOTICE",
+        "libdataloader/NOTICE"
       ],
       "usage": "Android runtime build source.",
       "pinRefs": [
@@ -778,7 +781,7 @@
       "path": "src/external/aosp-libcppbor",
       "revision": "a1cda453ee51c4bbf20b30c6cf00796c983d23ce",
       "licensePaths": [
-        "NOTICE"
+        "LICENSE"
       ],
       "usage": "Android runtime build source.",
       "pinRefs": [
@@ -829,7 +832,7 @@
       "path": "src/external/aosp-libziparchive",
       "revision": "8c51527debf9394dfa515f7e6c7941d2720c6d01",
       "licensePaths": [
-        "NOTICE"
+        "Android.bp"
       ],
       "usage": "Android runtime build source.",
       "pinRefs": [
@@ -838,7 +841,8 @@
           "path": "src/modules/android/native/ndk-graphics/sources.json",
           "property": "2.revision"
         }
-      ]
+      ],
+      "licenseStatus": "Original source header or build license declaration"
     },
     {
       "id": "aosp-logging",
@@ -846,7 +850,7 @@
       "path": "src/external/aosp-logging",
       "revision": "d78b713380007d3c0dde14712cbcbec27f491ad9",
       "licensePaths": [
-        "NOTICE"
+        "liblog/NOTICE"
       ],
       "usage": "Android runtime build source.",
       "pinRefs": [
@@ -1092,16 +1096,18 @@
       "path": "src/external/aosp-rust-crates",
       "revision": "c991cad10330f37e93d82926bd6dae7f4f6647f6",
       "licensePaths": [
-        "NOTICE"
+        "crates/anyhow/Android.bp",
+        "crates/anyhow/LICENSE-APACHE"
       ],
-      "usage": "Android runtime build source.",
+      "usage": "Pinned Cargo.toml and Android.bp metadata supplies Rust crate versions, features and provider names; crate implementations and notices follow the resolved Cargo registry closure.",
       "pinRefs": [
         {
           "kind": "json",
           "path": "src/modules/android/native/keystore/sources.json",
           "property": "14.revision"
         }
-      ]
+      ],
+      "licenseStatus": "Original source metadata"
     },
     {
       "id": "aosp-rust-cxx",
@@ -1109,7 +1115,8 @@
       "path": "src/external/aosp-rust-cxx",
       "revision": "686b428d8a630aecfd8328389cd8e6ef304e6f72",
       "licensePaths": [
-        "NOTICE"
+        "LICENSE-APACHE",
+        "LICENSE-MIT"
       ],
       "usage": "Android runtime build source.",
       "pinRefs": [
@@ -1126,7 +1133,7 @@
       "path": "src/external/aosp-rustutils",
       "revision": "1110a8083ad83dc1b77c1cd03d39665555a34521",
       "licensePaths": [
-        "NOTICE"
+        "lib.rs"
       ],
       "usage": "Android runtime build source.",
       "pinRefs": [
@@ -1135,7 +1142,8 @@
           "path": "src/modules/android/native/keystore/sources.json",
           "property": "8.revision"
         }
-      ]
+      ],
+      "licenseStatus": "Original source header or build license declaration"
     },
     {
       "id": "aosp-security",
@@ -1160,7 +1168,8 @@
       "path": "src/external/aosp-selinux",
       "revision": "89fe589e4b91ea164f01788724d7e3dd73949a44",
       "licensePaths": [
-        "NOTICE"
+        "NOTICE",
+        "libselinux/LICENSE"
       ],
       "usage": "Android runtime build source.",
       "pinRefs": [
@@ -1194,7 +1203,8 @@
       "path": "src/external/aosp-skia",
       "revision": "bcb0f77c44783b1800ba37641ba7ecab04f05e07",
       "licensePaths": [
-        "LICENSE"
+        "LICENSE",
+        "NOTICE"
       ],
       "usage": "Android runtime build source.",
       "pinRefs": [
@@ -1211,7 +1221,7 @@
       "path": "src/external/aosp-statsd",
       "revision": "8022cc37e35d424fb0eab65f79cd272759b5dc54",
       "licensePaths": [
-        "NOTICE"
+        "service/Android.bp"
       ],
       "usage": "Android runtime build source.",
       "pinRefs": [
@@ -1220,7 +1230,8 @@
           "path": "src/modules/android/native/source-pins.json",
           "property": "aospStatsd"
         }
-      ]
+      ],
+      "licenseStatus": "Original source header or build license declaration"
     },
     {
       "id": "aosp-system-core",
@@ -1373,7 +1384,8 @@
       "path": "src/external/libffi",
       "revision": "bc553867367246d140cd156f060bd0409f57f157",
       "licensePaths": [
-        "LICENSE"
+        "LICENSE",
+        "LICENSE-BUILDTOOLS"
       ],
       "usage": "Android runtime build source.",
       "pinRefs": [

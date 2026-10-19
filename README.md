@@ -30,6 +30,5 @@ components. Source Gitlinks and metadata can be checked without initializing
 checkouts; initialized checkouts are also checked for exact HEAD identity and
 tracked changes. The source check performs no downloads.
 
-Versioned packages and their corresponding sources are published by
-maclauncher-builds. Runtime installation and updates are explicit launcher
+maclauncher-builds packages runtime releases and their corresponding sources. Runtime installation and updates are explicit launcher
 actions; this source project performs no background update checks.
