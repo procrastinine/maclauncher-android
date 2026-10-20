@@ -17,6 +17,22 @@ export function prepareRegisterContexts(aim){
  edit('context.rs',[
   ['    ctx = const slot::CTX,','    ctx = const slot::CTX,\n    guest_x18 = const slot::SCS,'],
   ['        c.x = [0; 31];','        c.x = [0; 31];\n        c.x[18] = guest_scs();'],
+  ['    pub(crate) thread: *const crate::sys::Thread,',`    pub(crate) thread: *const crate::sys::Thread,
+    // Owned allocation identity, independent of the architectural x18 slot.
+    owned_scs_base: u64,`],
+  ['        slot_ptr(slot::SCS).write(st.scs());',`        (*ctx).owned_scs_base = st.scs();
+        slot_ptr(slot::SCS).write(st.scs());`],
+  ['/// Set the guest shadow-call-stack pointer',`/// The current context's actual runtime-owned shadow-stack allocation.
+/// Architectural x18 may instead address ordinary restored guest memory.
+pub(crate) fn owned_scs_range() -> Option<std::ops::RangeInclusive<u64>> {
+    let ctx = current_ctx();
+    if ctx.is_null() { return None; }
+    // SAFETY: current_ctx belongs to this thread until its existing unbind.
+    let base = unsafe { (*ctx).owned_scs_base };
+    (base != 0).then_some(base..=base + SCS_SIZE as u64)
+}
+
+/// Set the guest shadow-call-stack pointer`],
  ]);
  edit('trampoline.S',[
   ['    stp     x18, x19, [x16, #144]',`    str     x19, [x16, #152]
@@ -36,7 +52,46 @@ export function prepareRegisterContexts(aim){
         crate::context::set_guest_scs(self.x[18]);`],
  ]);
  edit('sys/fork/spawn.rs',[
-  ['    context::set_guest_scs(base + scs.len() as u64);',`    context::set_guest_scs(base + scs.len() as u64);
-    if !scs.is_empty() { c.x[18] = context::guest_scs(); }`],
+  [`fn shadow_stack() -> Vec<u8> {
+    let scs = context::guest_scs();
+    match vmmap::info_at(scs) {
+        // SAFETY: the used part of this thread's shadow stack.
+        Some(i) if i.start <= scs && scs < i.end => unsafe {
+            std::slice::from_raw_parts(i.start as *const u8, (scs - i.start) as usize).to_vec()
+        },
+        _ => Vec::new(),
+    }
+}`,`fn shadow_stack() -> Option<Vec<u8>> {
+    let owned = context::owned_scs_range()?;
+    let scs = context::guest_scs();
+    if !owned.contains(&scs) { return None; }
+    // SAFETY: only used bytes of this thread's own live allocation. The end
+    // pointer may equal its guard boundary; no byte at that pointer is read.
+    Some(unsafe {
+        std::slice::from_raw_parts(*owned.start() as *const u8,
+                                  (scs - *owned.start()) as usize).to_vec()
+    })
+}`],
+  ['    w.bytes(&shadow_stack());','    w.opt(shadow_stack(), |w, scs| w.bytes(&scs));'],
+  ['    let scs = r.bytes();',`    let scs = r.opt(|r| r.bytes());
+    let Some(owned_scs) = context::owned_scs_range() else {
+        return "fork child: missing owned shadow stack".into();
+    };
+    if scs.as_ref().is_some_and(|bytes| bytes.len() as u64 > *owned_scs.end() - *owned_scs.start()) {
+        return "fork child: shadow stack exceeds owned allocation".into();
+    }`],
+  [`    let base = context::guest_scs();
+    // SAFETY: our fresh shadow stack is larger than any parent's in use.
+    unsafe { std::ptr::copy_nonoverlapping(scs.as_ptr(), base as *mut u8, scs.len()) };
+    context::set_guest_scs(base + scs.len() as u64);`,`    if let Some(scs) = scs {
+        let base = *owned_scs.start();
+        // SAFETY: the private fork payload was bounded above against this
+        // context's actual allocation before any guest state was restored.
+        unsafe { std::ptr::copy_nonoverlapping(scs.as_ptr(), base as *mut u8, scs.len()) };
+        c.x[18] = base + scs.len() as u64;
+    }
+    // Non-owned x18 remains the original architectural value. Guest-owned
+    // data or shadow-stack mappings were restored at their original address.
+    context::set_guest_scs(c.x[18]);`],
  ]);
 }

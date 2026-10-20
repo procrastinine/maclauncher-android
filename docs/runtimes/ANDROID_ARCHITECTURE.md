@@ -1204,6 +1204,9 @@ with its original guard page, arguments and auxiliary vector. Allocation uses
 the same non-replacing mapping owner as other guest memory; ordinary `mmap`
 placement remains independent. Fork preserves the stack mapping, while exec
 recreates it through the original ELF loader.
+Fork relocates shadow-stack bytes only within the current context's owned
+allocation. An architectural x18 pointer into ordinary guest memory retains
+its address in the restored child mappings.
 The ARM64 VDSO exports its clock and signal entry points with the standard
 `LINUX_2.6.39` ELF symbol version, available through `AT_SYSINFO_EHDR`.
 The procfs auxiliary-vector files expose that loader's immutable per-exec vector,
