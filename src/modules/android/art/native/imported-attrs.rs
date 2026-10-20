@@ -27,7 +27,7 @@ fn imported_attrs(host: Host, st: &libc::stat, moving: bool) -> Result<Option<At
         let mode = match st.st_mode & libc::S_IFMT {
             libc::S_IFDIR => 0o755,
             libc::S_IFLNK => 0o777,
-            _ => 0o644 | (st.st_mode as u32 & 0o111),
+            _ => aim_storage::imported_inodes::code_mode(st.st_mode as u32),
         };
         return Ok(Some(old.over(Attr { uid: owner.uid, gid: owner.gid, mode: Some(mode) })));
     }

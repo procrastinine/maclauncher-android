@@ -987,6 +987,9 @@ execute-permission checks for verified, read-only installed ARM ELF files throug
 exact-file capabilities; host binaries, scripts and writable paths are excluded.
 Shared ELF files retain these capabilities when all hard links belong to
 verified prepared inputs outside writable storage; unaccounted links are excluded.
+ART's default installed-code view is root-owned and readable. Executable files
+receive guest mode `0755`, preserving explicit guest metadata and the host's
+private permissions. Mutable application files retain their guest owners and modes.
 This does not add Linux ELF child-process execution to the JVM. ART reads assets
 directly from the original APKs; JVM filesystem asset consumers use extracted inputs.
 Unused extracted ART assets retire under the package preparation owner after

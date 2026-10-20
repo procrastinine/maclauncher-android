@@ -6,6 +6,13 @@ use std::{ffi::CString, io, os::unix::{ffi::OsStrExt, fs::PermissionsExt}, path:
 const NAME: &std::ffi::CStr = c"dev.aim.import-owner";
 const CODE_FILE_MODE: u32 = 0o644;
 
+/// Host-private permissions are not Android's installed-code ownership.
+/// Preserve whether a code file is executable, while projecting that bit for
+/// the same guest readers as its root-owned read-only contents.
+pub fn code_mode(host_mode: u32) -> u32 {
+    CODE_FILE_MODE | if host_mode & 0o111 != 0 { 0o111 } else { 0 }
+}
+
 fn read(path: &Path) -> io::Result<Option<GuestInode>> {
     let path = CString::new(path.as_os_str().as_bytes()).map_err(io::Error::other)?;
     let mut bytes = [0u8; 20];
@@ -60,7 +67,7 @@ pub fn initialize_code(path: &Path) -> io::Result<()> {
     let old = guest_inode::read(path)?.unwrap_or_default();
     let value = GuestInode {
         uid: old.uid.or(Some(0)), gid: old.gid.or(Some(0)),
-        mode: old.mode.or(Some(CODE_FILE_MODE | (metadata.permissions().mode() & 0o111))),
+        mode: old.mode.or(Some(code_mode(metadata.permissions().mode()))),
     };
     if old != value { guest_inode::record(path, value)?; }
     preserve_code(path)
