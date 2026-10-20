@@ -20,6 +20,7 @@ import {prepareSignalUserMemory} from './signal-memory-source.mjs';
 import {prepareTranslationAnalysis} from './translation-source.mjs';
 import {prepareInitialStackLayout} from './stack-layout-source.mjs';
 import {prepareProcAuxv} from './proc-auxv-source.mjs';
+import {prepareVdsoVersions} from './vdso-source.mjs';
 import {prepareMulticastOptions,prepareSocketPendingBytes} from './network-source.mjs';
 import {prepareA64Execution} from './a64-execution-source.mjs';
 import {prepareOpenedOrigins} from './opened-origin-source.mjs';
@@ -41,6 +42,7 @@ export function prepareAimSource({source,output,klepton}){
   prepareTranslationAnalysis(temporary);
   prepareInitialStackLayout(temporary);
   prepareProcAuxv(temporary);
+  prepareVdsoVersions(temporary);
   prepareElfCopies(temporary);
   prepareAshmemAccess(temporary);
   prepareCodePublication(temporary);

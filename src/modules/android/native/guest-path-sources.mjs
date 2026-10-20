@@ -18,6 +18,8 @@ export function prepareGuestPathSource(file){
   const replace=(from,to)=>{if(source.split(from).length!==2)throw Error('Klepton proc owner changed: '+from);source=source.replace(from,to);};
   replace('static char g_procroot[512];','static char g_procroot[512];\nstatic pthread_once_t klj_proc_once=PTHREAD_ONCE_INIT;');
   replace('    static pthread_once_t once = PTHREAD_ONCE_INIT;\n    pthread_once(&once, proc_build);','    pthread_once(&klj_proc_once, proc_build);');
+  replace('    if (strncmp(path, "/proc/", 6) != 0 &&',
+    '    if (strcmp(path, "/proc") != 0 && strncmp(path, "/proc/", 6) != 0 &&');
   source+='\nconst char *klj_proc_maps_root(void) {\n    pthread_once(&klj_proc_once,proc_build);\n    return g_procroot[0]?g_procroot:NULL;\n}\n';
   const root=path.dirname(fileURLToPath(import.meta.url));
   fs.writeFileSync(file,includeDependencies(source,['guest-paths.h','proc-maps.h','process-ids.h'].map(name=>'#include '+JSON.stringify(path.join(root,name))).join('\n')));
