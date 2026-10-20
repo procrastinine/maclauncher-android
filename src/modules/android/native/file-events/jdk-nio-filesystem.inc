@@ -9,8 +9,7 @@ static int filesystem_nio_initialize(JNIEnv *env){
     (*env)->DeleteLocalRef(env,attributes);return filesystem_uid&&filesystem_gid&&!(*env)->ExceptionCheck(env);
 }
 static jlong filesystem_address(jlong path,char *buffer,size_t capacity){
-    const char *mapped=klj_mapped_guest_path((const char*)(uintptr_t)path,buffer,capacity);
-    return mapped?(jlong)(uintptr_t)mapped:path;
+    return (jlong)(uintptr_t)filesystem_native_path((const char*)(uintptr_t)path,buffer,capacity);
 }
 static void filesystem_nio_attributes(JNIEnv *env,jobject attributes){
     if((*env)->ExceptionCheck(env))return;

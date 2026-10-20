@@ -7,6 +7,17 @@
 #include "../guest-paths.h"
 #include <limits.h>
 #include <stdint.h>
+extern const char *kl_guest_path(const char *,char *,size_t);
+/* Original libc owns virtual process/device files. The JDK shares that owner
+ * after installed aliases, without changing its streams or descriptors. */
+static int filesystem_virtual_path(const char *path){
+    return path&&(!strcmp(path,"/proc")||!strncmp(path,"/proc/",6)||
+        !strcmp(path,"/sys")||!strncmp(path,"/sys/",5));
+}
+static const char *filesystem_native_path(const char *path,char *buffer,size_t capacity){
+    const char *mapped=klj_mapped_guest_path(path,buffer,capacity);
+    return mapped?mapped:filesystem_virtual_path(path)?kl_guest_path(path,buffer,capacity):path;
+}
 #include "jdk-filesystem.inc"
 #include "jdk-nio-filesystem.inc"
 
@@ -42,8 +53,8 @@ static void channel_close(JNIEnv *e,jclass c,jint fd){klj_file_event event=klj_f
 static void fis_open(JNIEnv *e,jobject s,jstring p){jstring path=filesystem_path(e,p);if(!(*e)->ExceptionCheck(e))input_open(e,s,path);if(path)(*e)->DeleteLocalRef(e,path);opened(e,s,input_fd);}
 static void fos_open(JNIEnv *e,jobject s,jstring p,jboolean a){jstring path=filesystem_path(e,p);if(!(*e)->ExceptionCheck(e))output_open(e,s,path,a);if(path)(*e)->DeleteLocalRef(e,path);opened(e,s,output_fd);}
 static void raf_open(JNIEnv *e,jobject s,jstring p,jint m){jstring path=filesystem_path(e,p);if(!(*e)->ExceptionCheck(e))random_open(e,s,path,m);if(path)(*e)->DeleteLocalRef(e,path);opened(e,s,random_fd);}
-static jint fs_open(JNIEnv *e,jclass c,jlong p,jint f,jint m){char buffer[PATH_MAX];const char *mapped=klj_mapped_guest_path((const char*)(uintptr_t)p,buffer,sizeof buffer);jint fd=unix_open(e,c,mapped?(jlong)(uintptr_t)mapped:p,f,m);if(!(*e)->ExceptionCheck(e)&&fd>=0)klj_file_event_fd(fd,IN_OPEN);return fd;}
-static jint fs_openat(JNIEnv *e,jclass c,jint d,jlong p,jint f,jint m){char buffer[PATH_MAX];const char *mapped=klj_mapped_guest_path((const char*)(uintptr_t)p,buffer,sizeof buffer);jint fd=unix_openat(e,c,d,mapped?(jlong)(uintptr_t)mapped:p,f,m);if(!(*e)->ExceptionCheck(e)&&fd>=0)klj_file_event_fd(fd,IN_OPEN);return fd;}
+static jint fs_open(JNIEnv *e,jclass c,jlong p,jint f,jint m){char buffer[PATH_MAX];const char *mapped=filesystem_native_path((const char*)(uintptr_t)p,buffer,sizeof buffer);jint fd=unix_open(e,c,(jlong)(uintptr_t)mapped,f,m);if(!(*e)->ExceptionCheck(e)&&fd>=0)klj_file_event_fd(fd,IN_OPEN);return fd;}
+static jint fs_openat(JNIEnv *e,jclass c,jint d,jlong p,jint f,jint m){char buffer[PATH_MAX];const char *mapped=filesystem_native_path((const char*)(uintptr_t)p,buffer,sizeof buffer);jint fd=unix_openat(e,c,d,(jlong)(uintptr_t)mapped,f,m);if(!(*e)->ExceptionCheck(e)&&fd>=0)klj_file_event_fd(fd,IN_OPEN);return fd;}
 static void stream_access(JNIEnv *e,jobject stream,jfieldID field){if((*e)->ExceptionCheck(e)||!klj_file_event_interest(IN_ACCESS))return;jobject fd=(*e)->GetObjectField(e,stream,field);klj_file_event_fd(number(e,fd),IN_ACCESS);if(fd)(*e)->DeleteLocalRef(e,fd);}
 static jint fis_read(JNIEnv *e,jobject s){jint n=input_read(e,s);if(n>=0)stream_access(e,s,input_fd);return n;}
 static jint raf_read(JNIEnv *e,jobject s){jint n=random_read(e,s);if(n>=0)stream_access(e,s,random_fd);return n;}

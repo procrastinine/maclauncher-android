@@ -78,7 +78,7 @@ test('JVM Java and ART native paths share persistent app storage and original pa
  assert.throws(()=>namespace({packageName:'../other',dataRoot:data,partitionsRoot:'/'}),/package/);
 });
 
-test('unmodified JDK File and stream operations resolve the shared expansion namespace',t=>{
+test('unmodified JDK File and stream operations share expansion and virtual process files',t=>{
  const runtime=process.env.KLEPTON_NATIVE_RUNTIME,home=process.env.JAVA_HOME;
  if(process.platform!=='darwin'||!runtime||!home)return t.skip('Requires built Android classes and Java21');
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'android-jdk-storage-')));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
@@ -86,7 +86,8 @@ test('unmodified JDK File and stream operations resolve the shared expansion nam
  for(const name of ['files','cache','obb'])fs.mkdirSync(path.join(data,name),{recursive:true});fs.mkdirSync(classes);
  fs.writeFileSync(path.join(data,'obb','main.12.'+pkg+'.obb'),'original expansion bytes é 🐈');
  const cp=[classes,path.resolve(runtime,'android-host.jar'),path.resolve(runtime,'android-framework.jar')].join(path.delimiter);
- function run(binary,args){const result=spawnSync(path.join(home,'bin',binary),args,{encoding:'utf8',timeout:15000});assert.ifError(result.error);assert.equal(result.status,0,result.stdout+result.stderr);return result.stdout;}
+ const temporary=path.join(data,'cache','proc-é-🐈');fs.mkdirSync(temporary);
+ function run(binary,args){const result=spawnSync(path.join(home,'bin',binary),args,{encoding:'utf8',timeout:15000,env:{...process.env,TMPDIR:temporary}});assert.ifError(result.error);assert.equal(result.status,0,result.stdout+result.stderr);return result.stdout;}
  run('javac',['--release','21','-cp',cp,'-d',classes,'tests/fixtures/android-sandbox/JvmFileNamespaceProbe.java']);
  assert.match(run('java',['-Xcheck:jni','-cp',cp,'maclauncher.android.framework.JvmFileNamespaceProbe',path.resolve(runtime),data,process.env.ANDROID_JVM_FILESYSTEM_LIBRARY||path.resolve(runtime,'native/libklepton-jvm.dylib')]),/PASS actual JDK File metadata, directories, streams and canonical expansion ownership/);
 });

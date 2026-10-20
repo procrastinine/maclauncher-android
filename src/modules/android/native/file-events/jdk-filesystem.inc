@@ -3,7 +3,26 @@
 static jclass filesystem_paths,filesystem_file;
 static jmethodID filesystem_map,filesystem_file_path,filesystem_file_constructor;
 static jstring filesystem_path(JNIEnv *env,jstring path){
-    return path?(*env)->CallStaticObjectMethod(env,filesystem_paths,filesystem_map,path):NULL;
+    jstring mapped=path?(*env)->CallStaticObjectMethod(env,filesystem_paths,filesystem_map,path):NULL;
+    if(!mapped||(*env)->ExceptionCheck(env))return mapped;
+    const char *name=(*env)->GetStringUTFChars(env,mapped,NULL);if(!name)return mapped;
+    char buffer[PATH_MAX];const char *native=filesystem_virtual_path(name)?kl_guest_path(name,buffer,sizeof buffer):name;
+    jstring result=mapped;
+    if(native!=name){
+        /* The owner returns UTF-8 filenames; JNI modified UTF-8 would corrupt
+         * a supplementary character in the private cache directory. */
+        size_t length=strlen(native);jbyteArray bytes=(*env)->NewByteArray(env,(jsize)length);
+        if(bytes){
+            (*env)->SetByteArrayRegion(env,bytes,0,(jsize)length,(const jbyte*)native);
+            jclass string=(*env)->FindClass(env,"java/lang/String");
+            jmethodID constructor=string?(*env)->GetMethodID(env,string,"<init>","([BLjava/lang/String;)V"):NULL;
+            jstring charset=constructor?(*env)->NewStringUTF(env,"UTF-8"):NULL;
+            if(charset&&!(*env)->ExceptionCheck(env))result=(*env)->NewObject(env,string,constructor,bytes,charset);
+            if(charset)(*env)->DeleteLocalRef(env,charset);if(string)(*env)->DeleteLocalRef(env,string);(*env)->DeleteLocalRef(env,bytes);
+        }
+    }
+    (*env)->ReleaseStringUTFChars(env,mapped,name);
+    if(result!=mapped)(*env)->DeleteLocalRef(env,mapped);return result;
 }
 static jobject filesystem_value(JNIEnv *env,jobject file){
     if(!file)return NULL;

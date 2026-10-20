@@ -16,4 +16,4 @@ async function probe(t,mode){
  assert.match(result.stdout,/PASS original Bionic stat\/fstat, signal, file, vector, pipe and socket JIT outputs retain counts and EFAULT/);
 }
 test('Original Bionic JIT outputs retain scalar and vectored I/O semantics',t=>probe(t));
-test('Original Unix datagram MSG_TRUNC returns the full payload length',{todo:'Framed Unix datagram payload length'},t=>probe(t,'--datagram-truncation'));
+test('Original Unix datagram MSG_TRUNC returns the full payload length',t=>probe(t,'--datagram-truncation'));
