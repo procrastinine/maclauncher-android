@@ -50,6 +50,21 @@ test('original nested task removal preserves finish modes and exact test-session
  for(const expected of ['targeted test close removes the original nested task without signal fallback','stale test close cannot fall through to a different task','original non-root finishAndRemoveTask retains its root','original root finishAndRemoveTask removes its descendants','original always-remove mode removes the task from a non-root Activity'])assert.ok(result.stdout.includes('PASS '+expected),result.stdout);
 });
 
+test('original Activity Up navigation retains task ownership Intent results and lifecycle',async t=>{
+ const runtime=process.env.KLEPTON_NATIVE_RUNTIME,home=process.env.JAVA_HOME;
+ if(process.platform!=='darwin'||!runtime||!home)return t.skip('Requires the Android native runtime and JDK21');
+ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'android-activity-up-'));t.after(()=>fs.rmSync(temp,{recursive:true,force:true}));
+ const cp=[temp,...['android-host.jar','android-framework.jar','apksig.jar'].map(n=>path.resolve(runtime,n))].join(path.delimiter),env={...process.env};
+ for(const key of Object.keys(env))if(/^(DYLD_|KL_|RESHADE_)/.test(key)||['JAVA_TOOL_OPTIONS','JDK_JAVA_OPTIONS','_JAVA_OPTIONS','CLASSPATH'].includes(key))delete env[key];
+ const identities=path.join(temp,'ids');fs.mkdirSync(identities,{mode:0o700});env.KL_ANDROID_ID_DIRECTORY=fs.realpathSync(identities);
+ const fixture=path.resolve('tests/fixtures/android-framework-services'),source=path.resolve('src/modules/android/native/java/maclauncher/android/framework');
+ const sources=[...['HostActivity','HostActivityTasks'].map(n=>path.join(source,n+'.java')),...['ActivityUpNavigationProbe','HostWindowProbe','PackageManifest','SyntheticResources'].map(n=>path.join(fixture,n+'.java')),...['LayoutInflationProbe','ResourceFixtureData'].map(n=>path.join(fixture,'../android-native/'+n+'.java'))];
+ const compiled=spawnSync(path.join(home,'bin/javac'),['--release','21','-cp',cp,'-d',temp,...sources],{encoding:'utf8',env,timeout:30000,maxBuffer:4<<20});assert.equal(compiled.error,undefined,compiled.error?.message);assert.equal(compiled.status,0,compiled.stdout+compiled.stderr);
+ const result=await require('./helpers/android-platform-window').platformWindow({runtime,home,root:fs.realpathSync(temp),classpath:cp,args:['-Xverify:all','-Dandroid.fixture.input=maclauncher.android.ActivityUpNavigationProbe'],env});
+ assert.equal(result.status,0,result.stdout+result.stderr);
+ assert.match(result.stdout,/PASS original Up navigation: parent reuse, Intent, result and finishing lifecycle/);
+});
+
 test('shared output retirement preserves the first failure and drains the existing owner queue',t=>{
  const runtime=process.env.KLEPTON_NATIVE_RUNTIME,home=process.env.JAVA_HOME;
  if(process.platform!=='darwin'||!runtime||!home)return t.skip('Requires the Android native runtime and JDK21');

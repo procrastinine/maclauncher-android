@@ -1297,6 +1297,9 @@ Initial and navigated Activities use original `ActivityThread` destruction,
 which marks an Activity as finishing before pause, stop and destroy callbacks.
 Activity task removal follows the original root-only and always-remove modes;
 ordinary Activity finish retains the remaining task records.
+Up navigation uses the same task owner, retaining the original destination
+Intent, caller result and launch mode. Reusable parents receive a new Intent;
+standard parents use ordinary Activity creation and replacement.
 Initial ART output and service Activity output use the same window retirement
 sequence. Activity teardown failures retain the first exception while compositor
 detachment and window cleanup continue. Display callbacks stop after compositor

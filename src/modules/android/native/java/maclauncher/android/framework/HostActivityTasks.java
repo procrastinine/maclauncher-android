@@ -2,6 +2,7 @@ package maclauncher.android.framework;
 
 import android.app.*;
 import android.content.*;
+import android.content.pm.ActivityInfo;
 import android.content.pm.ConfigurationInfo;
 import android.os.*;
 import java.util.*;
@@ -39,7 +40,19 @@ final class HostActivityTasks extends IActivityTaskManager.Default {
         }
         @Override public void setExcludeFromRecents(boolean exclude){HostActivity.excludeTask(id,exclude);}
     }
-    private int launch(IApplicationThread caller,String pkg,Intent intent,int user,IBinder result,String who,int request,Bundle options){
+    private static boolean permitted(ActivityInfo info,int uid){return ActivityManager.checkComponentPermission(info.permission,uid,info.applicationInfo.uid,info.exported)==android.content.pm.PackageManager.PERMISSION_GRANTED;}
+    static boolean permitsUp(Intent intent){
+        var context=HostApplication.applicationContext();
+        var resolved=context.getPackageManager().resolveActivity(intent,android.content.pm.PackageManager.MATCH_DEFAULT_ONLY);
+        return resolved!=null&&resolved.activityInfo!=null&&permitted(resolved.activityInfo,android.os.Process.myUid())&&HostGoogleProviders.accountActivityAllowed(resolved.activityInfo);
+    }
+    /** Up runs after its captured task request reaches the existing main owner. */
+    static int launchUp(Intent intent,IApplicationThread caller,IBinder parent){
+        var context=HostApplication.applicationContext();
+        return new HostActivityTasks(context).launch(caller,context.getPackageName(),intent,context.getUserId(),parent,null,-1,null,true);
+    }
+    private int launch(IApplicationThread caller,String pkg,Intent intent,int user,IBinder result,String who,int request,Bundle options){return launch(caller,pkg,intent,user,result,who,request,options,false);}
+    private int launch(IApplicationThread caller,String pkg,Intent intent,int user,IBinder result,String who,int request,Bundle options,boolean up){
         var peer=HostBinderRpc.callingPeer();String callerPackage=peer==null?context.getPackageName():peer.packageName();
         if(!Objects.equals(pkg,callerPackage)||user!=context.getUserId())return ActivityManager.START_PERMISSION_DENIED;
         Objects.requireNonNull(intent);if(HostPermissions.handles(intent))return HostPermissions.request(intent,result,who,request);
@@ -48,13 +61,15 @@ final class HostActivityTasks extends IActivityTaskManager.Default {
         if(resolved!=null&&resolved.activityInfo!=null){
             var info=resolved.activityInfo;String process=info.processName==null?info.applicationInfo.processName:info.processName;
             int callerUid=peer==null?android.os.Process.myUid():peer.uid(),callerPid=peer==null?android.os.Process.myPid():peer.pid();
-            if(ActivityManager.checkComponentPermission(info.permission,callerUid,info.applicationInfo.uid,info.exported)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return ActivityManager.START_PERMISSION_DENIED;
+            if(!permitted(info,callerUid))return ActivityManager.START_PERMISSION_DENIED;
             if(!HostGoogleProviders.accountActivityAllowed(info)){
                 cancelResult(caller,result,who,request);return ActivityManager.START_SUCCESS;
             }
             Intent launch=new Intent(intent).setComponent(new ComponentName(info.packageName,info.name));
             if(Objects.equals(info.packageName,context.getPackageName())&&Objects.equals(process,HostContext.hostProcessName())){
-                HostActivity.launch(info,launch,caller,result,who,request,options);return ActivityManager.START_SUCCESS;
+                if(up)HostActivity.launchUp(info,launch,caller,result);
+                else HostActivity.launch(info,launch,caller,result,who,request,options);
+                return ActivityManager.START_SUCCESS;
             }
             // The receiving process authenticates this process and owns its own
             // Application/ActivityThread. Original Binder arguments retain the

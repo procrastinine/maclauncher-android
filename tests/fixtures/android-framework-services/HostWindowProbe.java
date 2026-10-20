@@ -85,6 +85,7 @@ public final class HostWindowProbe {
         com.android.internal.util.FrameworkStatsLog.write(atom,View.class.getName(),com.android.internal.util.FrameworkStatsLog.TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__SINGLE_TAP);
     }
     public static final class OwnedActivity extends Activity {
+        static OwnedActivity instance;
         static boolean redirectOnCreate;
         final List<String> finishingCallbacks=new ArrayList<>();
         public View content;
@@ -93,12 +94,14 @@ public final class HostWindowProbe {
         boolean windowFocused;
         public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);windowFocused=focused;}
         int activityRequest=-1,activityResult;Intent activityData;Thread activityResultThread;
+        Intent upIntent;final List<String> upEvents=new ArrayList<>();
+        protected void onNewIntent(Intent intent){super.onNewIntent(intent);upIntent=new Intent(intent);upEvents.add("intent");}
         protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);activityRequest=request;activityResult=result;activityData=data;activityResultThread=Thread.currentThread();}
         int permissionRequest=-1;String[] permissions;int[] grants;Thread permissionThread;
         public void onRequestPermissionsResult(int request,String[] names,int[] results){permissionRequest=request;permissions=names;grants=results;permissionThread=Thread.currentThread();}
-        protected void onCreate(Bundle saved){super.onCreate(saved);events.add("create");setTheme(android.R.style.Theme_Material_Light_NoActionBar);content=new View(this){protected void onDraw(Canvas canvas){canvas.drawColor(Color.RED);}};content.setId(123);content.setFocusable(true);content.setFocusableInTouchMode(true);content.setWillNotDraw(false);setContentView(content);if(redirectOnCreate){startActivity(new Intent(this,NextActivity.class));finish();}}
+        protected void onCreate(Bundle saved){super.onCreate(saved);instance=this;events.add("create");setTheme(android.R.style.Theme_Material_Light_NoActionBar);content=new View(this){protected void onDraw(Canvas canvas){canvas.drawColor(Color.RED);}};content.setId(123);content.setFocusable(true);content.setFocusableInTouchMode(true);content.setWillNotDraw(false);setContentView(content);if(redirectOnCreate){startActivity(new Intent(this,NextActivity.class));finish();}}
         protected void onStart(){super.onStart();events.add("start");}
-        protected void onResume(){super.onResume();events.add("resume");}
+        protected void onResume(){super.onResume();events.add("resume");upEvents.add("resume");}
         protected void onPause(){finishingCallbacks.add("pause:"+isFinishing());events.add("pause");super.onPause();}
         protected void onStop(){finishingCallbacks.add("stop:"+isFinishing());events.add("stop");super.onStop();}
         protected void onDestroy(){finishingCallbacks.add("destroy:"+isFinishing());events.add("destroy");super.onDestroy();}

@@ -278,6 +278,10 @@ public final class HostActivity {
         Bundle windowOptions=options==null?null:new Bundle(options);
         new Handler(Looper.getMainLooper()).post(()->launchOnMain(info,intent,caller,resultTo,who,request,windowOptions));
     }
+    static void launchUp(ActivityInfo info,Intent intent,IApplicationThread caller,IBinder parent){
+        if(!Looper.getMainLooper().isCurrentThread())throw new IllegalStateException("Activity Up requires the task owner thread");
+        launchOnMain(info,intent,caller,parent,null,-1,null);
+    }
     /** Launcher-owned requests use Android's original result callback Binder.
      * The Intent and any authenticator response stay in the Android processes. */
     public static java.util.concurrent.CompletionStage<Void> request(Context context,Intent intent){
@@ -329,7 +333,7 @@ public final class HostActivity {
     private static void launchAttached(ActivityInfo info,Intent intent,IApplicationThread caller,IBinder resultTo,String who,int request,boolean firstOutput){
         HostApplication process=HostApplication.current();HostActivity previous=top();
         String className=info.targetActivity==null?info.name:info.targetActivity;
-        boolean singleTop=info.launchMode==ActivityInfo.LAUNCH_SINGLE_TOP||(intent.getFlags()&Intent.FLAG_ACTIVITY_SINGLE_TOP)!=0;
+        boolean singleTop=info.launchMode!=ActivityInfo.LAUNCH_MULTIPLE||(intent.getFlags()&Intent.FLAG_ACTIVITY_SINGLE_TOP)!=0;
         if(singleTop&&previous!=null&&previous.activity.getClass().getName().equals(className)){
             process.thread.handleNewIntent(previous.record,List.of(new com.android.internal.content.ReferrerIntent(intent,process.context.getPackageName())));return;
         }
@@ -435,6 +439,56 @@ public final class HostActivity {
     }
     private static final class Controller extends IActivityClientController.Default {
         private HostActivity find(IBinder token){synchronized(activities){return activities.get(token);}}
+        @Override public boolean shouldUpRecreateTask(IBinder token,String affinity){synchronized(activities){
+            HostActivity source=activities.get(token);if(source==null||source.closed||task.isEmpty())return false;
+            HostActivity root=task.getFirst();var info=(ActivityInfo)HostUiAccess.get(root.record,ActivityThread.ActivityClientRecord.class,"activityInfo");
+            if(info.taskAffinity==null||!Objects.equals(info.taskAffinity,affinity))return true;
+            Intent base=(Intent)HostUiAccess.get(root.record,ActivityThread.ActivityClientRecord.class,"intent");
+            // Each native output owns one task, with no preceding document task.
+            return source==root&&base!=null&&base.isDocument();
+        }}
+        @Override public boolean navigateUpTo(IBinder token,Intent destination,String type,int code,Intent data){
+            Intent intent=new Intent(Objects.requireNonNull(destination)),result=data==null?null:new Intent(data);
+            HostActivity source,parent;List<HostActivity> finish;int expected;boolean found=false;
+            synchronized(activities){
+                source=activities.get(token);if(source==null||source.closed||source.closing)return false;
+                int index=task.indexOf(source);if(index<0)return false;
+                int boundary=index-1;parent=boundary<0?null:task.get(boundary);
+                ComponentName target=intent.getComponent();
+                if(target!=null)for(int i=index-1;i>=0;i--)if(target.equals(componentForLocalToken(task.get(i).token))){parent=task.get(i);boundary=i;found=true;break;}
+                finish=new ArrayList<>(task.subList(boundary+1,index+1));Collections.reverse(finish);expected=taskId;
+            }
+            if(found&&!HostActivityTasks.permitsUp(intent))return false;
+            synchronized(activities){
+                if(taskId!=expected||activities.get(token)!=source||source.closed||source.closing)return false;
+                for(HostActivity state:finish)state.closing=true;
+            }
+            HostActivity target=parent;boolean matched=found;
+            Handler queue=new Handler(Looper.getMainLooper());
+            Runnable navigation=new Runnable(){int next;
+                private void cancel(){synchronized(activities){for(HostActivity state:finish)if(activities.get(state.token)==state&&!state.closed)state.closing=false;}}
+                @Override public void run(){
+                synchronized(activities){if(taskId!=expected||next==0&&activities.get(token)!=source||target!=null&&!task.contains(target)){cancel();return;}}
+                if(next<finish.size()){
+                    HostActivity state=finish.get(next++);
+                    if(!state.closed){state.resultCode=next==1?code:Activity.RESULT_CANCELED;state.resultData=next==1?result:null;finish(state.activity);}
+                    // The original result transaction must reach its live
+                    // recipient before that recipient's later destruction.
+                    if(!queue.post(this))cancel();return;
+                }
+                if(matched&&!target.closed){
+                    var process=HostApplication.current();
+                    int status=HostActivityTasks.launchUp(intent,process.thread.getApplicationThread(),target.token);
+                    // A normal launch replaces a standard parent; reusable
+                    // launch modes retain it and deliver the original new Intent.
+                    if(status==ActivityManager.START_SUCCESS&&top()!=target&&!target.closed){target.resultCode=Activity.RESULT_CANCELED;target.resultData=null;finish(target.activity);}
+                }
+                restoreTop();
+                }
+            };
+            if(!queue.post(navigation)){synchronized(activities){for(HostActivity state:finish)if(!state.closed)state.closing=false;}return false;}
+            return found;
+        }
         @Override public void finishSubActivity(IBinder token,String who,int request){finishChildren(token,who,request);}
         @Override public boolean finishActivity(IBinder token,int code,Intent result,int mode){
             HostActivity state;boolean removeTask;int expectedTask;
