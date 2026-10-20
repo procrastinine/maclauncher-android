@@ -34,7 +34,7 @@ int kl_dl_iterate_phdr(int (*cb)(void *, size_t, void *), void *data) {`);
  replace('    kl_shim_override = kl_dl_shim_override;','    (void)klj_register_import_resolver(kl_dl_shim_override);');
  replace('#define KL_MAX_IMAGES 64\ntypedef struct { char soname[128]; kl_image *img; } entry;\nstatic entry  g_imgs[KL_MAX_IMAGES];\n'+anchor,'static KlImageRegistry klj_images;');
  replace('void kl_register_image(const char *soname, kl_image *img) {',
-  'extern void klj_image_capture_identity(kl_image *);\nextern const char *klj_image_soname(kl_image *);\nextern const char *klj_image_path(kl_image *);\nvoid kl_register_image(const char *soname, kl_image *img) {');
+  'extern int klj_guest_mapping_claim(void *,size_t,int);\nextern void klj_image_capture_identity(kl_image *);\nextern const char *klj_image_soname(kl_image *);\nextern const char *klj_image_path(kl_image *);\nvoid kl_register_image(const char *soname, kl_image *img) {\n    if(klj_guest_mapping_claim(kl_base(img),kl_span(img),1))abort();');
  replace('    const char *base = basename_of(soname);\n    pthread_mutex_lock(&g_lock);',
   '    const char *base = basename_of(soname);\n    pthread_mutex_lock(&g_lock);\n    klj_image_capture_identity(img);');
  replace('    for (int i = 0; i < g_nimgs; i++)\n        if (strcmp(g_imgs[i].soname, b) == 0) return g_imgs[i].img;',
@@ -88,6 +88,7 @@ static int klj_group_publish(void *context,const KlImageRegistryEntry *entries,v
     (void)context;
     /* The existing registry treats publication allocation failure as fatal;
      * no partially registered executable owner is returned to a caller. */
+    for(size_t i=0;i<count;i++)if(klj_guest_mapping_claim(kl_base(entries[i].img),kl_span(entries[i].img),1))abort();
     pthread_mutex_lock(&g_lock);
     for(size_t i=0;i<count;i++) {
         klj_image_capture_identity(entries[i].img);

@@ -233,11 +233,18 @@ int klj_executable_signal_action(int signal,const void *action,void *previous){
 
 #include "code-publication.c"
 
-int klj_executable_protect(void *address,size_t length,int protection){
+static int protect_guest(void *address,size_t length,int protection){
     if((protection&PROT_EXEC)&&(klj_executable_thread_enter()||klj_executable_signal_enable()))return -1;
     int64_t result=klj_guest_executable_protect_prepared((uintptr_t)address,length,protection,prepare_executable_code,finish_executable_code);
     if(result<0){errno=kl_errno_from_linux((int)-result);return -1;}
     return 0;
+}
+int klj_executable_protect(void *address,size_t length,int protection){
+    extern int klj_guest_mapping_owned(void *,size_t);
+    /* A native stack or loaded host image keeps Darwin's mapping identity and
+     * protection contract. AIM's destructive fallback owns guest ranges only. */
+    if(!klj_guest_mapping_owned(address,length))return mprotect(address,length,protection);
+    return protect_guest(address,length,protection);
 }
 
 void *klj_executable_map(void *address,size_t length,int protection,int native_flags,int descriptor,long long offset){
@@ -246,7 +253,13 @@ void *klj_executable_map(void *address,size_t length,int protection,int native_f
      * original AIM JIT owner with the same bytes and requested permissions. */
     void *mapped=mmap(address,length,PROT_READ|PROT_WRITE,native_flags,descriptor,(off_t)offset);
     if(mapped==MAP_FAILED)return MAP_FAILED;
-    if(klj_executable_protect(mapped,length,protection)){
+    /* MAP_FIXED already retired the previous physical mapping, even if later
+     * executable preparation fails. The caller reserved extent metadata. */
+    extern void klj_guest_mapping_retire_locked(void *,size_t);
+    if(native_flags&MAP_FIXED)klj_guest_mapping_retire_locked(mapped,length);
+    /* This allocation was just created by the guest mmap owner. Its extent is
+     * published by that caller only after successful executable preparation. */
+    if(protect_guest(mapped,length,protection)){
         int error=errno;munmap(mapped,length);errno=error;return MAP_FAILED;
     }
     return mapped;

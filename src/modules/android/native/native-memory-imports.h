@@ -1,13 +1,17 @@
 #ifndef MACLAUNCHER_NATIVE_MEMORY_IMPORTS_H
 #define MACLAUNCHER_NATIVE_MEMORY_IMPORTS_H
 // Linux mremap over the existing process VM map. Mach moves the actual memory
-// object; no second allocator, byte copy, or untracked guest mapping registry.
+// object. Extent provenance follows these same serialized mapping mutations;
+// allocation and protection remain with the kernel's actual VM objects.
 #include <errno.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <pthread.h>
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
+#include "signal-critical.h"
 
 // Linux and Darwin assign different MS_* values. A zero Linux mode is valid
 // (asynchronous writeback); Darwin requires an explicit sync/async selection.
@@ -47,6 +51,60 @@ static int klj_remap_error(kern_return_t status) {
     return status==KERN_INVALID_ADDRESS?EFAULT:status==KERN_PROTECTION_FAILURE?EACCES:ENOMEM;
 }
 static pthread_mutex_t klj_vm_lock=PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
+static pthread_once_t klj_vm_once=PTHREAD_ONCE_INIT;
+static void klj_vm_before_fork(void){pthread_mutex_lock(&klj_vm_lock);}
+static void klj_vm_after_fork(void){pthread_mutex_unlock(&klj_vm_lock);}
+/* Darwin's recursive owner token belongs to the parent's physical thread.
+ * The child has one thread and a quiescent COW extent snapshot. */
+static void klj_vm_child_fork(void){pthread_mutex_t fresh=PTHREAD_RECURSIVE_MUTEX_INITIALIZER;memcpy(&klj_vm_lock,&fresh,sizeof fresh);}
+static void klj_vm_initialize(void){pthread_atfork(klj_vm_before_fork,klj_vm_after_fork,klj_vm_child_fork);}
+static KljSignalCritical klj_vm_enter(void){KljSignalCritical previous;klj_signal_critical_enter(&previous);pthread_once(&klj_vm_once,klj_vm_initialize);pthread_mutex_lock(&klj_vm_lock);return previous;}
+static void klj_vm_leave(const KljSignalCritical *previous){pthread_mutex_unlock(&klj_vm_lock);klj_signal_critical_leave(previous);}
+typedef struct KljVmExtent {uintptr_t first,last;int owned;struct KljVmExtent *next;} KljVmExtent;
+static KljVmExtent *klj_vm_extents,*klj_vm_spares;
+static unsigned klj_vm_spare_count;
+/* Reserve bookkeeping before touching a live mapping. Splitting one existing
+ * interval and inserting its replacement needs at most two spare nodes. */
+static int klj_vm_reserve(unsigned count){
+    while(klj_vm_spare_count<count){KljVmExtent *node=malloc(sizeof(*node));if(!node){errno=ENOMEM;return 0;}node->next=klj_vm_spares;klj_vm_spares=node;klj_vm_spare_count++;}
+    return 1;
+}
+static KljVmExtent *klj_vm_take(void){KljVmExtent *node=klj_vm_spares;klj_vm_spares=node->next;klj_vm_spare_count--;return node;}
+static void klj_vm_retire(KljVmExtent *node){node->next=klj_vm_spares;klj_vm_spares=node;klj_vm_spare_count++;}
+static int klj_vm_bounds(void *address,size_t size,uintptr_t *first,uintptr_t *last){
+    uintptr_t mask=vm_page_size-1,start=(uintptr_t)address;
+    if((start&mask)||size>UINTPTR_MAX-mask)return 0;
+    size_t rounded=(size+mask)&~mask;if(start>UINTPTR_MAX-rounded)return 0;
+    *first=start;*last=start+rounded;return 1;
+}
+static void klj_vm_record(uintptr_t first,uintptr_t last,int owned){
+    if(first==last)return;KljVmExtent **link=&klj_vm_extents;
+    while(*link&&(*link)->last<=first)link=&(*link)->next;
+    while(*link&&(*link)->first<last){
+        KljVmExtent *node=*link;
+        if(node->first<first){
+            if(node->last>last){KljVmExtent *right=klj_vm_take();*right=*node;right->first=last;node->last=first;node->next=right;link=&node->next;break;}
+            node->last=first;link=&node->next;continue;
+        }
+        if(node->last>last){node->first=last;break;}
+        *link=node->next;klj_vm_retire(node);
+    }
+    KljVmExtent *node;
+    if(owned){node=klj_vm_take();*node=(KljVmExtent){first,last,1,*link};*link=node;}
+    for(node=klj_vm_extents;node&&node->next;){KljVmExtent *next=node->next;if(node->last==next->first&&node->owned==next->owned){node->last=next->last;node->next=next->next;klj_vm_retire(next);}else node=next;}
+}
+/* Original ELF publication and guest mmap claim actual extents. Retirement
+ * removes them, so a native allocator's later reuse cannot inherit ownership.
+ * A fresh image publication or guest mmap can claim the same address again. */
+static int klj_vm_owned(uintptr_t first,uintptr_t last){
+    KljVmExtent *node=klj_vm_extents;
+    while(first<last){
+        while(node&&node->last<=first)node=node->next;
+        if(node&&node->first<=first){if(!node->owned)return 0;first=node->last<last?node->last:last;continue;}
+        return 0;
+    }
+    return 1;
+}
 static void *klj_mremap_alias_locked(mach_vm_address_t source,mach_vm_size_t size,int flags) {
     // Linux old_size==0 duplicates a shareable mapping. The kernel retains
     // the actual object and offset; closing its file or unmapping the source
@@ -126,7 +184,15 @@ static void *klj_mremap_locked(void *address,size_t old_size,size_t new_size,int
     return (void *)(uintptr_t)destination;
 }
 static void *klj_mremap(void *address,size_t old_size,size_t new_size,int flags,...) {
-    pthread_mutex_lock(&klj_vm_lock);void *result=klj_mremap_locked(address,old_size,new_size,flags);int error=errno;
-    pthread_mutex_unlock(&klj_vm_lock);errno=error;return result;
+    KljSignalCritical previous=klj_vm_enter();
+    uintptr_t first,last;int valid=klj_vm_bounds(address,old_size?old_size:new_size,&first,&last);
+    int owned=valid&&klj_vm_owned(first,last);
+    if(!klj_vm_reserve(4)){klj_vm_leave(&previous);return MAP_FAILED;}
+    void *result=klj_mremap_locked(address,old_size,new_size,flags);int error=errno;
+    if(result!=MAP_FAILED){
+        if(old_size&&klj_vm_bounds(address,old_size,&first,&last))klj_vm_record(first,last,0);
+        if(klj_vm_bounds(result,new_size,&first,&last))klj_vm_record(first,last,owned);
+    }
+    klj_vm_leave(&previous);errno=error;return result;
 }
 #endif

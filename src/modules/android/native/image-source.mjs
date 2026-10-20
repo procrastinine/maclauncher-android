@@ -104,7 +104,7 @@ const char *klj_image_runpath(kl_image *image){
     if(format)return format->needed(format->context,path,names,max,g_err,sizeof g_err);`);
  replace('    if (!i || !i->base) return NULL;', '    if (!i || !i->base) return NULL;\n    if(i->format)return i->format->phdrs(i->format_payload,count);');
  replace('    if (img->dl_handle) dlclose(img->dl_handle);', '    if (img->format) { img->format->unmap(img->format_payload);free(img);return; }\n    if (img->dl_handle) dlclose(img->dl_handle);');
- replace('    if (!img) return;','    if (!img) return;\n    klj_image_tls_unregister(img);\n    klj_executable_code_forget(img->base,img->span);\n    free(img->soname);\n    free(img->dependencies);\n    free(img->inline_pools);\n    klj_code_metadata_release(&img->code_metadata);');
+ replace('    if (!img) return;','    if (!img) return;\n    extern int klj_guest_mapping_claim(void *,size_t,int);\n    if(klj_guest_mapping_claim(img->base,img->span,0))abort();\n    klj_image_tls_unregister(img);\n    klj_executable_code_forget(img->base,img->span);\n    free(img->soname);\n    free(img->dependencies);\n    free(img->inline_pools);\n    klj_code_metadata_release(&img->code_metadata);');
  replace('                         ? (const Elf64_Shdr *)(file + eh->e_shoff) : NULL;',`                         ? (const Elf64_Shdr *)(file + eh->e_shoff) : NULL;
     if (!klj_code_metadata_read(&img->code_metadata,file,(size_t)sb.st_size,eh,ph,sh)) {
         err("Unable to allocate native instruction metadata");

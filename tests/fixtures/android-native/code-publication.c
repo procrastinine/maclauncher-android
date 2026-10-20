@@ -78,7 +78,9 @@ int main(int argc,char **argv){
  assert(branch_target((uint32_t *)(middle+8))!=old_body);
  // PROT_NONE source contents remain readable only through the private COW
  // snapshot. Neither successful nor failed preparation changes them in place.
- uint32_t *hidden=mmap(NULL,page,3,MAP_ANON|MAP_PRIVATE,-1,0);assert(hidden!=MAP_FAILED);memcpy(hidden,publication_tp_begin,tp_size);assert(!mprotect(hidden,page,0));
+ void *(*lookup)(const char *)=dlsym(core,"kl_shim_lookup");assert(lookup);
+ void *(*guest_map)(void *,size_t,int,int,int,off_t)=lookup("mmap");assert(guest_map);
+ uint32_t *hidden=guest_map(NULL,page,3,0x22,-1,0);assert(hidden!=MAP_FAILED);memcpy(hidden,publication_tp_begin,tp_size);assert(!mprotect(hidden,page,0));
  assert(!protect(hidden,page,5));assert(((uintptr_t (*)(void))hidden)()==((uintptr_t)tp()^0x1234));
  void (*forget)(void *,size_t)=dlsym(core,"klj_executable_code_forget");assert(forget);forget(hidden,page);assert(!munmap(hidden,page));
  // The ordinary loader retains registry entries for the process lifetime.

@@ -436,7 +436,21 @@ public final class HostActivity {
     private static final class Controller extends IActivityClientController.Default {
         private HostActivity find(IBinder token){synchronized(activities){return activities.get(token);}}
         @Override public void finishSubActivity(IBinder token,String who,int request){finishChildren(token,who,request);}
-        @Override public boolean finishActivity(IBinder token,int code,Intent result,int mode){HostActivity state=find(token);if(state==null||state.closing)return false;state.closing=true;state.resultCode=code;state.resultData=result==null?null:new Intent(result);new Handler(Looper.getMainLooper()).post(()->{if(state.closed)return;finish(state.activity);restoreTop();});return true;}
+        @Override public boolean finishActivity(IBinder token,int code,Intent result,int mode){
+            HostActivity state;boolean removeTask;int expectedTask;
+            synchronized(activities){
+                state=activities.get(token);if(state==null||state.closing)return false;
+                state.closing=true;state.resultCode=code;state.resultData=result==null?null:new Intent(result);
+                removeTask=mode==Activity.FINISH_TASK_WITH_ACTIVITY||
+                    mode==Activity.FINISH_TASK_WITH_ROOT_ACTIVITY&&!task.isEmpty()&&task.getFirst()==state;
+                expectedTask=taskId;
+            }
+            // Preserve the original server's root-only and always-remove modes.
+            // The task owner rechecks identity when the main queue accepts it.
+            if(removeTask)finishTask(expectedTask);
+            else new Handler(Looper.getMainLooper()).post(()->{if(state.closed)return;finish(state.activity);restoreTop();});
+            return true;
+        }
         @Override public boolean finishActivityAffinity(IBinder token){return finishActivity(token,0,null,0);}
         @Override public boolean isTopOfTask(IBinder token){return find(token)==top();}
         @Override public boolean willActivityBeVisible(IBinder token){return find(token)==top();}

@@ -43,26 +43,48 @@ static int klj_android_log_buf_write(int buffer,int priority,const char *tag,con
 // Actual allocation, JIT refusal, virtual OBB handling and flags stay Klepton's.
 static void *klj_guest_mmap(void *address,size_t length,int protection,int flags,int fd,off_t offset){
     void *(*call)(void *,size_t,int,int,int,off_t)=kl_upstream_shim_lookup("mmap");
-    pthread_mutex_lock(&klj_vm_lock);
+    KljSignalCritical previous=klj_vm_enter();
+    if(!klj_vm_reserve(2)){klj_vm_leave(&previous);return MAP_FAILED;}
     int native_flags=kl_mmap_flags(flags);
     void *result=(native_flags&MAP_ANON)&&(native_flags&MAP_PRIVATE)&&(protection&PROT_EXEC)?
         klj_executable_map(address,length,protection,native_flags,-1,offset):
         call(address,length,protection,flags,fd,offset);
     int error=errno;
+    uintptr_t first,last;
+    if(result!=MAP_FAILED&&klj_vm_bounds(result,length,&first,&last))klj_vm_record(first,last,1);
     if(result!=MAP_FAILED&&(native_flags&MAP_FIXED))klj_executable_code_forget(result,length);
     klj_vm_trace("mmap",result==MAP_FAILED?address:result,length,protection,
         result==MAP_FAILED?-1:0,result==MAP_FAILED?error:0,__builtin_return_address(0));
-    pthread_mutex_unlock(&klj_vm_lock);errno=error;return result;
+    klj_vm_leave(&previous);errno=error;return result;
 }
 static int klj_guest_munmap(void *address,size_t length){
-    pthread_mutex_lock(&klj_vm_lock);int result=munmap(address,length),error=errno;
-    if(!result)klj_executable_code_forget(address,length);
-    pthread_mutex_unlock(&klj_vm_lock);errno=error;return result;
+    KljSignalCritical previous=klj_vm_enter();
+    if(!klj_vm_reserve(2)){klj_vm_leave(&previous);return -1;}
+    int result=munmap(address,length),error=errno;
+    if(!result){uintptr_t first,last;if(klj_vm_bounds(address,length,&first,&last))klj_vm_record(first,last,0);klj_executable_code_forget(address,length);}
+    klj_vm_leave(&previous);errno=error;return result;
 }
 static int klj_guest_mprotect(void *address,size_t length,int protection){
-    pthread_mutex_lock(&klj_vm_lock);int result=klj_executable_protect(address,length,protection),error=errno;
+    KljSignalCritical previous=klj_vm_enter();int result=klj_executable_protect(address,length,protection),error=errno;
     klj_vm_trace("mprotect",address,length,protection,result,result?error:0,__builtin_return_address(0));
-    pthread_mutex_unlock(&klj_vm_lock);errno=error;return result;
+    klj_vm_leave(&previous);errno=error;return result;
+}
+/* The caller already holds this executor's mapping-mutation lock. Kernel JIT
+ * tags alone cannot transfer a co-resident VM's allocations to this owner. */
+int klj_guest_mapping_owned(void *address,size_t length){
+    uintptr_t first,last;return klj_vm_bounds(address,length,&first,&last)&&klj_vm_owned(first,last);
+}
+void klj_guest_mapping_retire_locked(void *address,size_t length){
+    uintptr_t first,last;if(klj_vm_bounds(address,length,&first,&last))klj_vm_record(first,last,0);
+}
+/* Original image publication/retirement shares the same mapping extent owner.
+ * These calls occur outside the loader registry lock. */
+int klj_guest_mapping_claim(void *address,size_t length,int owned){
+    if(!length)return 0;uintptr_t first,last;
+    if(!klj_vm_bounds(address,length,&first,&last)){errno=EINVAL;return -1;}
+    KljSignalCritical previous=klj_vm_enter();int result=-1;
+    if(klj_vm_reserve(2)){klj_vm_record(first,last,owned);result=0;}
+    int error=errno;klj_vm_leave(&previous);errno=error;return result;
 }
 extern void klj_android_log_assert(void);
 extern void *klj_math_lookup(const char *name);

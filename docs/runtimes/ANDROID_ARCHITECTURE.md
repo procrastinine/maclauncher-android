@@ -744,8 +744,11 @@ mapping guards after blocking I/O completes.
 Executable Android mappings share AIM's original native `MAP_JIT` allocation,
 protection migration and instruction-store implementation. The JVM executor
 calls that owner through a native ABI from its existing mapping and signal
-dispatchers; ART retains the original AIM entry points. Kernel VM tags separate
-Android executable allocations from the JVM's own code cache. Per-thread resume
+dispatchers; ART retains the original AIM entry points. The JVM mapping owner
+retains guest extents across replacement, partial unmap, remapping and fork.
+Those extents and original loaded ELF mappings use executable-memory migration.
+Native stacks, host libraries and other VM code caches retain Darwin's original
+protection behavior and mapping identity. Per-thread resume
 state remains with the executor's physical thread lifetime, including native
 cleanup after Java detachment.
 When writable executable memory becomes executable memory without write
@@ -982,6 +985,8 @@ Prepared APK inputs retain the package's resource and split identities. Native
 libraries retain their installed executable modes. The JVM sandbox permits
 execute-permission checks for verified, read-only installed ARM ELF files through
 exact-file capabilities; host binaries, scripts and writable paths are excluded.
+Shared ELF files retain these capabilities when all hard links belong to
+verified prepared inputs outside writable storage; unaccounted links are excluded.
 This does not add Linux ELF child-process execution to the JVM. ART reads assets
 directly from the original APKs; JVM filesystem asset consumers use extracted inputs.
 Unused extracted ART assets retire under the package preparation owner after
@@ -1287,6 +1292,8 @@ owner thread while the output and display source remain available to the
 original pause, stop and destroy callbacks.
 Initial and navigated Activities use original `ActivityThread` destruction,
 which marks an Activity as finishing before pause, stop and destroy callbacks.
+Activity task removal follows the original root-only and always-remove modes;
+ordinary Activity finish retains the remaining task records.
 Initial ART output and service Activity output use the same window retirement
 sequence. Activity teardown failures retain the first exception while compositor
 detachment and window cleanup continue. Display callbacks stop after compositor
