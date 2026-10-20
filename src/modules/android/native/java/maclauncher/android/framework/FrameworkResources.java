@@ -21,7 +21,11 @@ public final class FrameworkResources {
         Path frameworkSource=framework.toRealPath();AssetManager.createSystemAssetsInZygoteLocked(false,frameworkSource.toString());
         ArrayList<String> paths=new ArrayList<>(sources.size());for(Path source:sources)paths.add(source.toRealPath().toString());
         HostDisplay.install();ResourcesManager manager=ResourcesManager.getInstance();
-        Configuration config=new Configuration();config.setToDefaults();config.setLocale(Locale.getDefault());config.keyboard=Configuration.KEYBOARD_NOKEYS;config.hardKeyboardHidden=Configuration.HARDKEYBOARDHIDDEN_YES;config.touchscreen=Configuration.TOUCHSCREEN_FINGER;config.uiMode=Configuration.UI_MODE_TYPE_NORMAL;
+        Configuration config=new Configuration();config.setToDefaults();config.setLocale(Locale.getDefault());
+        // Both VM input owners publish the SDL alphabetic keyboard. Resources
+        // initialize before ART registers that device, so declare its startup state here.
+        config.keyboard=Configuration.KEYBOARD_QWERTY;config.keyboardHidden=Configuration.KEYBOARDHIDDEN_NO;config.hardKeyboardHidden=Configuration.HARDKEYBOARDHIDDEN_NO;
+        config.touchscreen=Configuration.TOUCHSCREEN_FINGER;config.uiMode=Configuration.UI_MODE_TYPE_NORMAL;
         viewport(config);manager.applyConfigurationToResources(config,CompatibilityInfo.DEFAULT_COMPATIBILITY_INFO);
         installed=new Sources(frameworkSource,List.copyOf(paths),null);
     }
