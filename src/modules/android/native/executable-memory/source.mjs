@@ -35,7 +35,18 @@ export function prepareExecutableMemoryApi(aim){
 }
 pub fn protect_around_prepared(addr:u64,len:u64,prot:i32,
     prepare:Option<unsafe extern "C" fn(usize,*mut libc::c_void,usize)->i64>,
-    finish:Option<unsafe extern "C" fn(usize,*mut libc::c_void,usize,i32)>)->i64 {`);
+    finish:Option<unsafe extern "C" fn(usize,*mut libc::c_void,usize,i32)>)->i64 {
+    // A preparation error must precede every live mapping change. Snapshot the
+    // complete mapped request and publish it with the original single remap.
+    if prepare.is_some() && prot & libc::PROT_EXEC != 0 {
+        let end=addr+len;let mut at=addr;let mut keep=false;
+        while at<end {
+            let Some(info)=vmmap::info_at(at) else{return -(ENOMEM as i64);};
+            if info.start>at{return -(ENOMEM as i64);}
+            keep|=!info.empty;at=info.end.min(end);
+        }
+        return unjit(addr,len,prot,keep,prepare,finish);
+    }`);
  const dispatch='        let r = if i.prot as i32 & RWX == RWX {\n            unjit(cur, hi - cur, prot, !i.empty)';
  if(adapted.split(dispatch).length!==2)throw Error('AIM JIT migration dispatch changed');
  adapted=adapted.replace(dispatch,`        let r = if i.prot as i32 & RWX == RWX ||
@@ -58,9 +69,39 @@ pub fn protect_around_prepared(addr:u64,len:u64,prot:i32,
         let result=errno::check(-1);unsafe{if let Some(finish)=finish{finish(lo as usize,tmp,n as usize,0);}libc::munmap(tmp,n as usize);}return result;
     }
     let (mut at, mut cur, mut max) = (lo, 0, 0);`);
+ const copied='    unsafe {\n        if keep {\n            std::ptr::copy_nonoverlapping(lo as *const u8, tmp as *mut u8, n as usize);\n        }\n    }';
+ if(adapted.split(copied).length!==2)throw Error('AIM JIT snapshot boundary changed');
+ adapted=adapted.replace(copied,`    if keep {
+        let result=read_publication_snapshot(lo,n,tmp);
+        if result<0 {unsafe{libc::munmap(tmp,n as usize);}return result;}
+    }`);
  const published='    unsafe { libc::munmap(tmp, n as usize) };';
  if(adapted.split(published).length!==2)throw Error('AIM JIT publication completion changed');
  adapted=adapted.replace(published,'    unsafe { if let Some(finish)=finish{finish(lo as usize,tmp,n as usize,i32::from(kr==0));}libc::munmap(tmp,n as usize) };');
+ adapted+=`
+// A COW alias preserves source permissions, including ordinary PROT_NONE
+// pages. JIT aliases already have read permission; the original pages never
+// acquire temporary read/write permissions during failed preparation.
+fn read_publication_snapshot(lo:u64,n:u64,tmp:*mut libc::c_void)->i64 {
+    let(mut alias,mut current,mut maximum)=(0,0,0);
+    let result=unsafe{vm::mach_vm_remap(vm::task(),&mut alias,n,0,libc::VM_FLAGS_ANYWHERE,
+        vm::task(),lo,1,&mut current,&mut maximum,vm::VM_INHERIT_COPY)};
+    if result!=0{return -(ENOMEM as i64);}
+    let end=alias+n;let mut at=alias;let mut error=0;
+    while at<end {
+        let Some(info)=vmmap::info_at(at) else{error=-(ENOMEM as i64);break;};
+        if info.start>at{error=-(ENOMEM as i64);break;}
+        let hi=info.end.min(end);
+        if info.prot & libc::PROT_READ as u32==0 {
+            error=errno::check(unsafe{libc::mprotect(at as *mut _,(hi-at)as usize,libc::PROT_READ)}as i64);
+            if error<0{break;}
+        }
+        at=hi;
+    }
+    if error==0{unsafe{std::ptr::copy_nonoverlapping(alias as *const u8,tmp.cast::<u8>(),n as usize);}}
+    unsafe{libc::munmap(alias as *mut _,n as usize);}error
+}
+`;
  writeChanged(jitFile,adapted);
  const frameFile=path.join(root,'sigframe.rs');let frame=fs.readFileSync(frameFile,'utf8');
  const size='const FRAME_SIZE: u64 =';

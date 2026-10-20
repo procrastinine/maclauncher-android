@@ -81,6 +81,9 @@ int klj_inline_instruction_body(uint32_t word,uintptr_t site,uintptr_t target,ui
     *bytes=32;return 0;
 }
 int klj_inline_plan_apply(void *code,uintptr_t address,KljInlineSite *sites,size_t count,KljInlinePool *pools,size_t pool_count,KljInlineEmitter emit){
+    return klj_inline_plan_apply_aliases(code,address,sites,count,pools,pool_count,emit,NULL);
+}
+int klj_inline_plan_apply_aliases(void *code,uintptr_t address,KljInlineSite *sites,size_t count,KljInlinePool *pools,size_t pool_count,KljInlineEmitter emit,void *const *aliases){
     if(!count)return 0;
     size_t page=(size_t)getpagesize();
     if(!pools||!pool_count||pool_count>SIZE_MAX/sizeof(size_t)){errno=ENOMEM;return -1;}
@@ -119,17 +122,17 @@ int klj_inline_plan_apply(void *code,uintptr_t address,KljInlineSite *sites,size
         if(selected==SIZE_MAX){error=body_error?body_error:space?ERANGE:ENOMEM;break;}
         site->pool=selected;site->offset=needed[selected];needed[selected]+=site->bytes;
     }
-    if(!error)for(size_t p=0;p<pool_count;p++)if(needed[p]&&pool_protect((char *)pools[p].base+pools[p].used,pool_capacity(needed[p],&pools[p],page),PROT_READ|PROT_WRITE)){error=errno;break;}
+    if(!error)for(size_t p=0;p<pool_count;p++)if(needed[p]&&pool_protect((char *)(aliases&&aliases[p]?aliases[p]:pools[p].base)+pools[p].used,pool_capacity(needed[p],&pools[p],page),PROT_READ|PROT_WRITE)){error=errno;break;}
     if(!error){
         for(size_t n=0;n<count;n++){
             KljInlineSite *site=&sites[n];KljInlinePool *pool=&pools[site->pool];
-            memcpy((char *)pool->base+pool->used+site->offset,site->body,site->bytes);words[site->word]=site->entry;
+            memcpy((char *)(aliases&&aliases[site->pool]?aliases[site->pool]:pool->base)+pool->used+site->offset,site->body,site->bytes);words[site->word]=site->entry;
         }
         for(size_t p=0;p<pool_count;p++)if(needed[p]){
             size_t capacity=pool_capacity(needed[p],&pools[p],page);
-            sys_icache_invalidate((char *)pools[p].base+pools[p].used,capacity);pools[p].used+=capacity;
+            sys_icache_invalidate((char *)(aliases&&aliases[p]?aliases[p]:pools[p].base)+pools[p].used,capacity);pools[p].used+=capacity;
         }
-        if(klj_inline_syscall_pools_seal(pools,pool_count))error=errno;
+        for(size_t p=0;p<pool_count;p++)if(needed[p]&&pool_protect(aliases&&aliases[p]?aliases[p]:pools[p].base,pools[p].used,PROT_READ|PROT_EXEC)){error=errno;break;}
     }
     free(attempted);free(needed);if(error){errno=error;return -1;}return 0;
 }

@@ -68,6 +68,12 @@ return and relocated conditional branch is checked before instructions change.
 Original segment bytes retain their addresses; packed veneer pages contain no
 writable original segment, and used pools finish read-only and executable.
 Layouts without sufficient reachable storage report a loader error.
+Later executable publication uses a private snapshot of the complete requested
+range, including protected pages. Newly decoded instructions share the same
+placement planner and may use unused reserved ELF gaps within that range.
+Preflight completes before one final mapping replacement; a refused publication
+keeps the original bytes and permissions. Published instruction bodies retain
+their storage until the corresponding code mapping retires.
 Original typed data remains unchanged and is accounted separately from uncertain
 TP candidates, which retain strict load refusal. Complete paired stack-canary
 sequences can establish executable continuations using matching SP or FP slots;

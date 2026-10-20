@@ -7,11 +7,13 @@ import android.os.*;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.json.*;
 
 /** Original supplied APK components share their manifest-declared system owner. */
 final class HostPlatformPackages {
-    private static final Set<String> pending=new HashSet<>();
+    private static final Map<String,Installation> pending=new HashMap<>();
     private record PackageSource(Path image,JSONObject entry){}
     private static List<PackageSource> sources=List.of();
     private HostPlatformPackages(){}
@@ -58,10 +60,16 @@ final class HostPlatformPackages {
         }
     }
     static boolean owns(ProviderInfo info){return HostPackages.platformComponent(info)&&info.applicationInfo.uid==android.os.Process.SYSTEM_UID&&"android.system".equals(info.processName);}
-    static void demand(Context context,ProviderInfo info){
-        if(!owns(info))return;
-        synchronized(pending){if(!pending.add(info.packageName))return;}
-        Runnable install=()->{
+    private static final class Installation implements Runnable {
+        private final Context context;
+        private final ProviderInfo info;
+        private final AtomicBoolean started=new AtomicBoolean();
+        private final CompletableFuture<Void> completion=new CompletableFuture<>();
+        private volatile Thread owner;
+        Installation(Context context,ProviderInfo info){this.context=context;this.info=info;}
+        @Override public void run(){
+            if(!started.compareAndSet(false,true))return;
+            owner=Thread.currentThread();
             try{
                 var thread=Objects.requireNonNull(ActivityThread.currentActivityThread());
                 thread.installSystemProviders(HostPackages.platformProviders(info.packageName));
@@ -71,9 +79,37 @@ final class HostPlatformPackages {
                     Integer count=HostContext.hostBootCount();
                     if(count!=null)android.provider.Settings.Global.putInt(context.getContentResolver(),android.provider.Settings.Global.BOOT_COUNT,count);
                 }
-            }catch(RuntimeException|Error failure){synchronized(pending){pending.remove(info.packageName);}throw failure;}
-        };
-        if(Looper.myLooper()==context.getMainLooper())install.run();
-        else if(!new Handler(context.getMainLooper()).post(install)){synchronized(pending){pending.remove(info.packageName);}throw new IllegalStateException("Android system provider owner has stopped");}
+                completion.complete(null);
+            }catch(RuntimeException|Error failure){retire();completion.completeExceptionally(failure);throw failure;}
+            finally{owner=null;}
+        }
+        private void retire(){synchronized(pending){pending.remove(info.packageName,this);}}
+        void rejected(){
+            if(!started.compareAndSet(false,true))return;
+            retire();completion.completeExceptionally(new IllegalStateException("Android system provider owner has stopped"));
+        }
+        void await(){
+            try{completion.get();}
+            catch(InterruptedException failure){Thread.currentThread().interrupt();throw new IllegalStateException("Android system provider initialization was interrupted",failure);}
+            catch(ExecutionException failure){Throwable cause=failure.getCause();if(cause instanceof RuntimeException error)throw error;if(cause instanceof Error error)throw error;throw new IllegalStateException("Android system provider initialization failed",cause);}
+        }
+    }
+    /** A local synchronous acquisition cannot return an unfinished attachment.
+     * Reentrant lookups from the original provider's own onCreate still belong
+     * to that same main-thread installation and must not wait on themselves. */
+    static void demand(Context context,ProviderInfo info){install(context,info,true);}
+    /** Remote holders retain Android's original asynchronous publish callback. */
+    static void request(Context context,ProviderInfo info){install(context,info,false);}
+    private static void install(Context context,ProviderInfo info,boolean wait){
+        if(!owns(info))return;
+        Installation installation;boolean created;
+        synchronized(pending){
+            installation=pending.get(info.packageName);created=installation==null;
+            if(created){installation=new Installation(context,info);pending.put(info.packageName,installation);}
+        }
+        if(installation.owner==Thread.currentThread())return;
+        if(Looper.myLooper()==context.getMainLooper())installation.run();
+        else if(created&&!new Handler(context.getMainLooper()).post(installation)){installation.rejected();installation.await();}
+        if(wait)installation.await();
     }
 }

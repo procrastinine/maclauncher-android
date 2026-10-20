@@ -222,5 +222,28 @@ const char *klj_image_soname(kl_image *img) { return img->soname; }`);
   '    // Count the same executable regions that the adaptation pass visits.\n    // Upstream data detection still excludes constants inside those regions.\n');
  replaceBetween('    // Executable *sections*, not the executable segment.','    // The authoritative .dynsym entry count',
   '    // Executable mappings own coverage. Sections and typed metadata remove\n    // known data; section gaps remain eligible for the shared instruction pass.\n\n');
+ source+='\n#include '+JSON.stringify(path.join(root,'image-pool-lease.h'))+`\n
+size_t klj_image_gap_pools(kl_image *image,KljImagePoolLease *leases,size_t capacity){
+    if(image->format)return 0;
+    size_t count=0;
+    for(size_t i=0;i<image->inline_pool_count;i++){
+        KljInlinePool *pool=&image->inline_pools[i];
+        if(!pool->packed||pool->used>=pool->size)continue;
+        if(count<capacity)leases[count]=(KljImagePoolLease){image,i,pool->used,
+            {(char *)pool->base+pool->used,pool->size-pool->used,0,1}};
+        count++;
+    }
+    return count;
+}
+void klj_image_gap_pool_commit(KljImagePoolLease *lease,size_t used){
+    kl_image *image=lease->image;KljInlinePool *pool=&image->inline_pools[lease->index];
+    if(pool->used!=lease->previous||used>pool->size-pool->used)abort();
+    pool->used+=used;
+}
+int klj_image_gap_pool_release(KljImagePoolLease *lease,size_t used){
+    kl_image *image=lease->image;KljInlinePool *pool=&image->inline_pools[lease->index];
+    if(pool->used!=lease->previous+used)return 0;
+    pool->used=lease->previous;return 1;
+}\n`;
  const file=path.join(build,'kl_image.c');fs.writeFileSync(file,source);return file;
 }

@@ -1,6 +1,7 @@
 package maclauncher.android.framework;
 
 import android.app.Application;
+import android.os.Handler;
 import android.os.Looper;
 import com.android.server.DropBoxManagerService;
 import com.android.server.SystemService;
@@ -90,11 +91,11 @@ public final class HostSystemServices implements AutoCloseable {
             owner.trust=new HostTrustService(context);
             HostStartupTiming.mark("system-permissions-trust");
             HostServices.registerLazy(android.content.Context.APPWIDGET_SERVICE,
-                com.android.internal.appwidget.IAppWidgetService.class.getName(),owner::widgets,true);
+                com.android.internal.appwidget.IAppWidgetService.class.getName(),owner::widgets,true,owner::onMain);
             owner.nativePackages=new HostNativePackages(context);
             owner.telephony=new HostTelephonyRegistry(context);
             HostServices.registerLazy(android.content.Context.SENSOR_PRIVACY_SERVICE,
-                android.hardware.ISensorPrivacyManager.class.getName(),owner::sensorPrivacy,true);
+                android.hardware.ISensorPrivacyManager.class.getName(),owner::sensorPrivacy,true,owner::onMain);
             HostStartupTiming.mark("system-package-telephony-sensors");
             owner.audioPermissions=new HostAudioPermissions(context);
             HostStartupTiming.mark("system-audio-permissions");
@@ -107,6 +108,10 @@ public final class HostSystemServices implements AutoCloseable {
             HostStartupTiming.mark("system-ready");
             return owner;
         } catch(Throwable failure){try{owner.close();}catch(Throwable cleanup){failure.addSuppressed(cleanup);}throw failure;}
+    }
+    private void onMain(Runnable operation){
+        if(Looper.myLooper()==context.getMainLooper())operation.run();
+        else if(!new Handler(context.getMainLooper()).post(operation))throw new IllegalStateException("Android system service owner has stopped");
     }
     private synchronized com.android.server.appwidget.HostWidgetService widgets(){
         if(closed)throw new IllegalStateException("Android system services have stopped");

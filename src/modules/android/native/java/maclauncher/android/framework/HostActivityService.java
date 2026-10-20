@@ -34,7 +34,7 @@ public final class HostActivityService extends IActivityManager.Default implemen
         if(info==null||!info.enabled)return null;
         boolean local=HostPackages.owns(info);
         if(!local){if(peer!=null)throw new SecurityException("Provider belongs to another process");return HostRemoteServices.provider(caller,packageName,info,authority,user,stable);}
-        if(peer!=null){var holder=providers.acquire(caller,peer,info,authority,stable);HostPlatformPackages.demand(context,info);return holder;}
+        if(peer!=null){var holder=providers.acquire(caller,peer,info,authority,stable);HostPlatformPackages.request(context,info);return holder;}
         if(HostPlatformPackages.owns(info)){
             HostPlatformPackages.demand(context,info);
             var endpoint=ActivityThread.currentActivityThread().acquireExistingProvider(context,authority,user,stable);

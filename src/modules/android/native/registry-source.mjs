@@ -191,5 +191,17 @@ int klj_proc_maps_image(uint64_t address,KljProcMapFile *result) {
     }
     return found;
 }\n`;
+ adapted+='\n#include '+JSON.stringify(path.join(import.meta.dirname,'image-pool-lease.h'))+`\n
+extern size_t klj_image_gap_pools(kl_image *,KljImagePoolLease *,size_t);
+size_t klj_image_gap_pool_leases(uintptr_t address,size_t size,KljImagePoolLease *leases,size_t capacity){
+    if(size>UINTPTR_MAX-address)return 0;
+    KlImageRegistrySnapshot snapshot=klj_image_registry_snapshot(&klj_images);
+    for(size_t i=0;i<snapshot.count;i++){
+        kl_image *image=snapshot.entries[i].img;uintptr_t base=(uintptr_t)kl_base(image);
+        if(address>=base&&address-base<kl_span(image)&&size<=kl_span(image)-(address-base))
+            return klj_image_gap_pools(image,leases,capacity);
+    }
+    return 0;
+}\n`;
  const file=path.join(build,'kl_dl.c');fs.writeFileSync(file,adapted);return file;
 }

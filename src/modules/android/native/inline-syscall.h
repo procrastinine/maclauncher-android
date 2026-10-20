@@ -11,6 +11,9 @@ typedef int (*KljInlineEmitter)(uint32_t,uintptr_t,uintptr_t,uint32_t *,size_t *
 int klj_inline_instruction_match(uint32_t);
 int klj_inline_instruction_body(uint32_t,uintptr_t,uintptr_t,uint32_t *,size_t *,uint32_t *);
 int klj_inline_plan_apply(void *,uintptr_t,KljInlineSite *,size_t,KljInlinePool *,size_t,KljInlineEmitter);
+/* Private writable aliases retain the same final pool addresses. Publication
+ * can prepare new bodies without removing execute access from existing ones. */
+int klj_inline_plan_apply_aliases(void *,uintptr_t,KljInlineSite *,size_t,KljInlinePool *,size_t,KljInlineEmitter,void *const *);
 int klj_inline_syscall_patch_pools_context(void *,size_t,KljInlinePool *,size_t,const klx_code_context *);
 int klj_inline_syscall_pools_seal(KljInlinePool *,size_t);
 /* Counts/patches the Linux syscall and original AIM TP instruction bodies. */
