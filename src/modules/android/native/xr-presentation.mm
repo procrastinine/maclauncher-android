@@ -15,12 +15,13 @@
 #include <stdexcept>
 
 namespace {
-struct Slot {id<MTLTexture> texture,view;bool busy=false;size_t bytes=0;};
+struct Lease;
+struct Slot {id<MTLTexture> texture,view;bool busy=false;size_t bytes=0;std::weak_ptr<Lease> lease;};
 struct Pool {std::mutex mutex;std::array<Slot,3> slots;NSString *error=nil;};
 struct Lease {
- std::shared_ptr<Pool> pool;size_t index;bool released=false;
- void release(id<MTLCommandBuffer> commands=nil){std::lock_guard lock(pool->mutex);if(commands.status==MTLCommandBufferStatusError&&!pool->error)pool->error=commands.error.localizedDescription?:@"Projection command buffer failed";if(!released){pool->slots[index].busy=false;released=true;}}
- ~Lease(){release();}
+ std::shared_ptr<Pool> pool;size_t index;
+ void completed(id<MTLCommandBuffer> commands){std::lock_guard lock(pool->mutex);if(commands.status==MTLCommandBufferStatusError&&!pool->error)pool->error=commands.error.localizedDescription?:@"Projection command buffer failed";}
+ ~Lease(){std::lock_guard lock(pool->mutex);pool->slots[index].busy=false;}
 };
 struct Owner {
  JNIEnv *env;void *presenter;CAMetalLayer *layer;
@@ -70,7 +71,8 @@ extern "C" id<MTLTexture> klj_xr_output(id<MTLCommandBuffer> commands,int width,
  }
  slot.busy=true;
  auto lease=std::make_shared<Lease>();lease->pool=pool;lease->index=index;
- [commands addCompletedHandler:^(id<MTLCommandBuffer> commands){lease->release(commands);}];
+ slot.lease=lease;
+ [commands addCompletedHandler:^(id<MTLCommandBuffer> commands){lease->completed(commands);}];
  return slot.view;
 }
 extern "C" id<MTLCommandQueue> klj_xr_queue(id<MTLDevice> device){auto p=owner;if(!p)return nil;return (__bridge id<MTLCommandQueue>)klj_metal_projection_queue(p->env,p->presenter,(__bridge void*)device);}
@@ -80,10 +82,11 @@ extern "C" void klj_xr_fences(id<MTLSharedEvent> produced,int gl){
 }
 extern "C" void klj_xr_submit(id<MTLCommandBuffer> commands,id<MTLTexture> target,uint64_t value){
  auto p=owner;if(!p)return;
- id<MTLTexture> source=nil;
- {std::lock_guard lock(p->pool->mutex);for(auto &slot:p->pool->slots)if(slot.view==target){source=slot.texture;break;}}
- if(!source){p->failed=true;fail(p->env,"Projection source ownership is invalid");}
- else if(klj_metal_project(p->env,p->presenter,klj_glfb_display(),(__bridge void*)commands,(__bridge void*)source)==4)p->failed=true;
+ id<MTLTexture> source=nil;std::shared_ptr<Lease> lease;
+ {std::lock_guard lock(p->pool->mutex);for(auto &slot:p->pool->slots)if(slot.view==target){source=slot.texture;lease=slot.lease.lock();break;}}
+ if(!source||!lease){p->failed=true;fail(p->env,"Projection source ownership is invalid");}
+ else if(klj_metal_project_retained(p->env,p->presenter,klj_glfb_display(),(__bridge void*)commands,(__bridge void*)source,
+     new std::shared_ptr<Lease>(std::move(lease)),[](void*value){delete static_cast<std::shared_ptr<Lease>*>(value);})==4)p->failed=true;
  // Even a busy shared presenter has finished reading this source. Release the
  // original producer through its GPU queue, never through a CPU frame wait.
  klj_xr_discard(commands,value);

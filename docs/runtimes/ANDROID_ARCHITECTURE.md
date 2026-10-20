@@ -541,6 +541,14 @@ native image, so text and controls update independently of the game's frame
 rate. The same bounded image pool and common graphics presenter own these
 redraws; empty overlays add no native image copy. Audio, video, image storage and JNI
 references retain their original owners through asynchronous work and shutdown.
+PixelCopy reads the raw submitted surface before effects and scaling, including
+when its producer is idle. Native drawables, EGL window buffers, projection slots
+and decoded frames retain their source leases through GPU readback. EGL windows
+keep a stable surface identity while rotating up to three backing images; an
+image remains unavailable for reuse until its readers retire. Swaps copy the
+preceding contents only when preserved-buffer behavior is explicitly selected.
+Directly writable hardware-buffer sources use a three-image GPU snapshot pool
+capped at 128 MiB per process, inside the existing producer fence.
 Planar video uses the same CoreImage conversion source for both VM bindings.
 The original ART allocator supplies the NV12, NV21, YV12 or P010 plane offsets,
 strides and color metadata. Its existing EGL image registry retains the mapped
@@ -971,8 +979,11 @@ selected launcher profile. Temporary launcher profiles use separate storage.
 Native files retain allocation, positioned I/O and mapping operations after
 adoption by the shared descriptor owner; their original access modes apply.
 Prepared APK inputs retain the package's resource and split identities. Native
-libraries retain their installed executable modes. ART reads assets directly
-from the original APKs; JVM filesystem asset consumers use extracted inputs.
+libraries retain their installed executable modes. The JVM sandbox permits
+execute-permission checks for verified, read-only installed ARM ELF files through
+exact-file capabilities; host binaries, scripts and writable paths are excluded.
+This does not add Linux ELF child-process execution to the JVM. ART reads assets
+directly from the original APKs; JVM filesystem asset consumers use extracted inputs.
 Unused extracted ART assets retire under the package preparation owner after
 its generation readers release, preserving APK paths and native library inodes.
 Path translation and the process sandbox confine file access to the application's

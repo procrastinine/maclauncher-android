@@ -20,6 +20,8 @@
 #include <mutex>
 #include <atomic>
 #include <vector>
+#include <array>
+#include <algorithm>
 #include "frame.h"
 #include "shared-presentation.h"
 #include "target-time.h"
@@ -50,6 +52,7 @@ struct Presenter {
     bool initialized=false,deviceReady=false;
     bool projection=false;
     IOSurfaceRef storage=nullptr;
+    std::array<IOSurfaceID,3> producerBuffers{};
     void *display=nullptr,*surface=nullptr,*producerSync=nullptr,*consumerSync=nullptr;
     void *effectsLibrary=nullptr;
     void *shared=nullptr;
@@ -61,6 +64,8 @@ struct Presenter {
     int (*targetTiming)(void*,RSPresentationTiming*)=nullptr;
     void (*destroyShared)(void*)=nullptr;
     void (*releaseOwner)(void*)=nullptr;
+    void *(*retainNativeSource)(void*,void*)=nullptr;
+    void (*releaseNativeSource)(void*)=nullptr;
     ~Presenter(){if(overlay)klj_overlay_destroy(overlay);if(shared)destroyShared(shared);if(releaseOwner)releaseOwner(this);if(storage)CFRelease(storage);/* Runtime may own callbacks: keep dylib loaded to process exit. */}
 };
 struct FrameMeasurement {
@@ -133,6 +138,8 @@ void initializeDevice(Presenter *p,id<MTLDevice> device,bool topLeft=false){
         p->targetTiming=reinterpret_cast<decltype(p->targetTiming)>(dlsym(p->effectsLibrary,"rsGetFramePresenterTiming"));
         p->destroyShared=reinterpret_cast<decltype(p->destroyShared)>(dlsym(p->effectsLibrary,"rsDestroyFramePresenter"));
         p->releaseOwner=reinterpret_cast<decltype(p->releaseOwner)>(dlsym(p->effectsLibrary,"rsReleaseFrameOwner"));
+        p->retainNativeSource=reinterpret_cast<decltype(p->retainNativeSource)>(dlsym(p->effectsLibrary,"rsRetainNativeMetalSource"));
+        p->releaseNativeSource=reinterpret_cast<decltype(p->releaseNativeSource)>(dlsym(p->effectsLibrary,"rsReleaseNativeMetalSource"));
         check(p->createShared&&p->submitShared&&p->sharedStatus&&p->destroyShared,"Shared graphics library lacks the presentation API");
         initializeShared(p,topLeft);
     }
@@ -177,7 +184,7 @@ extern "C" int klj_metal_resize(JNIEnv *env,int width,int height){@autoreleasepo
     symbol<void(*)(void)>("glFlush")();[p->last waitUntilCompleted];
     check(!p->last||p->last.status==MTLCommandBufferStatusCompleted,"Metal surface could not finish before resize");
     removeSync(p,p->producerSync);removeSync(p,p->consumerSync);
-    p->last=nil;p->source=nil;
+    p->copies.retire();p->last=nil;p->source=nil;p->producerBuffers={};
     if(p->storage){CFRelease(p->storage);p->storage=nullptr;}
     p->target.retire();p->surface=nullptr;p->initialized=false;p->width=width;p->height=height;
     if(!p->outputAssigned){p->outputWidth=width;p->outputHeight=height;}
@@ -205,17 +212,26 @@ extern "C" void *klj_metal_surface(JNIEnv *env,void *display,void *config,int wi
     p->surface=symbol<void*(*)(void*,unsigned,void*,void*,const int*)>("eglCreatePbufferFromClientBuffer")(display,0x3454,p->storage,config,attributes.data());check(p->surface,"ANGLE IOSurface window creation failed");
     auto descriptor=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:klj_surface_format::metal(p->storage) width:width height:height mipmapped:NO];descriptor.storageMode=MTLStorageModeShared;descriptor.usage=MTLTextureUsageShaderRead|MTLTextureUsageRenderTarget;
     p->source=[p->device newTextureWithDescriptor:descriptor iosurface:p->storage plane:0];check(p->source!=nil,"Cannot wrap Android IOSurface as a Metal texture");
+    p->producerBuffers[0]=IOSurfaceGetID(p->storage);
     fprintf(stderr,"[android-metal] source=%ux%u output=%ux%u\n",unsigned(p->source.width),unsigned(p->source.height),p->outputWidth,p->outputHeight);
     p->committedExtent.store((uint64_t(uint32_t(width))<<32)|uint32_t(height),std::memory_order_release);
     p->target.bind(display,p->surface);
     return p->surface;
 }catch(const std::exception &error){fail(env,error.what());return nullptr;}}}
-extern "C" int klj_metal_present(JNIEnv *env,void *presenter,int frame){@autoreleasepool{try{
+static int present(JNIEnv *env,void *presenter,int frame,std::shared_ptr<void> sourceLease,const KLMetalBufferSwap *swap){@autoreleasepool{try{
     auto p=(Presenter*)presenter;check(p&&p->surface,"Android has no IOSurface-backed EGL surface");
     std::lock_guard lock(p->frameMutex);
     // XR already presents the composed frame through this owner. The ordinary
     // surface is no longer sampled, so do not put a second wait on its queue.
-    if(p->projection){symbol<void(*)(void)>("glFlush")();return 1;}
+    if(p->projection){symbol<void(*)(void)>("glFlush")();return 2;}
+    auto submittedImage=p->source;id<MTLTexture> nextImage=nil;IOSurfaceID nextId=0;
+    if(swap){
+        check(sourceLease&&swap->surface&&swap->storage&&swap->advance,"EGL producer handoff is incomplete");
+        auto storage=static_cast<IOSurfaceRef>(swap->storage);nextId=IOSurfaceGetID(storage);
+        check(IOSurfaceGetWidth(storage)==p->width&&IOSurfaceGetHeight(storage)==p->height,"EGL producer image extent changed");
+        nextImage=klj_surface_format::texture(p->device,storage);check(nextImage,"Cannot import the next EGL producer image");
+        check(std::find(p->producerBuffers.begin(),p->producerBuffers.end(),nextId)!=p->producerBuffers.end()||std::find(p->producerBuffers.begin(),p->producerBuffers.end(),0)!=p->producerBuffers.end(),"EGL producer image pool exceeds three buffers");
+    }
     FrameMeasurement measurement{p,p->glesObservation,"gles"};
     if(frame==12){
         int framebuffer=-1;symbol<void(*)(unsigned,int*)>("glGetIntegerv")(0x8CA6,&framebuffer);int readbuffer=framebuffer;
@@ -231,6 +247,13 @@ extern "C" int klj_metal_present(JNIEnv *env,void *presenter,int frame){@autorel
     auto commands=[p->queue commandBuffer];commands.label=@"Android common graphics and presentation";
     [commands encodeWaitForEvent:p->produced value:serial];
     p->copies.encode(commands,p->source,true);
+    if(swap&&swap->preserved){
+        auto next=nextImage;
+        check(next&&next.width==p->source.width&&next.height==p->source.height&&next.pixelFormat==p->source.pixelFormat,"Preserved EGL buffer extent changed");
+        auto copy=[commands blitCommandEncoder];check(copy,"Cannot preserve the EGL window buffer");
+        [copy copyFromTexture:p->source sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0) sourceSize:MTLSizeMake(next.width,next.height,1)
+            toTexture:next destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(0,0,0)];[copy endEncoding];
+    }
     std::string submissionError;
     int64_t targetNanos=0;const bool targeted=p->target.read(targetNanos);bool targetRefused=false;
     void *frameSource=(__bridge void*)p->source;int overlayStatus=0;KLJOverlayFrame overlayFrame{};
@@ -264,13 +287,45 @@ extern "C" int klj_metal_present(JNIEnv *env,void *presenter,int frame){@autorel
     }
     // The next ANGLE render must not overwrite the shared surface before our
     // sampling finishes. A GPU-side wait, not glFinish or a CPU event wait.
-    [commands encodeSignalEvent:p->consumed value:serial];[commands commit];p->last=commands;
-    p->consumerSync=sync(p,p->consumed,serial,true);check(symbol<unsigned(*)(void*,void*,int)>("eglWaitSync")(p->display,p->consumerSync,0),"ANGLE cannot wait for shared-surface reuse");
+    [commands encodeSignalEvent:p->consumed value:serial];
+    p->consumerSync=sync(p,p->consumed,serial,true);
+    if(swap){
+        // Rebind before publishing the immutable old source. Failure leaves
+        // the old producer current, so its image must remain unpublished.
+        check(swap->advance(swap->context),"ANGLE cannot advance the EGL producer buffer");
+        auto previous=p->storage;p->storage=(IOSurfaceRef)CFRetain(swap->storage);if(previous)CFRelease(previous);
+        p->source=nextImage;p->surface=swap->surface;p->target.rebind(p->display,swap->surface);
+        if(std::find(p->producerBuffers.begin(),p->producerBuffers.end(),nextId)==p->producerBuffers.end())*std::find(p->producerBuffers.begin(),p->producerBuffers.end(),0)=nextId;
+    }
+    check(symbol<unsigned(*)(void*,void*,int)>("eglWaitSync")(p->display,p->consumerSync,0),"ANGLE cannot wait for shared-surface reuse");
+    // Future producer writes now target another owned slot. Independent idle
+    // readbacks retain this actual submitted image through GPU completion.
+    if(sourceLease)p->copies.source(commands,submittedImage,true,std::move(sourceLease));else p->copies.clearSource();
+    [commands commit];p->last=commands;
     // Rejected targeted swaps still retire producer/consumer fences, but never
     // claim success for an ignored target. The EGL adapter reports BAD_ACCESS.
     if(targetRefused)return 0;
     check(submissionError.empty(),submissionError.c_str());
     p->rendered++;return 1;
+}catch(const std::exception &error){fail(env,error.what());return 0;}}}
+extern "C" int klj_metal_present(JNIEnv *env,void *presenter,int frame){return present(env,presenter,frame,{},nullptr);}
+extern "C" int klj_metal_present_retained(JNIEnv *env,void *presenter,int frame,void *owner,void(*release)(void*),const KLMetalBufferSwap *swap){return present(env,presenter,frame,std::shared_ptr<void>(owner,release),swap);}
+extern "C" int klj_metal_replace_surface(JNIEnv *env,void *presenter,void *surface,void *storage,int width,int height){@autoreleasepool{try{
+    auto p=static_cast<Presenter*>(presenter);check(p&&surface&&storage&&width>0&&height>0&&width<=8192&&height<=8192,"Invalid EGL backing generation");
+    std::lock_guard lock(p->frameMutex);auto image=static_cast<IOSurfaceRef>(storage);
+    check(IOSurfaceGetWidth(image)==size_t(width)&&IOSurfaceGetHeight(image)==size_t(height),"EGL backing generation extent differs");
+    auto texture=klj_surface_format::texture(p->device,image);check(texture,"Cannot import the replacement EGL backing");
+    // Preparation and the actual EGL bind have succeeded. No owner metadata
+    // changes until the old producer's submitted GPU work is known complete.
+    if(symbol<void*(*)()>("eglGetCurrentContext")()&&symbol<void*(*)()>("eglGetCurrentDisplay")()==p->display)symbol<void(*)()>("glFlush")();
+    [p->last waitUntilCompleted];check(!p->last||p->last.status==MTLCommandBufferStatusCompleted,"Metal surface could not finish before resize");
+    removeSync(p,p->producerSync);removeSync(p,p->consumerSync);
+    auto previous=p->storage;p->storage=(IOSurfaceRef)CFRetain(image);if(previous)CFRelease(previous);
+    p->copies.retire();p->last=nil;p->source=texture;p->surface=surface;p->initialized=false;
+    p->producerBuffers={IOSurfaceGetID(image),0,0};p->width=width;p->height=height;
+    if(!p->outputAssigned){p->outputWidth=width;p->outputHeight=height;}
+    p->layer.drawableSize=CGSizeMake(p->outputWidth,p->outputHeight);p->target.bind(p->display,surface);
+    p->committedExtent.store((uint64_t(uint32_t(width))<<32)|uint32_t(height),std::memory_order_release);return 1;
 }catch(const std::exception &error){fail(env,error.what());return 0;}}}
 extern "C" void *klj_metal_projection_queue(JNIEnv *env,void *presenter,void *device){@autoreleasepool{try{
     auto p=static_cast<Presenter*>(presenter);check(p&&device,"Projection graphics device is unavailable");
@@ -280,7 +335,7 @@ extern "C" void *klj_metal_projection_queue(JNIEnv *env,void *presenter,void *de
     if(!p->projection){if(p->shared){p->destroyShared(p->shared);p->shared=nullptr;}p->projection=true;initializeShared(p);}
     return (__bridge void*)p->queue;
 }catch(const std::exception &error){fail(env,error.what());return nullptr;}}}
-static int project(JNIEnv *env,void *presenter,void *display,void *buffer,void *texture,bool nativeProducer){@autoreleasepool{try{
+static int project(JNIEnv *env,void *presenter,void *display,void *buffer,void *texture,bool nativeProducer,std::shared_ptr<void> sourceLease={}){@autoreleasepool{try{
     auto p=static_cast<Presenter*>(presenter);check(p&&buffer&&texture,"Android projection source is unavailable");
     std::unique_lock lock(p->frameMutex,std::try_to_lock);if(!lock.owns_lock())return 3;
     FrameMeasurement measurement{p,nativeProducer?p->nativeObservation:p->projectionObservation,nativeProducer?"native":"projection"};
@@ -305,12 +360,20 @@ static int project(JNIEnv *env,void *presenter,void *display,void *buffer,void *
     int status=submitFrame(p,&submission,targeted?&target:nullptr,&result);
     if(status==RS_FRAME_BUSY){++p->busy;return 3;}
     check(status==RS_FRAME_OK&&result.encoded,*result.reason?result.reason:"Shared projection submission failed");
+    if(nativeProducer&&!sourceLease&&p->retainNativeSource&&p->releaseNativeSource){
+        if(auto owner=p->retainNativeSource(buffer,texture))sourceLease=std::shared_ptr<void>(owner,p->releaseNativeSource);
+    }
+    if(sourceLease)p->copies.source(commands,source,false,std::move(sourceLease));
+    else p->copies.snapshot(commands,source,false);
     if(p->overlay)klj_overlay_frame_submitted(p->overlay,&overlayFrame);
     ++p->accepted;++p->rendered;
     p->committedExtent.store((uint64_t(p->width)<<32)|p->height,std::memory_order_release);
     return 0;
 }catch(const std::exception &error){fail(env,error.what());return 4;}}}
 extern "C" int klj_metal_project(JNIEnv *env,void *presenter,void *display,void *buffer,void *texture){return project(env,presenter,display,buffer,texture,false);}
+extern "C" int klj_metal_project_retained(JNIEnv *env,void *presenter,void *display,void *buffer,void *texture,void *owner,void(*release)(void*)){
+    return project(env,presenter,display,buffer,texture,false,std::shared_ptr<void>(owner,release));
+}
 extern "C" int klj_metal_native_frame(JNIEnv *env,void *presenter,void *buffer,void *texture){return project(env,presenter,nullptr,buffer,texture,true);}
 namespace {char nativePresenterKey;}
 extern "C" void *klj_metal_native_layer(JNIEnv *env,int width,int height,KLNativeMetalFrame frame,void *context){@autoreleasepool{try{
@@ -360,6 +423,7 @@ extern "C" int klj_metal_finish(JNIEnv *env,void *presenter){@autoreleasepool{tr
         fprintf(stderr,"[android-metal] shared encoded=%llu real=%llu generated=%llu busy=%u pending=%u\n",(unsigned long long)status.encoded,(unsigned long long)status.presentedReal,(unsigned long long)status.presentedGenerated,p->busy,status.pending);
         p->destroyShared(p->shared);p->shared=nullptr;
     }
+    p->copies.clearSource();
     fprintf(stderr,"[android-metal] frames=%u producer=%llu consumer=%llu per-frame-readbacks=0 explicit-CPU-completion-waits=0\n",p->rendered,(unsigned long long)p->produced.signaledValue,(unsigned long long)p->consumed.signaledValue);
     return p->rendered>0&&p->accepted>0;
 }catch(const std::exception &error){fail(env,error.what());return 0;}}}
@@ -372,7 +436,7 @@ extern "C" uint64_t klj_metal_copy_region(JNIEnv *env,void *presenter,void *stor
     std::lock_guard lock(p->frameMutex);
     int status=-1;
     if(width<=0||height<=0||width>16384||height>16384||uint64_t(width)*height>16777216)status=klj_copy::DestinationInvalid;
-    else if(!p->projection&&p->storage&&p->storage!=storage)status=klj_copy::SourceInvalid;
+    else if(!p->projection&&p->storage&&(!storage||std::find(p->producerBuffers.begin(),p->producerBuffers.end(),IOSurfaceGetID(static_cast<IOSurfaceRef>(storage)))==p->producerBuffers.end()))status=klj_copy::SourceInvalid;
     else if(!p->source||!p->rendered)status=klj_copy::NoData;
     return p->copies.add(env,callback,width,height,status,left,top,right,bottom);
 }}
@@ -433,7 +497,7 @@ extern "C" int klj_metal_overlay_submit(JNIEnv*env,void*presenter,jintArray pixe
 extern "C" int klj_metal_overlay_clear(JNIEnv*env,void*presenter,uint64_t frameId){auto p=(Presenter*)presenter;if(!p||!p->overlay){fail(env,"Native overlay is not attached");return 4;}return klj_overlay_clear(env,p->overlay,frameId);}
 
 extern "C" void klj_metal_supply_storage(void *storage){if(suppliedStorage)CFRelease(suppliedStorage);suppliedStorage=storage?(IOSurfaceRef)CFRetain(storage):nullptr;}
-extern "C" int klj_metal_detach_surface(JNIEnv *env){@autoreleasepool{try{auto p=active;check(p,"No active native presenter");std::lock_guard lock(p->frameMutex);p->copies.retire();removeSync(p,p->producerSync);removeSync(p,p->consumerSync);p->last=nil;p->source=nil;p->target.retire();p->surface=nullptr;p->rendered=0;p->initialized=false;if(p->storage){CFRelease(p->storage);p->storage=nullptr;}return 1;}catch(const std::exception &error){fail(env,error.what());return 0;}}}
+extern "C" int klj_metal_detach_surface(JNIEnv *env){@autoreleasepool{try{auto p=active;check(p,"No active native presenter");std::lock_guard lock(p->frameMutex);p->copies.retire();removeSync(p,p->producerSync);removeSync(p,p->consumerSync);p->last=nil;p->source=nil;p->producerBuffers={};p->target.retire();p->surface=nullptr;p->rendered=0;p->initialized=false;if(p->storage){CFRelease(p->storage);p->storage=nullptr;}return 1;}catch(const std::exception &error){fail(env,error.what());return 0;}}}
 
 extern "C" uint64_t klj_metal_committed_extent(void *value){auto p=static_cast<Presenter*>(value);return p?p->committedExtent.load(std::memory_order_acquire):0;}
 extern "C" unsigned klj_metal_target(void*value,void*display,void*surface,int64_t nanos){auto p=static_cast<Presenter*>(value);if(!p)return 0x300D;if(!p->shared||!p->submitTarget||!p->targetTiming)return 0x3002;RSPresentationTiming timing{};timing.size=sizeof(timing);timing.version=RS_TARGET_ABI_VERSION;if(p->targetTiming(p->shared,&timing)!=RS_FRAME_OK)return 0x3002;return p->target.replace(display,surface,nanos);}

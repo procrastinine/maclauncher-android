@@ -5,6 +5,7 @@
 #include <chrono>
 #include <mutex>
 #include <unordered_map>
+#include <array>
 
 namespace klj_copy {
 namespace {
@@ -14,6 +15,8 @@ std::unordered_map<uint64_t,std::shared_ptr<Request>> registry;
 uint64_t nextId=1;
 size_t allocatedBytes=0;
 bool timerScheduled=false;
+std::atomic<size_t> sourceBytes{0};
+constexpr size_t sourceBudget=128u*1024u*1024u;
 void armTimerLocked();
 struct Environment {
     JavaVM *vm;JNIEnv *env=nullptr;bool attached=false;
@@ -60,6 +63,61 @@ struct Request {
         if(prior){env->Throw(prior);env->DeleteLocalRef(prior);}
     }
 };
+struct SubmittedSource:std::enable_shared_from_this<SubmittedSource> {
+    std::mutex mutex;
+    id<MTLTexture> image;
+    std::shared_ptr<void> lease;
+    std::vector<std::weak_ptr<Request>> waiting;
+    bool bottomLeft,completed=false;
+    int status=Unknown;
+    SubmittedSource(id<MTLTexture> value,bool bottom,std::shared_ptr<void> owner):image(value),lease(std::move(owner)),bottomLeft(bottom){}
+    void encode(std::vector<std::shared_ptr<Request>> batch){
+        batch.erase(std::remove_if(batch.begin(),batch.end(),[](auto&r){return r->done.load();}),batch.end());
+        if(batch.empty())return;
+        if(status!=Success){for(auto&r:batch)r->finish(status);return;}
+        @autoreleasepool {
+            // Never allocate from the producer's bounded queue inside its
+            // completion callback. A requested read owns its own short buffer.
+            auto commands=[[image.device newCommandQueue] commandBuffer];
+            if(!commands){for(auto&r:batch)r->finish(Unknown);return;}
+            commands.label=@"Android retained surface PixelCopy";
+            Queue encoder;for(auto&r:batch)encoder.pending.push_back(r);
+            encoder.encode(commands,image,bottomLeft);
+            auto owner=shared_from_this();
+            [commands addCompletedHandler:^(id<MTLCommandBuffer>){(void)owner;}];
+            [commands commit];
+        }
+    }
+    void copy(const std::shared_ptr<Request>&request){
+        {std::lock_guard lock(mutex);if(!completed){waiting.push_back(request);return;}}
+        encode({request});
+    }
+    void finish(MTLCommandBufferStatus result){
+        std::vector<std::shared_ptr<Request>> batch;
+        {std::lock_guard lock(mutex);completed=true;status=result==MTLCommandBufferStatusCompleted?Success:Unknown;
+            for(auto&weak:waiting)if(auto request=weak.lock())batch.push_back(std::move(request));waiting.clear();}
+        encode(std::move(batch));
+    }
+};
+struct SourcePool {
+    struct Image {
+        id<MTLTexture> texture;size_t bytes=0;
+        ~Image(){if(bytes)sourceBytes-=bytes;}
+    };
+    std::array<std::shared_ptr<Image>,3> images;
+    std::shared_ptr<Image> acquire(id<MTLTexture> input){
+        for(auto&image:images)if(image&&image.use_count()==1&&image->texture.device==input.device&&image->texture.width==input.width&&image->texture.height==input.height&&image->texture.pixelFormat==input.pixelFormat)return image;
+        for(auto&image:images)if(image&&image.use_count()==1)image.reset();
+        auto slot=std::find(images.begin(),images.end(),nullptr);if(slot==images.end())return {};
+        auto descriptor=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:input.pixelFormat width:input.width height:input.height mipmapped:NO];
+        descriptor.storageMode=MTLStorageModePrivate;descriptor.usage=MTLTextureUsageShaderRead;
+        auto need=[input.device heapTextureSizeAndAlignWithDescriptor:descriptor].size;
+        size_t used=sourceBytes.load();do{if(!need||need>sourceBudget||used>sourceBudget-need)return {};}while(!sourceBytes.compare_exchange_weak(used,used+need));
+        auto image=std::make_shared<Image>();image->bytes=need;image->texture=[input.device newTextureWithDescriptor:descriptor];if(!image->texture)return {};
+        auto actual=image->texture.allocatedSize;if(actual>need){size_t extra=actual-need;used=sourceBytes.load();do{if(extra>sourceBudget||used>sourceBudget-extra)return {};}while(!sourceBytes.compare_exchange_weak(used,used+extra));image->bytes=actual;}
+        *slot=image;return image;
+    }
+};
 namespace {
 void armTimerLocked(){
     if(timerScheduled||registry.empty())return;
@@ -84,6 +142,8 @@ uint64_t Queue::add(JNIEnv *env,jobject callback,int width,int height,int immedi
     request->callback=env->NewGlobalRef(callback);if(!request->callback)return 0;
     {std::lock_guard lock(registryMutex);request->token=nextId++;if(registry.size()>=maxRequests)immediateStatus=Timeout;else if(immediateStatus<0){registry.emplace(request->token,request);armTimerLocked();}}
     if(immediateStatus>=0){request->finish(immediateStatus);return 0;}
+    if(sourceStatus>=0){request->finish(sourceStatus);return 0;}
+    if(submitted){submitted->copy(request);return request->token;}
     pending.erase(std::remove_if(pending.begin(),pending.end(),[](auto&w){auto r=w.lock();return !r||r->done.load();}),pending.end());
     pending.push_back(request);
     // At most one process-wide timeout callback, idle when requests are absent.
@@ -115,7 +175,23 @@ void Queue::encode(id<MTLCommandBuffer> commands,id<MTLTexture> source,bool bott
         [commands addCompletedHandler:^(id<MTLCommandBuffer> completed){request->finish(completed.status==MTLCommandBufferStatusCompleted?Success:Unknown,buffer);}];
     }
 }
-void Queue::retire(int status){auto batch=std::move(pending);pending.clear();for(auto &weak:batch)if(auto request=weak.lock())request->finish(status);}
+void Queue::retire(int status){clearSource();sourcePool.reset();auto batch=std::move(pending);pending.clear();for(auto &weak:batch)if(auto request=weak.lock())request->finish(status);}
+void Queue::source(id<MTLCommandBuffer>commands,id<MTLTexture>image,bool bottomLeft,std::shared_ptr<void>lease){
+    if(!commands||!image||!lease||commands.status>=MTLCommandBufferStatusCommitted||!commands.retainedReferences)return;
+    auto frame=std::make_shared<SubmittedSource>(image,bottomLeft,std::move(lease));
+    submitted=frame;sourceStatus=-1;
+    [commands addCompletedHandler:^(id<MTLCommandBuffer>completed){frame->finish(completed.status);}];
+}
+void Queue::clearSource(){submitted.reset();sourceStatus=-1;}
+void Queue::snapshot(id<MTLCommandBuffer>commands,id<MTLTexture>image,bool bottomLeft){
+    if(!commands||!image||commands.status>=MTLCommandBufferStatusCommitted||!commands.retainedReferences)return;
+    if(!sourcePool)sourcePool=std::make_shared<SourcePool>();
+    auto retained=sourcePool->acquire(image);if(!retained){clearSource();sourceStatus=Timeout;return;}
+    auto copy=[commands blitCommandEncoder];if(!copy){clearSource();sourceStatus=Unknown;return;}
+    [copy copyFromTexture:image sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0) sourceSize:MTLSizeMake(image.width,image.height,1)
+        toTexture:retained->texture destinationSlice:0 destinationLevel:0 destinationOrigin:MTLOriginMake(0,0,0)];[copy endEncoding];
+    source(commands,retained->texture,bottomLeft,std::move(retained));
+}
 Queue::~Queue(){retire();}
 void cancel(uint64_t id){std::shared_ptr<Request> request;{std::lock_guard lock(registryMutex);auto found=registry.find(id);if(found!=registry.end())request=found->second;}if(request)request->finish(SourceInvalid,nil,false);}
 }

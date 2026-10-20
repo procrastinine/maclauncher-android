@@ -14,9 +14,16 @@ int klj_metal_output_size(JNIEnv*,void *presenter,int width,int height);
 int klj_metal_current(JNIEnv *env,void *surface);
 void *klj_metal_surface(JNIEnv *env,void *display,void *config,int width,int height,bool opaque,const int *attributes);
 int klj_metal_present(JNIEnv *env,void *presenter,int frame);
+/* The EGL window transfers its submitted backing-image lease. Only an
+ * explicitly preserved swap copies pixels into the next producer image. */
+typedef struct KLMetalBufferSwap {void *surface,*storage,*context;int(*advance)(void*);bool preserved;} KLMetalBufferSwap;
+int klj_metal_present_retained(JNIEnv*,void *presenter,int frame,void *owner,void(*release)(void*),const KLMetalBufferSwap*);
+int klj_metal_replace_surface(JNIEnv*,void *presenter,void *surface,void *storage,int width,int height);
 /* Same owner/common pipeline, a top-left projection already encoded in cb.
  * Returns 0 accepted, 3 busy, 4 failure. Caller commits exactly once. */
 int klj_metal_project(JNIEnv*,void *presenter,void *display,void *cb,void *texture);
+/* Transfers an actual immutable image/pool lease, including rejected calls. */
+int klj_metal_project_retained(JNIEnv*,void *presenter,void *display,void *cb,void *texture,void *owner,void(*release)(void*));
 void *klj_metal_projection_queue(JNIEnv*,void *presenter,void *device);
 typedef int (*KLNativeMetalFrame)(void *context,void *commandBuffer,void *texture);
 /* Native driver WSI owns this retained carrier; output uses this presenter. */

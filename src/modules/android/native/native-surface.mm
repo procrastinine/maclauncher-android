@@ -4,6 +4,7 @@
 #include <jni.h>
 #include "native-import-registry.h"
 #include <unordered_set>
+#include <unordered_map>
 #include <mutex>
 #include <cstdint>
 #include <cinttypes>
@@ -21,12 +22,19 @@
 
 namespace {
 
-struct Window {uint64_t lease,consumer=0;unsigned references=1,presentationCalls=0;bool bound=true,texture=false,nativeLayerStarting=false,consumerHeld=false;int width,height,format,defaultWidth,defaultHeight,defaultFormat,requestedWidth=0,requestedHeight=0,requestedFormat=0;IOSurfaceRef storage=nullptr,eglStorage=nullptr;size_t bytes=0;JavaVM *vm=nullptr;jobject composition=nullptr;int(*consumerRetain)(void*)=nullptr;void(*consumerRelease)(void*)=nullptr;void *presenter=nullptr,*egl=nullptr,*nativeLayer=nullptr;};
+struct Window {uint64_t lease,consumer=0,geometryGeneration=1,eglGeneration=0;unsigned references=1,presentationCalls=0;bool bound=true,texture=false,nativeLayerStarting=false,consumerHeld=false;int width,height,format,defaultWidth,defaultHeight,defaultFormat,requestedWidth=0,requestedHeight=0,requestedFormat=0;IOSurfaceRef storage=nullptr,eglStorage=nullptr;size_t bytes=0;JavaVM *vm=nullptr;jobject composition=nullptr;int(*consumerRetain)(void*)=nullptr;void(*consumerRelease)(void*)=nullptr;void *presenter=nullptr,*egl=nullptr,*nativeLayer=nullptr;};
 void *hostPresenter=nullptr;
 std::mutex mutex;
 std::unordered_set<Window*> windows;
 uint64_t nextLease=1,allocations=0,retirements=0,externalGeneration=0;
 size_t bytes=0;
+struct StorageCharge {size_t references=0,bytes=0;};
+std::unordered_map<IOSurfaceID,StorageCharge> storageCharges;
+void chargeStorage(IOSurfaceRef storage,bool retain){
+    if(!storage)return;auto id=IOSurfaceGetID(storage);
+    if(retain){auto &charge=storageCharges[id];if(!charge.references++){charge.bytes=IOSurfaceGetAllocSize(storage);bytes+=charge.bytes;}}
+    else{auto at=storageCharges.find(id);if(at!=storageCharges.end()&&!--at->second.references){bytes-=at->second.bytes;storageCharges.erase(at);}}
+}
 void releaseComposition(Window *value){
     if(!value->composition)return;JNIEnv *env=nullptr;bool attached=false;
     if(value->vm->GetEnv((void**)&env,JNI_VERSION_1_8)==JNI_EDETACHED)attached=value->vm->AttachCurrentThreadAsDaemon((void**)&env,nullptr)==JNI_OK;
@@ -55,7 +63,7 @@ struct WindowLock {
     }
     void retire(Window *value){
         if(value->references==2&&value->consumerHeld){retired.push_back({value->consumerRelease,value->consumer});value->consumerHeld=false;}
-        if(--value->references)return;windows.erase(value);bytes-=value->bytes;if(value->storage)CFRelease(value->storage);releaseComposition(value);delete value;retirements++;
+        if(--value->references)return;windows.erase(value);if(value->storage){chargeStorage(value->storage,false);CFRelease(value->storage);}releaseComposition(value);delete value;retirements++;
     }
     ~WindowLock(){lock.unlock();for(auto entry:retired)entry.release((void*)(uintptr_t)entry.handle);}
 };
@@ -94,7 +102,7 @@ int bufferGeometryLocked(Window *value,int w,int h,int f){
     size_t needed=size_t(w)*h*4;
     auto storage=allocate(w,h,f);if(!storage)return -ENOMEM;
     needed=IOSurfaceGetAllocSize(storage);
-    auto old=value->storage;bytes=bytes-value->bytes+needed;value->storage=storage;value->bytes=needed;value->width=w;value->height=h;value->format=f;CFRelease(old);
+    auto old=value->storage;chargeStorage(storage,true);chargeStorage(old,false);value->storage=storage;value->bytes=needed;value->width=w;value->height=h;value->format=f;++value->geometryGeneration;CFRelease(old);
     if(value->nativeLayer){auto layer=(__bridge CAMetalLayer*)value->nativeLayer;layer.bounds=CGRectMake(0,0,w,h);layer.drawableSize=CGSizeMake(w,h);}
     return 0;
 }
@@ -183,7 +191,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_maclauncher_android_bridge_NativeSurface
     auto storage=allocate(width,height,format);if(!storage){fail(env,"Native IOSurface allocation failed");return 0;}
     needed=IOSurfaceGetAllocSize(storage);
     auto value=new Window;env->GetJavaVM(&value->vm);value->lease=nextLease++;value->width=value->defaultWidth=width;value->height=value->defaultHeight=height;value->format=value->defaultFormat=format;value->storage=storage;value->bytes=needed;value->presenter=hostPresenter;
-    windows.insert(value);bytes+=needed;allocations++;return value->lease;
+    windows.insert(value);chargeStorage(storage,true);allocations++;return value->lease;
 }
 extern "C" JNIEXPORT jlong JNICALL Java_maclauncher_android_bridge_NativeSurface_createComposition(JNIEnv *env,jclass,jint width,jint height,jint format,jobject producer){
     if(width<1||height<1||format!=1||!producer){fail(env,"Native composition surface descriptor is invalid");return 0;}
@@ -267,12 +275,12 @@ extern "C" void *klj_surface_begin_egl(void *pointer,void **presenter,int *width
     WindowLock lock;auto value=known(pointer);if(!value||!value->bound||value->egl||value->eglStorage||value->nativeLayer||value->nativeLayerStarting||(!value->presenter&&!value->texture&&!value->composition))return nullptr;
     if(value->composition){if(format&&format!=1&&format!=2)return nullptr;format=1;}
     if(format){if(bufferGeometryLocked(value,value->width,value->height,format))return nullptr;value->requestedFormat=format;}
-    if(!value->storage){value->storage=allocate(value->width,value->height,value->format);if(!value->storage)return nullptr;value->bytes=IOSurfaceGetAllocSize(value->storage);bytes+=value->bytes;}
-    if(!lock.retain(value))return 0;value->eglStorage=(IOSurfaceRef)CFRetain(value->storage);*presenter=value->presenter;*width=value->width;*height=value->height;return (void*)CFRetain(value->storage);
+    if(!value->storage){value->storage=allocate(value->width,value->height,value->format);if(!value->storage)return nullptr;value->bytes=IOSurfaceGetAllocSize(value->storage);chargeStorage(value->storage,true);}
+    if(!lock.retain(value))return 0;value->eglStorage=(IOSurfaceRef)CFRetain(value->storage);chargeStorage(value->eglStorage,true);value->eglGeneration=value->geometryGeneration;*presenter=value->presenter;*width=value->width;*height=value->height;return (void*)CFRetain(value->storage);
 }
 extern "C" void klj_surface_record_egl(void *pointer,void *egl){WindowLock lock;if(auto value=known(pointer)){if(value->egl!=egl)externalGeneration++;value->egl=egl;}}
 extern "C" void *klj_surface_find_egl(void *egl,void **presenter){WindowLock lock;for(auto value:windows)if(value&&value->egl==egl&&egl){*presenter=value->presenter;return value;}return nullptr;}
-extern "C" void klj_surface_end_egl(void *pointer){WindowLock lock;if(auto value=known(pointer)){if(value->egl)externalGeneration++;value->egl=nullptr;if(value->eglStorage){CFRelease(value->eglStorage);value->eglStorage=nullptr;}lock.retire(value);}}
+extern "C" void klj_surface_end_egl(void *pointer){WindowLock lock;if(auto value=known(pointer)){if(value->egl)externalGeneration++;value->egl=nullptr;if(value->eglStorage){chargeStorage(value->eglStorage,false);CFRelease(value->eglStorage);value->eglStorage=nullptr;}lock.retire(value);}}
 extern "C" void *klj_surface_native_window(JNIEnv *env,jobject surface){return fromSurface(env,surface);}
 extern "C" void *klj_surface_acquire_lease(uint64_t lease,void **presenter,int *width,int *height){
     if(!presenter||!width||!height)return nullptr;
@@ -297,12 +305,17 @@ extern "C" void *klj_surface_copy_storage(void *pointer){WindowLock lock;auto va
 
 // Buffer adoption happens on the EGL producer after old GPU work is retired.
 extern "C" void *klj_surface_next_egl(void *pointer,int *width,int *height){
- WindowLock lock;auto value=known(pointer);if(!value||!value->eglStorage||value->storage==value->eglStorage)return nullptr;
+ WindowLock lock;auto value=known(pointer);if(!value||!value->eglStorage||value->geometryGeneration==value->eglGeneration)return nullptr;
  *width=value->width;*height=value->height;return (void*)CFRetain(value->storage);
 }
 extern "C" void klj_surface_commit_egl(void *pointer,void *storage){
  WindowLock lock;auto value=known(pointer);if(!value||!value->eglStorage||!storage)return;
- auto old=value->eglStorage;value->eglStorage=(IOSurfaceRef)CFRetain(storage);CFRelease(old);
+ auto old=value->eglStorage;value->eglStorage=(IOSurfaceRef)CFRetain(storage);chargeStorage(value->eglStorage,true);chargeStorage(old,false);if(storage==value->storage)value->eglGeneration=value->geometryGeneration;CFRelease(old);
 }
+extern "C" void klj_surface_rotate_egl(void *pointer,void *storage){
+ WindowLock lock;auto value=known(pointer);if(!value||!value->eglStorage||!storage)return;
+ auto old=value->eglStorage;value->eglStorage=(IOSurfaceRef)CFRetain(storage);chargeStorage(value->eglStorage,true);chargeStorage(old,false);CFRelease(old);
+}
+extern "C" void klj_surface_account_egl_buffer(void *storage,bool retain){WindowLock lock;chargeStorage(static_cast<IOSurfaceRef>(storage),retain);}
 extern "C" JNIEXPORT jboolean JNICALL Java_maclauncher_android_bridge_NativeSurface_externallyPresented(JNIEnv*,jclass,jlong lease){WindowLock lock;auto value=find(lease);return value&&value->presenter&&(value->egl||value->nativeLayer);}
 extern "C" JNIEXPORT jlong JNICALL Java_maclauncher_android_bridge_NativeSurface_externalGeneration(JNIEnv*,jclass){WindowLock lock;return externalGeneration;}

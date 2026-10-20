@@ -41,7 +41,10 @@ struct Surface {
         struct Active {void*window;~Active(){klj_surface_release_lease(window);}} activeOwner{active};if(!presenter)return unsupported;
         auto device=MTLCreateSystemDefaultDevice();auto queue=(__bridge id<MTLCommandQueue>)klj_metal_projection_queue(env,presenter,(__bridge void*)device);if(!queue||env->ExceptionCheck())return failed;
         auto commands=[queue commandBuffer];commands.label=@"Android decoded video";auto texture=klj_video_texture(pixels,device,commands);if(!texture)return failed;
-        int result=klj_metal_project(env,presenter,nullptr,(__bridge void*)commands,(__bridge void*)texture);if(result||env->ExceptionCheck())return failed;
+        // Each decoded frame owns this immutable conversion texture; retain it
+        // for idle PixelCopy without another per-frame GPU image copy.
+        int result=klj_metal_project_retained(env,presenter,nullptr,(__bridge void*)commands,(__bridge void*)texture,
+            (__bridge_retained void*)texture,[](void*value){id owner=(__bridge_transfer id)value;(void)owner;});if(result||env->ExceptionCheck())return failed;
         if(completed)[commands addCompletedHandler:^(id<MTLCommandBuffer> buffer){completed(context,buffer.status==MTLCommandBufferStatusCompleted?now():0);}];
         [commands commit];return 0;
     }}
