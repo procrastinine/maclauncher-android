@@ -20,6 +20,17 @@ static int klj_evidence_branch_cmp(const void *a,const void *b) {
     size_t x=((const klj_evidence_branch *)a)->target,y=((const klj_evidence_branch *)b)->target;
     return x<y?-1:x>y;
 }
+/* A fixed FP slot can retain the compiler's TP even when its register is later
+ * reused. The key is the exact matching 64-bit non-writeback load encoding. */
+static uint32_t klj_evidence_fp_store(uint32_t word) {
+    if(((word>>5)&31u)!=29u)return 0;
+    return ((word&0xffc00000u)==0xf9000000u||(word&0xffe00c00u)==0xf8000000u)?
+        (word|0x00400000u)&~31u:0;
+}
+static uint32_t klj_evidence_fp_load(uint32_t word) {
+    if(((word>>5)&31u)!=29u)return 0;
+    return ((word&0xffc00000u)==0xf9400000u||(word&0xffe00c00u)==0xf8400000u)?word&~31u:0;
+}
 
 /* A protected function can retain an opaque entry while its compiler-emitted
  * body is ordinary code. Its unwind root alone does not prove that body. The
@@ -32,15 +43,28 @@ static int klj_evidence_canary_tail(const uint32_t *words,size_t begin,size_t en
     uint32_t read=words[begin];
     if(end-begin<7||(read&0xffffffe0u)!=0xd53bd040u||
        ((state[begin]|state[begin+1])&KLX_EVIDENCE_DATA))return 0;
-    unsigned tp=read&31u,guard=words[begin+1]&31u;
-    if(tp==31||guard==31||
-       (words[begin+1]&0xffffffe0u)!=(0xf9401400u|(tp<<5)))return 0;
-    size_t saved=end;unsigned slot=0;
-    for(size_t k=begin+2;k<end&&k-begin<9;k++) {
+    unsigned tp=read&31u,guard=31u;size_t loaded=end;uint32_t pointer_slot=0;
+    if(tp==31)return 0;
+    for(size_t k=begin+1;k<end&&k-begin<4;k++) {
         uint32_t w=words[k];klx_info info;klx_decode(w,&info);
         if(!info.ok||(state[k]&KLX_EVIDENCE_DATA))return 0;
-        if((w&0xffc003ffu)==(0xf90003e0u|guard)) {
-            slot=(w>>10)&4095u;saved=k;break;
+        if((w&0xffffffe0u)==(0xf9401400u|(tp<<5))){guard=w&31u;loaded=k;break;}
+        if((w&31u)==tp){uint32_t key=klj_evidence_fp_store(w);if(key)pointer_slot=key;}
+        if((info.gp_written&(1u<<tp))||(w&0xfc000000u)==0x94000000u||
+           (w&0xfffffc1fu)==0xd63f0000u)return 0;
+    }
+    if(guard==31u)return 0;
+    size_t saved=end;uint32_t reload=0;unsigned stack_base=31;
+    for(size_t k=loaded+1;k<end&&k-begin<10;k++) {
+        uint32_t w=words[k];klx_info info;klx_decode(w,&info);
+        if(!info.ok||(state[k]&KLX_EVIDENCE_DATA))return 0;
+        unsigned base=(w>>5)&31u;
+        if((base==31u||base==29u)&&(w&31u)==guard&&
+           ((w&0xffc00000u)==0xf9000000u||(w&0xffe00c00u)==0xf8000000u)) {
+            // STR/LDR unsigned and STUR/LDUR signed offsets must use the same
+            // stable SP/FP slot. Register-offset and writeback forms do not
+            // establish a canary slot.
+            reload=(w|0x00400000u)&~31u;stack_base=base;saved=k;break;
         }
         if((info.gp_written&((1u<<guard)|(1u<<tp)))||(w&0xfc000000u)==0x94000000u||
            (w&0xfffffc1fu)==0xd63f0000u)return 0;
@@ -54,14 +78,25 @@ static int klj_evidence_canary_tail(const uint32_t *words,size_t begin,size_t en
         if(end-k>=4&&(w&0xffc00000u)==0xf9400000u&&base<31&&
            (pointers&(1u<<base))&&((w>>10)&4095u)==5u) {
             unsigned live=w&31u,stack=words[k+1]&31u;
-            uint32_t compare=words[k+2];
-            if(live!=31&&stack!=31&&live!=stack&&
-               (words[k+1]&0xffffffe0u)==(0xf94003e0u|(slot<<10))&&
+            size_t comparison=k+2;
+            if(live!=31&&stack!=31&&live!=stack&&(words[k+1]&~31u)==reload) {
+            for(;comparison<end&&comparison-k<6;comparison++) {
+                uint32_t compare=words[comparison];klx_info compared;klx_decode(compare,&compared);
+                if(!compared.ok||(state[comparison]&KLX_EVIDENCE_DATA))return 0;
+                if(
                (compare&0xffe0fc1fu)==0xeb00001fu&&
                ((((compare>>5)&31u)==live&&((compare>>16)&31u)==stack)||
-                (((compare>>5)&31u)==stack&&((compare>>16)&31u)==live))&&
-               (words[k+3]&0xff00001fu)==0x54000001u) {
-                for(size_t tail=k+4;tail<end;tail++) {
+                (((compare>>5)&31u)==stack&&((compare>>16)&31u)==live)))break;
+                // Result/flag calculations may intervene, but neither guard
+                // value nor control flow can change before their comparison.
+                if((compared.gp_written&((1u<<live)|(1u<<stack)))||
+                   (compare&0x7c000000u)==0x14000000u||
+                   (compare&0xff000010u)==0x54000000u||
+                   (compare&0x7e000000u)==0x34000000u||
+                   (compare&0x7e000000u)==0x36000000u||((compare>>25)&0x7fu)==0x6bu)return 0;
+            }
+            if(comparison+1<end&&comparison-k<6&&(words[comparison+1]&0xff00001fu)==0x54000001u) {
+                for(size_t tail=comparison+2;tail<end;tail++) {
                     uint32_t next=words[tail];klx_decode(next,&info);
                     if(!info.ok||(state[tail]&KLX_EVIDENCE_DATA))return 0;
                     if(next==0xd65f03c0u)return 1;
@@ -75,13 +110,68 @@ static int klj_evidence_canary_tail(const uint32_t *words,size_t begin,size_t en
                 }
                 return 0;
             }
+            }
+        }
+        if((stack_base==29u||pointer_slot)&&(info.gp_written&(1u<<29)))return 0;
+        uint32_t stored=klj_evidence_fp_store(w),loaded_slot=klj_evidence_fp_load(w);
+        if(stored){
+            if(pointers&(1u<<(w&31u)))pointer_slot=stored;
+            else if(pointer_slot==stored)pointer_slot=0;
         }
         pointers&=~info.gp_written;
+        if(pointer_slot&&loaded_slot==pointer_slot&&(w&31u)!=31u)pointers|=1u<<(w&31u);
         if((w&0xffffffe0u)==0xd53bd040u&&((w&31u)!=31u))pointers|=1u<<(w&31u);
         if((w&0xfc000000u)==0x94000000u||(w&0xfffffc1fu)==0xd63f0000u)
             pointers&=0x3ff80000u; /* AAPCS callee-saved x19..x29. */
     }
     return 0;
+}
+/* An original function can cross into an opaque page after its ordinary
+ * prologue. Prove only that prefix: an allocated aligned call frame, retained
+ * original LR/callee registers, then the exact Bionic TP/canary load. No byte of
+ * its opaque continuation acquires code evidence from this contract. */
+static size_t klj_evidence_canary_prefix(const uint32_t *words,size_t begin,size_t end,
+                                        const uint8_t *state) {
+    int64_t sp=0,slots[32];unsigned registers[32];size_t slot_count=0;
+    uint32_t saved=0;
+    for(size_t k=begin;k<end&&k-begin<16;k++) {
+        uint32_t word=words[k];klx_info info;klx_decode(word,&info);
+        if(!info.ok||(state[k]&KLX_EVIDENCE_DATA))return begin;
+        if((word&0xffffffe0u)==0xd53bd040u) {
+            unsigned tp=word&31u;
+            if(sp>=0||tp==31||!(saved&(1u<<30))||
+               (tp>=19&&!(saved&(1u<<tp)))||k+1>=end||
+               (state[k+1]&KLX_EVIDENCE_DATA)||
+               (words[k+1]&0xffffffe0u)!=(0xf9401400u|(tp<<5))||
+               (words[k+1]&31u)==31u)return begin;
+            return k+2;
+        }
+        if((word&0xff8003ffu)==0xd10003ffu) {
+            uint64_t bytes=((uint64_t)(word>>10)&4095u)<<((word&(1u<<22))?12:0);
+            if(!bytes||(bytes&15u)||bytes>(uint64_t)(INT64_MAX+sp))return begin;
+            sp-=(int64_t)bytes;continue;
+        }
+        if((word&0xff8003ffu)==0x910003fdu) {
+            uint64_t offset=((uint64_t)(word>>10)&4095u)<<((word&(1u<<22))?12:0);
+            if(sp>=0||offset>(uint64_t)-sp)return begin;
+            continue;
+        }
+        unsigned count=0,reg[2]={word&31u,(word>>10)&31u};int64_t offset=0;
+        uint32_t form=word&0xffc003e0u;
+        if(form==0xa98003e0u||form==0xa90003e0u) {
+            offset=klj_a64_signed((word>>15)&127u,7)*8;count=2;
+            if(form==0xa98003e0u){if(offset>=0||(offset&15))return begin;sp+=offset;offset=0;}
+        }else if(form==0xf90003e0u){offset=((word>>10)&4095u)*8;count=1;}
+        else return begin;
+        if(sp>=0||offset<0||offset+(int64_t)count*8>-sp)return begin;
+        for(unsigned n=0;n<count;n++) {
+            if(reg[n]<19||reg[n]>30||slot_count==32)return begin;
+            int64_t slot=sp+offset+n*8;
+            for(size_t old=0;old<slot_count;old++)if(slots[old]==slot)saved&=~(1u<<registers[old]);
+            slots[slot_count]=slot;registers[slot_count++]=reg[n];saved|=1u<<reg[n];
+        }
+    }
+    return begin;
 }
 int klx_instruction_evidence(const uint32_t *words,size_t count,uint64_t base,
                             const uint64_t *roots,size_t root_count,uint8_t *state) {
@@ -192,6 +282,15 @@ int klx_instruction_evidence(const uint32_t *words,size_t count,uint64_t base,
             if(defines&&rd<31){addresses[rd]=value;known|=1u<<rd;}
         }
         if(!complete)for(size_t k=begin;k<at;k++)state[k]&=~KLX_EVIDENCE_CODE;
+    }
+    // A complete rooted prologue establishes only its own prefix, even when
+    // the ordinary decoded path stops in a later opaque page. This runs after
+    // fallthrough analysis so incomplete continuations cannot erase that fact.
+    function=count;
+    for(size_t end=0;end<=count;end++)if(end==count||(state[end]&16u)) {
+        if(function<count){size_t prefix=klj_evidence_canary_prefix(words,function,end,state);
+            for(size_t k=function;k<prefix;k++)state[k]|=KLX_EVIDENCE_CODE;}
+        function=end;
     }
     /* A valid conditional path can skip opaque inline bytes. Its decoded
      * prefix remains code when the target reaches established code, even if

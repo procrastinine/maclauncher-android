@@ -24,6 +24,11 @@ impl OpenedPath {
    if !origin.starts_with("/proc/")||!origin.ends_with("/maps"){return Err(errno::EINVAL);}
    return Self::virtual_node(origin.to_owned());
   }
+  // Read-only image names are immutable Linux dentries. Darwin F_GETPATH may
+  // return another hardlink to the same vnode (including another APEX), which
+  // is not the dentry this open resolved. Keep the original canonical guest
+  // name in the existing open-description owner instead of reversing a vnode.
+  if resolved.read_only(){return Self::virtual_node(resolved.guest.clone());}
   let(guest,host)=vfs::opened_mount(&resolved.guest);
   let host=CString::new(host.as_os_str().as_bytes()).map_err(|_|errno::EINVAL)?;
   let root=PrivateFd::allocate(||{

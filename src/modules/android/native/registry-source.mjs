@@ -29,6 +29,8 @@ int kl_dl_iterate_phdr(int (*cb)(void *, size_t, void *), void *data) {`);
   '    if (!klj_resolve_library_path(path,NULL,full,sizeof full)) {\n        snprintf(g_dlerr,sizeof g_dlerr,"dlopen failed: library \\"%s\\" not found",basename_of(path));\n        return NULL;\n    }');
  replace('           kl_openxr_claims(path) || kl_core_shim_claims(path) || kl_can_load(path);',
   '           kl_openxr_claims(path) || kl_core_shim_claims(path) || klj_resolve_library_path(path,NULL,(char[PATH_MAX]){0},PATH_MAX);');
+ replace('"  [klepton] guest dlopen(\\"%s\\") FAILED: %s\\n", path, kl_error());',
+  '"  [klepton] guest dlopen(\\"%s\\") FAILED: %s\\n", path, klj_image_load_error());');
  replace('    kl_shim_override = kl_dl_shim_override;','    (void)klj_register_import_resolver(kl_dl_shim_override);');
  replace('#define KL_MAX_IMAGES 64\ntypedef struct { char soname[128]; kl_image *img; } entry;\nstatic entry  g_imgs[KL_MAX_IMAGES];\n'+anchor,'static KlImageRegistry klj_images;');
  replace('void kl_register_image(const char *soname, kl_image *img) {',

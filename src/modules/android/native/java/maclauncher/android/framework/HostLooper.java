@@ -18,7 +18,8 @@ public final class HostLooper {
     private static final Map<MessageQueue,ArrayList<Runnable>> listeners=new WeakHashMap<>();
     private static final Map<MessageQueue,java.lang.ref.WeakReference<Looper>> owners=new WeakHashMap<>();
     private static volatile long mainDeadline=Long.MAX_VALUE;
-    private static final class Drain {boolean active,boundaryReached;int polls;long deadline=Long.MAX_VALUE;}
+    private static volatile long mainTurnNanos=16_666_667L;
+    private static final class Drain {boolean active,boundaryReached,turnReached;int polls;long deadline=Long.MAX_VALUE;}
     private static Field field(String name){try{Field result=MessageQueue.class.getDeclaredField(name);result.setAccessible(true);return result;}catch(ReflectiveOperationException error){throw new ExceptionInInitializerError(error);}}
     private static Method method(Class<?> owner,String name,Class<?>...types){try{Method result=owner.getDeclaredMethod(name,types);result.setAccessible(true);return result;}catch(ReflectiveOperationException error){throw new ExceptionInInitializerError(error);}}
     private static MethodHandle handle(Method method){try{return MethodHandles.lookup().unreflect(method);}catch(IllegalAccessException error){throw new ExceptionInInitializerError(error);}}
@@ -60,17 +61,26 @@ public final class HostLooper {
     public static void pump(Looper looper){
         drain(looper,false);
     }
+    /** Native input and presentation share the physical display's turn length. */
+    static void hostFrameInterval(long interval){if(interval<=0)throw new IllegalArgumentException("Invalid display interval");mainTurnNanos=interval;}
     private static void drain(Looper looper,boolean callbacks){
         if(!looper.isCurrentThread())throw new IllegalStateException("Looper can only execute on its owner thread");
-        Drain state=draining.get();if(state.active)return;state.active=true;state.boundaryReached=false;state.polls=0;state.deadline=Long.MAX_VALUE;
+        Drain state=draining.get();if(state.active)return;state.active=true;state.boundaryReached=state.turnReached=false;state.polls=0;state.deadline=Long.MAX_VALUE;
+        long started=System.nanoTime(),budget=mainTurnNanos;
         // ART owns its original nativePollOnce. An asynchronous Handler marks
         // the ready-work boundary without a blocking poll or a sync-barrier wait.
         Handler boundary=callbacks?Handler.createAsync(looper):null;Runnable finish=callbacks?()->state.boundaryReached=true:null;
         // Match Looper.loop's two-step identity reset: its first clear may return
         // a foreign/uncleared token; only the second token describes this owner.
-        try{if(boundary!=null&&!boundary.post(finish))return;Binder.clearCallingIdentity();long identity=Binder.clearCallingIdentity();for(int count=0;count<1024&&!state.boundaryReached;count++)if(!(boolean)once.invokeExact(looper,identity,-1))return;}
+        try{if(boundary!=null&&!boundary.post(finish))return;Binder.clearCallingIdentity();long identity=Binder.clearCallingIdentity();for(int count=0;count<1024&&!state.boundaryReached;count++){
+            if(!(boolean)once.invokeExact(looper,identity,-1))return;
+            // Continuous animation can always leave another message ready.
+            // Return to native input and frame publication between completed
+            // callbacks instead of draining hundreds of complete UI frames.
+            if(!callbacks&&System.nanoTime()-started>=budget){state.turnReached=true;return;}
+        }}
         catch(Throwable error){throw failure(error);}
-        finally{if(boundary!=null)boundary.removeCallbacks(finish);state.active=false;if(!callbacks&&looper==Looper.getMainLooper())mainDeadline=state.polls>=1024?SystemClock.uptimeMillis():state.deadline;}
+        finally{if(boundary!=null)boundary.removeCallbacks(finish);state.active=false;if(!callbacks&&looper==Looper.getMainLooper())mainDeadline=state.turnReached||state.polls>=1024?SystemClock.uptimeMillis():state.deadline;}
     }
     public static int waitMillis(int maximum){long remaining=mainDeadline-SystemClock.uptimeMillis();return remaining<=0?0:(int)Math.min(maximum,remaining);}
     public static boolean addShutdownListener(Looper looper,Runnable action){

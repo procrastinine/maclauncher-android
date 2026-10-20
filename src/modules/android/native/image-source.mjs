@@ -14,9 +14,9 @@ export function prepareImageSource(vendor,build) {
  replace('        if (!has_code) { bits[p] &= (uint8_t)~PF_X; continue; }',
          '        if (!has_code) bits[p] &= (uint8_t)~PF_X;\n        }');
  replace(relroEnd,relroEnd+'\n        if (!(bits[p] & PF_X)) continue;\n');
- source='#include '+JSON.stringify(path.join(root,'elf-tls.h'))+'\n#include '+JSON.stringify(path.join(root,'image-constructor.h'))+'\n#include '+JSON.stringify(path.join(root,'native-invocation.h'))+'\n#include '+JSON.stringify(path.join(root,'image-format.h'))+'\n#include '+JSON.stringify(path.join(root,'inline-syscall.h'))+'\n#include '+JSON.stringify(path.join(root,'executable-memory/jvm.h'))+'\n#include <stdatomic.h>\n#define DT_INIT 12\n'+source;
+ source='#include '+JSON.stringify(path.join(root,'elf-tls.h'))+'\n#include '+JSON.stringify(path.join(root,'image-constructor.h'))+'\n#include '+JSON.stringify(path.join(root,'native-invocation.h'))+'\n#include '+JSON.stringify(path.join(root,'image-format.h'))+'\n#include '+JSON.stringify(path.join(root,'inline-syscall.h'))+'\n#include '+JSON.stringify(path.join(root,'x18-pools.h'))+'\n#include '+JSON.stringify(path.join(root,'executable-memory/jvm.h'))+'\n#include <stdatomic.h>\n#define DT_INIT 12\n'+source;
  replace('struct kl_image {','#include '+JSON.stringify(path.join(root,'image-code-ranges.h'))+'\n#include '+JSON.stringify(path.join(root,'image-identity.h'))+'\n\nstruct kl_image {\n    const KlImageFormat *format;\n    void *format_payload;\n    char *soname;\n    int identity_captured;\n    struct kl_image **dependencies;\n    size_t dependency_count;\n    KlImageCodeMetadata code_metadata;');
- replace('    size_t     span;','    uintptr_t tls_module;\n    struct klj_elf_tls_descriptor_node *tls_descriptors;\n    size_t inline_prefix_size,inline_pool_count;\n    KljInlinePool *inline_pools;\n    size_t     span;');
+ replace('    size_t     span;','    uintptr_t tls_module;\n    struct klj_elf_tls_descriptor_node *tls_descriptors;\n    size_t inline_prefix_size,inline_pool_count,tls_data_words;\n    KljInlinePool *inline_pools;\n    size_t     span;');
  replace('static int apply_relocs(kl_image *img, const Elf64_Rela *r, size_t count) {',
   '#include '+JSON.stringify(path.join(root,'elf-tls-image.inc'))+'\n\nstatic int apply_relocs(kl_image *img, const Elf64_Rela *r, size_t count) {');
  replace('        case R_AARCH64_RELATIVE:',
@@ -25,7 +25,15 @@ export function prepareImageSource(vendor,build) {
   'static int bind_dynamic(kl_image *img, const Elf64_Phdr *ph, int phnum, uint64_t lo) {\n    if(klj_image_tls_register(img,ph,phnum,lo))return -1;');
  replace('    if (bind_dynamic(img, ph, eh->e_phnum, lo) != 0) { free(img); dlclose(h); return NULL; }',
   '    if (bind_dynamic(img, ph, eh->e_phnum, lo) != 0) { klj_image_tls_unregister(img);free(img);dlclose(h);return NULL; }');
- replace('                        kl_stats *st) {','                        kl_stats *st, const klx_code_context *context) {');
+ replace('                        kl_stats *st) {','                        kl_stats *st, const klx_code_context *context, const KlImageCodeMetadata *metadata, size_t *data_words) {');
+ replace('        if ((w[i] & 0xffffffe0u) == 0xd53bd040u) {',`        if ((w[i] & 0xffffffe0u) == 0xd53bd040u) {
+            // Only original typed metadata or established memory-reference
+            // evidence can classify a TP-shaped word as data. An uncertain
+            // neighborhood remains a refusal, never a successful omission.
+            uint64_t address=va+i*4;size_t left=0,right=metadata?metadata->dataCount:0;
+            while(left<right){size_t mid=left+(right-left)/2;if(metadata->data[mid].start<=address)left=mid+1;else right=mid;}
+            if(left && address<metadata->data[left-1].end){if(data_words)(*data_words)++;continue;}`);
+ replace('neighbourhood reads as data. If it IS code, ', 'neighbourhood is not proven executable. If it IS code, ');
  replace('            if (kl_x18_is_data(w, n, i)) {','            if (kl_x18_is_data_context(w, n, i, context)) {');
  // The shared instruction pass emits AIM's actual guest-TP load. A bit flip
  // would expose Darwin's reserved TSD slots as Android's writable TLS block.
@@ -113,19 +121,20 @@ const char *klj_image_runpath(kl_image *image){
     while(klj_image_code_next(eh,ph,sh,(size_t)sb.st_size,&reservation_cursor,&reservation)) {
         size_t sites=klj_inline_syscall_count_context(file+reservation.offset,reservation.size,
             &(klx_code_context){img->code_metadata.marks,img->code_metadata.count,reservation.address,img->code_metadata.reachable,img->code_metadata.reachableCount});
+        sites+=(size_t)kl_x18_capacity(file+reservation.offset,reservation.size);
         inline_sites+=sites;if(sites)inline_ranges++;
-        x18_arena += (size_t)kl_x18_capacity(file+reservation.offset,reservation.size)+sites;
+        x18_arena += sites;
     }`);
  replace('    img->x18_arena_size = x18_arena;',`    img->x18_arena_size = x18_arena;
     if(inline_sites && img->map_size+x18_arena>=(1ULL<<27)) {
-        if(inline_sites>(SIZE_MAX-pg)/32 || inline_ranges>(SIZE_MAX-inline_sites*32-pg)/pg) {
+        if(inline_sites>(SIZE_MAX-pg)/48 || inline_ranges>(SIZE_MAX-inline_sites*48-pg)/pg) {
             err("Inline instruction arena size overflow");free(img);munmap(file,sb.st_size);return NULL;
         }
-        img->inline_prefix_size=(inline_sites*32+inline_ranges*pg+pg-1)&~((size_t)pg-1);
+        img->inline_prefix_size=(inline_sites*48+inline_ranges*pg+pg-1)&~((size_t)pg-1);
         img->map_off+=img->inline_prefix_size;img->map_size+=img->inline_prefix_size;
     }`);
  replace('static int protect_pages(kl_image *img, const Elf64_Ehdr *eh,',
-  '#include '+JSON.stringify(path.join(root,'image-inline-pools.h'))+'\n\nstatic int protect_pages(kl_image *img, const Elf64_Ehdr *eh,');
+  '#include '+JSON.stringify(path.join(root,'x18-pools.inc'))+'\n#include '+JSON.stringify(path.join(root,'image-inline-pools.h'))+'\n\nstatic int protect_pages(kl_image *img, const Elf64_Ehdr *eh,');
  replace('    size_t   x18_arena_used = 0;',`    size_t   x18_arena_used = 0;
     if(klj_image_inline_pools(img,ph,eh->e_phnum,lo)) {
         err("Inline instruction arena metadata: %s",strerror(errno));
@@ -149,15 +158,15 @@ const char *klj_image_runpath(kl_image *image){
     while(klj_image_code_next(eh,ph,sh,(size_t)sb.st_size,&rewrite_cursor,&code)) {
         uint64_t cursor=code.address,cva;size_t csz;
         while(kl_x18_next_code(code.address,code.size,skip,nskip,&cursor,&cva,&csz)) {`);
- replace('            rewrite_tls(p, csz, cva, path, &img->stats);','            klx_code_context code_context={img->code_metadata.marks,img->code_metadata.count,cva,img->code_metadata.reachable,img->code_metadata.reachableCount};\n            rewrite_tls(p, csz, cva, path, &img->stats, &code_context);');
- replace('            if (kl_x18_patch(p, csz, x18_arena_base, img->x18_arena_size,\n                             &x18_arena_used, &xs) != 0) {','            if (kl_x18_patch_context(p, csz, x18_arena_base, img->x18_arena_size,\n                             &x18_arena_used, &xs, &code_context) != 0) {');
- const patchCall=(address,size)=>`            img->inline_pools[0].used=x18_arena_used;
-            if (klj_inline_syscall_patch_pools_context(${address}, ${size}, img->inline_pools, img->inline_pool_count, &code_context)) {
-                err("Linux inline instruction adaptation: %s", strerror(errno));
-                kl_unload(img); munmap(file, sb.st_size); return NULL;
-            }
-            x18_arena_used=img->inline_pools[0].used;`;
- replace('            if (!veneer) continue;',patchCall('p','csz')+'\n            if (!veneer) continue;');
+ replace('            rewrite_tls(p, csz, cva, path, &img->stats);','            klx_code_context code_context={img->code_metadata.marks,img->code_metadata.count,cva,img->code_metadata.reachable,img->code_metadata.reachableCount};\n            rewrite_tls(p, csz, cva, path, &img->stats, &code_context, &img->code_metadata, &img->tls_data_words);');
+ replace('            if (kl_x18_patch(p, csz, x18_arena_base, img->x18_arena_size,\n                             &x18_arena_used, &xs) != 0) {','            if (klj_image_instruction_patch_context(p, csz, img->inline_pools, img->inline_pool_count, &xs, &code_context) != 0) {');
+ replace(`                fprintf(stderr, "  [klepton] %s: x18 veneering failed to start\\n", path);
+                veneer = 0;
+                continue;`,`                err("Linux inline instruction adaptation: %s",strerror(errno));
+                kl_unload(img);munmap(file,sb.st_size);return NULL;`);
+ replace(`    uint8_t *x18_arena_base = img->x18_arena_size
+                            ? img->base - img->map_off + img->map_size : NULL;
+    size_t   x18_arena_used = 0;`, '');
  replace('    if (protect_pages(img, eh, ph, sh, lo) != 0) {\n        munmap(file, (size_t)sb.st_size); return NULL;',
   '    if (protect_pages(img, eh, ph, sh, lo) != 0 || klj_inline_syscall_pools_seal(img->inline_pools,img->inline_pool_count) != 0) {\n        kl_unload(img);munmap(file, (size_t)sb.st_size); return NULL;');
  replace('        uint64_t *slot = (uint64_t *)(img->base + r->r_offset);\n        uint32_t type = ELF64_R_TYPE(r->r_info);',

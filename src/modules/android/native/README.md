@@ -62,10 +62,23 @@ before native constructors run. ARM32 and ARM64 imports retain the same platform
 service providers and per-library class-loader ownership.
 Large ARM64 ELF images reserve instruction veneers at both ends of their mapping
 and use original gaps between load segments for sites outside both branch
-windows. Every entry and return branch is checked before instructions change.
+windows. TP, Linux SVC and original x18 bodies share one placement transaction,
+using the original decoder and unmodified instruction neighborhoods. Every entry,
+return and relocated conditional branch is checked before instructions change.
 Original segment bytes retain their addresses; packed veneer pages contain no
 writable original segment, and used pools finish read-only and executable.
 Layouts without sufficient reachable storage report a loader error.
+Original typed data remains unchanged and is accounted separately from uncertain
+TP candidates, which retain strict load refusal. Complete paired stack-canary
+sequences can establish executable continuations using matching SP or FP slots;
+fixed FP slots can retain TP across register reuse and dynamic SP allocation.
+Guard comparisons retain both original values through bounded intervening
+calculations. A rooted aligned prologue that preserves LR and its callee-saved
+TP register can establish its own exact TP/canary-load prefix before an opaque
+continuation; that continuation receives no evidence from the prefix.
+Opaque prefixes and mismatched canary slots supply no such evidence. Native
+load diagnostics retain the registry's rejection reason while guest `dlerror`
+strings keep their bounded Android form.
 ARM64 ELF TLS supports `PT_TLS`, `DTPMOD64`, `DTPREL64`, `TPREL64` and `TLSDESC`
 while preserving the real Android thread pointer and original Bionic slots.
 Initial-exec and dynamic references share the same per-thread address. A private

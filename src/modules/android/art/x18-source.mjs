@@ -45,7 +45,7 @@ export function prepareAimRegisters({aim,klepton}) {
  edit('src/a64.rs', [['#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]\n#[path = "x18.rs"]\nmod x18;\n\npub enum Kind {',
  '#[path = "x18.rs"]\nmod x18;\n\n#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]\npub enum Kind {']]);
  edit('src/xlate/mod.rs',[
-  ['pub const VERSION: u32 = 2;','pub const VERSION: u32 = 17;'],
+  ['pub const VERSION: u32 = 2;','pub const VERSION: u32 = 19;'],
   ['pub sites: [usize; 6]','pub sites: [usize; 7]'],
   ['            None => {\n                report.brk_fallback += 1;',`            None if s.kind == Kind::X18 => {
                 return done(Outcome::Unsupported(format!("register veneer requires load-time placement at {:#x}",s.vaddr)),report);

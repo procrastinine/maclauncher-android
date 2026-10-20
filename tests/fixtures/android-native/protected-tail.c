@@ -7,8 +7,9 @@
 
 static void (*enter)(void);
 static uintptr_t (*run)(uintptr_t);
+static uintptr_t (*spilled)(uintptr_t);
 static void *worker(void *unused){
-    (void)unused;enter();assert(run(7)==0x45d);return NULL;
+    (void)unused;enter();assert(run(7)==0x45d);assert(spilled(7)==0x45d);return NULL;
 }
 int main(int argc,char **argv){
     assert(argc==4);void *core=dlopen(argv[1],RTLD_NOW|RTLD_LOCAL);
@@ -27,7 +28,13 @@ int main(int argc,char **argv){
     const uint32_t constants[]={0xd53bd053,0xf9401668,0xf9000be8,0xd65f03c0};
     assert(!memcmp(symbol(image,"protected_constants"),constants,sizeof constants));
     run=(void *)(entry+3);assert(run(5)==0x45b);
+    const uint32_t *spill=symbol(image,"protected_spilled_entry");assert(spill);
+    assert(!memcmp(spill,prefix,sizeof prefix));assert(spill[7]!=0xd53bd048u);
+    spilled=(void *)(spill+3);assert(spilled(5)==0x45b);
+    const uint32_t *opaque=symbol(image,"protected_opaque_continuation");assert(opaque);
+    assert(opaque[5]!=0xd53bd056u);
+    assert(opaque[7]==0x7a839c6bu&&opaque[8]==0x2a81fc7cu);
     pthread_t thread;assert(!pthread_create(&thread,NULL,worker,NULL));
-    assert(!pthread_join(thread,NULL));assert(run(9)==0x45f);
+    assert(!pthread_join(thread,NULL));assert(run(9)==0x45f);assert(spilled(9)==0x45f);
     puts("PASS actual ELF continuation executes Android TP/canary and x18 on two threads with opaque prefix and data bytes preserved");
 }

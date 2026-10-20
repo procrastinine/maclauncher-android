@@ -18,7 +18,7 @@ extern int kl_errno_to_linux(int);
 static int thread_pointer_instruction(uint32_t word){
     return ((word&0xffffffe0u)==0xd53bd040u&&(word&31)!=31)||(word&0xffffffe0u)==0xd51bd040u;
 }
-static int adapted_instruction(uint32_t word){return word==0xd4000001u||thread_pointer_instruction(word);}
+int klj_inline_instruction_match(uint32_t word){return word==0xd4000001u||thread_pointer_instruction(word);}
 
 long klj_inline_syscall_dispatch(const uint64_t *registers){
     int saved_errno=errno;
@@ -31,7 +31,7 @@ long klj_inline_syscall_dispatch(const uint64_t *registers){
 }
 size_t klj_inline_syscall_count_context(const void *code,size_t size,const klx_code_context *context){
     const uint32_t *words=code;size_t count=0;
-    for(size_t i=0;i<size/4;i++)if(adapted_instruction(words[i])&&!kl_x18_is_data_context(code,size,i,context))count++;
+    for(size_t i=0;i<size/4;i++)if(klj_inline_instruction_match(words[i])&&!kl_x18_is_data_context(code,size,i,context))count++;
     return count;
 }
 static int branch(uintptr_t from,uintptr_t to,uint32_t *instruction){
@@ -75,44 +75,55 @@ int klj_inline_syscall_pools_seal(KljInlinePool *pools,size_t count){
     for(size_t n=0;n<count;n++)if(pools[n].used&&pool_protect(pools[n].base,pools[n].used,PROT_READ|PROT_EXEC))return -1;
     return 0;
 }
-int klj_inline_syscall_emit_pools_context(void *code,size_t size,uintptr_t address,KljInlinePool *pools,size_t pool_count,const klx_code_context *context){
-    size_t count=klj_inline_syscall_count_context(code,size,context);if(!count)return 0;
-    typedef struct {size_t word,pool,offset;uint32_t body[8],entry;} Site;
+int klj_inline_instruction_body(uint32_t word,uintptr_t site,uintptr_t target,uint32_t *body,size_t *bytes,uint32_t *entry){
+    int back=instruction_body(word,body);if(back<0)return -1;
+    if(branch(site,target,entry)||branch(target+(size_t)back*4,site+4,&body[back])){errno=ERANGE;return -1;}
+    *bytes=32;return 0;
+}
+int klj_inline_plan_apply(void *code,uintptr_t address,KljInlineSite *sites,size_t count,KljInlinePool *pools,size_t pool_count,KljInlineEmitter emit){
+    if(!count)return 0;
     size_t page=(size_t)getpagesize();
-    if(!pools||!pool_count||pool_count>SIZE_MAX/sizeof(size_t)||count>(SIZE_MAX-page)/sizeof(Site)){errno=ENOMEM;return -1;}
-    Site *sites=calloc(count,sizeof *sites);size_t *needed=calloc(pool_count,sizeof *needed);
-    if(!sites||!needed){free(sites);free(needed);return -1;}
-    int error=0;size_t next=0;uint32_t *words=code;
-    // Record the original classification and validate both branches for every
-    // site before changing guest text or any arena. No site is skipped on reach
-    // failure and no instruction sequence is widened into neighboring bytes.
-    for(size_t i=0;i<size/4;i++)if(adapted_instruction(words[i])&&!kl_x18_is_data_context(code,size,i,context)){
-        Site *site=&sites[next++];site->word=i;
-        int back=instruction_body(words[i],site->body);if(back<0){error=errno;break;}
-        int space=0;size_t selected=SIZE_MAX;uint64_t best=UINT64_MAX;
-        for(size_t p=0;p<pool_count;p++){
-            KljInlinePool *pool=&pools[p];
-            if(!pool->base||pool->used>pool->size||needed[p]>SIZE_MAX-32-page)continue;
-            size_t capacity=pool_capacity(needed[p]+32,pool,page);
-            if(capacity>pool->size-pool->used)continue;
-            space=1;uintptr_t target=(uintptr_t)pool->base+pool->used+needed[p];
-            uint32_t entry,returning;
-            if(branch(address+i*4,target,&entry)||branch(target+(size_t)back*4,address+(i+1)*4,&returning))continue;
-            uint64_t distance=target>address+i*4?target-address-i*4:address+i*4-target;
-            // Prefer the two outer arenas. Small interior gaps are reserved
-            // for sites that cannot reach either end of a large image.
-            if(selected!=SIZE_MAX&&pools[selected].packed<pool->packed)continue;
-            if(selected!=SIZE_MAX&&pools[selected].packed==pool->packed&&distance>=best)continue;
-            selected=p;best=distance;site->entry=entry;site->body[back]=returning;
+    if(!pools||!pool_count||pool_count>SIZE_MAX/sizeof(size_t)){errno=ENOMEM;return -1;}
+    size_t *needed=calloc(pool_count,sizeof *needed);uint8_t *attempted=calloc(pool_count,1);
+    if(!needed||!attempted){free(needed);free(attempted);return -1;}
+    int error=0;uint32_t *words=code;
+    // Original owners preclassify every site. Preflight each complete original
+    // body at its future address before changing any guest word or pool usage.
+    for(size_t n=0;n<count;n++){
+        KljInlineSite *site=&sites[n];uintptr_t pc=address+site->word*4;
+        int space=0,body_error=0;size_t selected=SIZE_MAX;
+        memset(attempted,0,pool_count);
+        for(size_t attempt=0;attempt<pool_count;attempt++){
+            size_t candidate=SIZE_MAX;uint64_t best=UINT64_MAX;
+            for(size_t p=0;p<pool_count;p++)if(!attempted[p]){
+                KljInlinePool *pool=&pools[p];
+                if(!pool->base||pool->used>pool->size||needed[p]>SIZE_MAX-sizeof site->body-page)continue;
+                size_t capacity=pool_capacity(needed[p]+sizeof site->body,pool,page);
+                if(capacity>pool->size-pool->used)continue;
+                space=1;uintptr_t target=(uintptr_t)pool->base+pool->used+needed[p];uint32_t entry;
+                if(branch(pc,target,&entry))continue;
+                uint64_t distance=target>pc?target-pc:pc-target;
+                // Keep small interior gaps for sites beyond both outer arenas.
+                if(candidate!=SIZE_MAX&&pools[candidate].packed<pool->packed)continue;
+                if(candidate!=SIZE_MAX&&pools[candidate].packed==pool->packed&&distance>=best)continue;
+                candidate=p;best=distance;
+            }
+            if(candidate==SIZE_MAX)break;
+            attempted[candidate]=1;KljInlinePool *pool=&pools[candidate];
+            uintptr_t target=(uintptr_t)pool->base+pool->used+needed[candidate];
+            uint32_t body[12],entry;size_t bytes=0;
+            if(emit(words[site->word],pc,target,body,&bytes,&entry)){body_error=errno;continue;}
+            if(!bytes||bytes>sizeof body||(bytes&3)){body_error=EINVAL;continue;}
+            selected=candidate;site->entry=entry;site->bytes=bytes;memcpy(site->body,body,bytes);break;
         }
-        if(selected==SIZE_MAX){error=space?ERANGE:ENOMEM;break;}
-        site->pool=selected;site->offset=needed[selected];needed[selected]+=32;
+        if(selected==SIZE_MAX){error=body_error?body_error:space?ERANGE:ENOMEM;break;}
+        site->pool=selected;site->offset=needed[selected];needed[selected]+=site->bytes;
     }
     if(!error)for(size_t p=0;p<pool_count;p++)if(needed[p]&&pool_protect((char *)pools[p].base+pools[p].used,pool_capacity(needed[p],&pools[p],page),PROT_READ|PROT_WRITE)){error=errno;break;}
     if(!error){
-        for(size_t n=0;n<next;n++){
-            Site *site=&sites[n];KljInlinePool *pool=&pools[site->pool];
-            memcpy((char *)pool->base+pool->used+site->offset,site->body,32);words[site->word]=site->entry;
+        for(size_t n=0;n<count;n++){
+            KljInlineSite *site=&sites[n];KljInlinePool *pool=&pools[site->pool];
+            memcpy((char *)pool->base+pool->used+site->offset,site->body,site->bytes);words[site->word]=site->entry;
         }
         for(size_t p=0;p<pool_count;p++)if(needed[p]){
             size_t capacity=pool_capacity(needed[p],&pools[p],page);
@@ -120,7 +131,15 @@ int klj_inline_syscall_emit_pools_context(void *code,size_t size,uintptr_t addre
         }
         if(klj_inline_syscall_pools_seal(pools,pool_count))error=errno;
     }
-    free(sites);free(needed);if(error){errno=error;return -1;}return 0;
+    free(attempted);free(needed);if(error){errno=error;return -1;}return 0;
+}
+int klj_inline_syscall_emit_pools_context(void *code,size_t size,uintptr_t address,KljInlinePool *pools,size_t pool_count,const klx_code_context *context){
+    size_t count=klj_inline_syscall_count_context(code,size,context);if(!count)return 0;
+    if(count>SIZE_MAX/sizeof(KljInlineSite)){errno=ENOMEM;return -1;}
+    KljInlineSite *sites=calloc(count,sizeof *sites);if(!sites)return -1;
+    uint32_t *words=code;size_t next=0;
+    for(size_t i=0;i<size/4;i++)if(klj_inline_instruction_match(words[i])&&!kl_x18_is_data_context(code,size,i,context))sites[next++].word=i;
+    int result=klj_inline_plan_apply(code,address,sites,count,pools,pool_count,klj_inline_instruction_body);free(sites);return result;
 }
 int klj_inline_syscall_patch_pools_context(void *code,size_t size,KljInlinePool *pools,size_t count,const klx_code_context *context){return klj_inline_syscall_emit_pools_context(code,size,(uintptr_t)code,pools,count,context);}
 size_t klj_inline_syscall_count(const void *code,size_t size){return klj_inline_syscall_count_context(code,size,NULL);}

@@ -91,7 +91,7 @@ public final class HostDisplayEvents {
         synchronized(lock){
             if(stopped||wakeup==null)return;
             if(callback<=0||callback>System.nanoTime()||interval<=0)throw new IllegalArgumentException("Invalid native display timestamp");
-            if(latest!=null&&callback<=latest.callback)return;latest=tick;targets=receivers.toArray(Receiver[]::new);
+            if(latest!=null&&callback<=latest.callback)return;latest=tick;HostLooper.hostFrameInterval(interval);targets=receivers.toArray(Receiver[]::new);
         }
         for(var target:targets)target.accept(tick);
     }

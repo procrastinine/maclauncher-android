@@ -12,6 +12,7 @@ import java.util.*;
 import java.util.jar.JarFile;
 import maclauncher.android.framework.HostLooper;
 import maclauncher.android.framework.HostServices;
+import maclauncher.android.framework.HostApplicationSharedMemory;
 
 /** Owns the original compatibility service and the generated configs supplied
  * alongside its framework classes. No platform change definitions are invented.
@@ -62,6 +63,10 @@ public final class HostPlatformCompat implements AutoCloseable {
         catch(Exception failure){throw new IllegalStateException("Android compatibility service could not prepare",failure);}
     }
     private static void open(Context context,List<Path> directories,boolean deferReceivers){
+        // CompatConfig invalidates ChangeIdStateCache while reading partition
+        // definitions. Its original shared-memory nonce writer must already
+        // exist, including before the later application bootstrap.
+        HostApplicationSharedMemory.initialize();
         HostPlatformCompat owner;
         try{owner=new HostPlatformCompat(context,directories==null?null:List.copyOf(directories),deferReceivers);}
         catch(RuntimeException|Error failure){throw failure;}
