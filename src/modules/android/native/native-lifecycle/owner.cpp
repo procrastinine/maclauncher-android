@@ -28,10 +28,10 @@ extern "C" int klj_guest_cxa_atexit(void (*fn)(void*), void* argument, void* dso
 // Android process retirement is not guest libc exit. An Activity or JVM can
 // retire after a game has already released its allocator and engine globals.
 // Only an explicit guest exit/finalize request runs the guest destructor table.
-extern "C" void klb_exit(int);
+extern "C" void klj_bionic_exit(int);
 extern "C" void klj_guest_exit(int status) {
-    klj_guest_cxa_finalize(nullptr);
-    klb_exit(status);
+    kl_thread_init();
+    klj_bionic_exit(status);
 }
 static void exitCallback(void* fn) { reinterpret_cast<void(*)(void)>(fn)(); }
 extern "C" int klj_guest_atexit(void (*fn)(void)) {

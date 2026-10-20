@@ -12,7 +12,7 @@ function replace(text,from,to){if(text.split(from).length!==2)throw Error('Nativ
 export function prepareNativeLifecycle({bionicSource,klepton,build}) {
   const output=path.join(build,'native-lifecycle'),source=path.join(output,'source');
   const portable=nativePathFlags({source,build});
-  const units=['atexit','pthread_atfork','__cxa_thread_atexit_impl'];
+  const units=['atexit','exit','pthread_atfork','__cxa_thread_atexit_impl'];
   exportSources(bionicSource,pins.aospBionic,[...units.map(name=>'libc/bionic/'+name+'.cpp'),'libc/bionic/atexit.h',
     'libc/platform/bionic/tls_defines.h','libc/include/bits/get_device_api_level_inlines.h','libc/NOTICE'],source);
   const objects=[];
@@ -25,6 +25,7 @@ export function prepareNativeLifecycle({bionicSource,klepton,build}) {
     // Linux VMA labels are diagnostic metadata, not lifetime behavior.
     if(name==='atexit')text=replace(text,'    prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, new_pages, new_capacity_bytes, "atexit handlers");','');
     if(name==='pthread_atfork')text=replace(text,'  g_atfork_list_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;','  g_atfork_list_mutex = (pthread_mutex_t)PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;');
+    if(name==='exit')text=replace(text,'#include "private/bionic_defs.h"','');
     if(name==='__cxa_thread_atexit_impl'){
       // Inventory every original C-linkage declaration/definition in this unit;
       // the native width adapter consumes declarations, never a symbol list.
@@ -37,7 +38,8 @@ export function prepareNativeLifecycle({bionicSource,klepton,build}) {
     }
     fs.writeFileSync(input,text);
     const object=path.join(output,name+'.o');
-    execFileSync('clang++',[...portable,'-std=c++20','-arch','arm64','-mmacosx-version-min=13.0','-O2','-fPIC','-Wall','-Wextra','-Werror',...(name==='__cxa_thread_atexit_impl'?[]:['-include',path.join(root,'darwin.h')]),'-c',input,'-o',object],{stdio:'inherit'});
+    execFileSync('clang++',[...portable,'-std=c++20','-arch','arm64','-mmacosx-version-min=13.0','-O2','-fPIC','-Wall','-Wextra','-Werror',...(name==='__cxa_thread_atexit_impl'?[]:['-include',path.join(root,'darwin.h')]),
+      ...(name==='exit'?['-Dexit=klj_bionic_exit','-D_exit=klb__exit','-D__cxa_thread_finalize=klj_guest_cxa_thread_finalize','-D__BIONIC_WEAK_FOR_NATIVE_BRIDGE=']:[]),'-c',input,'-o',object],{stdio:'inherit'});
     objects.push(object);
   }
   const owner=path.join(output,'owner.o');

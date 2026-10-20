@@ -25,6 +25,7 @@ import {prepareMulticastOptions,prepareSocketPendingBytes} from './network-sourc
 import {prepareA64Execution} from './a64-execution-source.mjs';
 import {prepareOpenedOrigins} from './opened-origin-source.mjs';
 import {prepareHardwareCapabilities} from './hwcap-source.mjs';
+import {prepareResourceLimits} from './resource-limits-source.mjs';
 const root=import.meta.dirname;
 export const supplier=JSON.parse(fs.readFileSync(path.join(root,'supplier.json'),'utf8'));
 
@@ -47,6 +48,7 @@ export function prepareAimSource({source,output,klepton}){
   prepareVdsoVersions(temporary);
   prepareElfCopies(temporary);
   prepareAshmemAccess(temporary);
+  prepareResourceLimits(temporary);
   prepareCodePublication(temporary);
   prepareIslandPlacement(temporary);
   prepareRelro(temporary);
