@@ -405,20 +405,13 @@ public final class HostActivity {
     private static Throwable attempt(Throwable first,Runnable action){try{action.run();}catch(Throwable failure){return keep(first,failure);}return first;}
     public static void finish(Activity activity){
         HostActivity state=state(activity);state.check();if(state.closed)return;state.closing=true;Throwable first=null;
-        if(state.launched){
-            first=attempt(first,()->HostApplication.current().thread.handleDestroyActivity(state.record,true,false,"activity finish"));
-            if(state.started)first=attempt(first,()->HostActivityManager.hostStopped(activity));
-            state.closed=true;synchronized(activities){activities.remove(state.token);task.remove(state);}first=attempt(first,state::completeResult);first=attempt(first,HostActivity::taskEmpty);if(first!=null)HostUiAccess.raise(first);return;
-        }
-        first=attempt(first,()->focus(activity,false));
-        if(state.resumed){state.resumed=false;first=attempt(first,()->state.invoke("performPause",new Class<?>[0]));}
-        if(state.started){state.started=false;first=attempt(first,()->state.invoke("performStop",new Class<?>[]{boolean.class,String.class},false,"native window close"));first=attempt(first,()->HostActivityManager.hostStopped(activity));}
-        if(state.created){state.created=false;first=attempt(first,()->state.invoke("performDestroy",new Class<?>[0]));}
-        first=attempt(first,()->HostWindowManager.closeActivity(activity));
-        first=attempt(first,()->HostApplication.releaseContext(activity.getBaseContext(),activity.getClass().getName()));
+        // Initial and navigated records share Android's finishing owner. It
+        // marks mFinished before pause, then owns stop, destroy and ViewRoot
+        // retirement while the native display and callback graph remain live.
+        first=attempt(first,()->HostApplication.current().thread.handleDestroyActivity(state.record,true,false,"activity finish"));
+        if(state.started)first=attempt(first,()->HostActivityManager.hostStopped(activity));
         state.closed=true;
         synchronized(activities){activities.remove(state.token);task.remove(state);}
-        var process=HostApplication.current();@SuppressWarnings("unchecked")var records=(Map<IBinder,ActivityThread.ActivityClientRecord>)HostUiAccess.get(process.thread,ActivityThread.class,"mActivities");records.remove(state.token);
         first=attempt(first,state::completeResult);
         first=attempt(first,HostActivity::taskEmpty);
         if(first!=null)HostUiAccess.raise(first);

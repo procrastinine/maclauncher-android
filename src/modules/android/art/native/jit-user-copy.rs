@@ -66,12 +66,15 @@ impl View{
 impl Drop for View{fn drop(&mut self){if self.restore{unsafe{libc::pthread_jit_write_protect_np(1)}}}}
 
 pub fn write(address:u64,bytes:&[u8])->Result<(),Errno>{
+ let _epoch=super::verity_pager::mutation();let _placement=super::arena::placing();
+ write_locked(address,bytes)
+}
+/// Caller retains the existing VM epoch and placement guards throughout copy.
+pub(crate) fn write_locked(address:u64,bytes:&[u8])->Result<(),Errno>{
  if bytes.is_empty(){return Ok(());}
  if !super::arena::contains(address,bytes.len()as u64){return Err(errno::EFAULT);}
  // Share the existing mapping epoch: protection/proof replacement is excluded.
  // Concurrent unmap/replace is still fault-contained by the exact assembly range.
- let _epoch=super::verity_pager::mutation();
- let _placement=super::arena::placing();
  let end=address.checked_add(bytes.len()as u64).ok_or(errno::EFAULT)?;
  let mut at=address;
  const RWX:i32=libc::PROT_READ|libc::PROT_WRITE|libc::PROT_EXEC;

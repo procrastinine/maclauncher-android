@@ -17,7 +17,7 @@
   "dataAliases": [
     ["user/0/{package}", "{data}"], ["user_de/0/{package}", "{data}/device_protected"], ["data/{package}", "{data}"]
   ],
-  "storagePrefixes": ["{files}", "/sdcard", "/mnt/sdcard", "/storage/emulated/0", "/storage/self/primary"],
+  "storagePrefixes": ["{files}", "/data/user/0/{package}/files", "/data/data/{package}/files", "/sdcard", "/mnt/sdcard", "/storage/emulated/0", "/storage/self/primary"],
   "storageAliases": [
     ["Android/data/{package}/files", "{files}"], ["Android/data/{package}/cache", "{cache}"],
     ["Android/data/{package}", "{data}"], ["Android/obb/{package}", "{data}/obb"], ["Android/media/{package}", "{data}/media"]

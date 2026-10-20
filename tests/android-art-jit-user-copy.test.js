@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {spawnSync}=require('node:child_process');
 
-test('Original Bionic stat and signal copies support JIT buffers without changing faults',async t=>{
+async function probe(t,mode){
  const payload=process.env.ANDROID_ART_PAYLOAD,compiler=process.env.ANDROID_CLANG,runner=process.env.ANDROID_ART_LINUX_RUN;
  if(process.platform!=='darwin'||process.arch!=='arm64'||!payload||!compiler||!runner)return t.skip('Requires the original ART image, Android Clang and adapted native runner');
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-art-jit-copy-'));
@@ -12,6 +12,8 @@ test('Original Bionic stat and signal copies support JIT buffers without changin
  const {layout,environment,prepareMountParents,publishPathMap}=await import('../src/modules/android/art/layout.mjs');
  const state=path.join(root,'state');fs.mkdirSync(state);
  const map=publishPathMap(state,'signals',prepareMountParents(layout({supplier,state})+'rw\t/data/local/tmp/signal-probe\t'+root+'\n',path.join(root,'mounts')));
- const result=run(runner,['--inherit-env','--runtime',path.join(root,'kernel'),'--path-map',map,'--cache',path.join(root,'cache'),'--host-module',supplier.components.hostLibrary,'/data/local/tmp/signal-probe/probe'],environment(supplier));
- assert.match(result.stdout,/PASS original Bionic stat\/fstat and signal copies support JIT buffers and retain EFAULT/);
-});
+ const result=run(runner,['--inherit-env','--runtime',path.join(root,'kernel'),'--path-map',map,'--cache',path.join(root,'cache'),'--host-module',supplier.components.hostLibrary,'/data/local/tmp/signal-probe/probe',...(mode?[mode]:[])],environment(supplier));
+ assert.match(result.stdout,/PASS original Bionic stat\/fstat, signal, file, vector, pipe and socket JIT outputs retain counts and EFAULT/);
+}
+test('Original Bionic JIT outputs retain scalar and vectored I/O semantics',t=>probe(t));
+test('Original Unix datagram MSG_TRUNC returns the full payload length',{todo:'Framed Unix datagram payload length'},t=>probe(t,'--datagram-truncation'));

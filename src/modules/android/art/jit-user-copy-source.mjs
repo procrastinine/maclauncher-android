@@ -9,6 +9,19 @@ export function prepareJitUserCopy(aim){
  copyChanged(path.join(import.meta.dirname,'native/jit-user-copy.rs'),path.join(root,'sys/jit-user-copy.rs'));
  edit('sys/mod.rs','pub(crate) mod user_memory;','pub(crate) mod user_memory;\n#[path="jit-user-copy.rs"]\npub(crate) mod jit_user_copy;');
  edit('sys/signal.rs','    let m = unsafe { sigframe::mcontext(uc) };','    let m = unsafe { sigframe::mcontext(uc) };\n    if matches!(hsig,libc::SIGSEGV|libc::SIGBUS)&&si.si_code>0&&si.si_code<0x10000&&super::jit_user_copy::recover(m){return None;}');
+ edit('sys/user_memory.rs',`    prepare(address, bytes.len(), Access::Write)?;
+    let mut done = 0;`,`    prepare(address, bytes.len(), Access::Write)?;
+    write_prepared(address,bytes)
+}
+
+/// Copy after syscall admission prepared the range, without paging under I/O locks.
+/// Current VM permissions and faults are still checked for every copied segment.
+pub(crate) fn write_prepared(address:u64,bytes:&[u8])->Result<(),Errno>{write_ready(address,bytes,false)}
+/// The caller owns the mapping epoch; no pager entry or recursive locking.
+pub(crate) fn write_locked(address:u64,bytes:&[u8])->Result<(),Errno>{write_ready(address,bytes,true)}
+fn write_ready(address:u64,bytes:&[u8],locked:bool)->Result<(),Errno>{
+    range(address,bytes.len())?;
+    let mut done = 0;`);
  edit('sys/user_memory.rs',`        let count = (bytes.len() - done).min(u32::MAX as usize);
         // SAFETY: source is our live slice; Mach validates the user destination.`,
  `        let at=address+done as u64;
@@ -22,7 +35,7 @@ export function prepareJitUserCopy(aim){
  `        if result != 0 {
             const RWX:i32=libc::PROT_READ|libc::PROT_WRITE|libc::PROT_EXEC;
             if !super::arena::contains(at,count as u64)||protection&RWX!=RWX{return Err(errno::EFAULT);}
-            super::jit_user_copy::write(at,&bytes[done..done+count])?;
+            if locked{super::jit_user_copy::write_locked(at,&bytes[done..done+count])?;}else{super::jit_user_copy::write(at,&bytes[done..done+count])?;}
         }
         done += count;`);
 }

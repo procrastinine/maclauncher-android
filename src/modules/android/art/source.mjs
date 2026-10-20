@@ -27,6 +27,7 @@ import {prepareOpenedOrigins} from './opened-origin-source.mjs';
 import {prepareHardwareCapabilities} from './hwcap-source.mjs';
 import {prepareResourceLimits} from './resource-limits-source.mjs';
 import {prepareJitUserCopy} from './jit-user-copy-source.mjs';
+import {prepareUserOutput} from './user-output-source.mjs';
 const root=import.meta.dirname;
 export const supplier=JSON.parse(fs.readFileSync(path.join(root,'supplier.json'),'utf8'));
 
@@ -56,6 +57,7 @@ export function prepareAimSource({source,output,klepton}){
   prepareAimVideo(temporary);
   prepareSignalUserMemory(temporary);
   prepareJitUserCopy(temporary);
+  prepareUserOutput(temporary);
   prepareMulticastOptions(temporary);
   prepareSocketPendingBytes(temporary);
   prepareFaultDiagnostics(temporary);
