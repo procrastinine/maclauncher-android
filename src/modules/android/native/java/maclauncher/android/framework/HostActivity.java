@@ -241,7 +241,9 @@ public final class HostActivity {
         var process=HostApplication.current();Intent intent=new Intent(Intent.ACTION_MAIN)
             .setComponent(new ComponentName(process.context.getPackageName(),Objects.requireNonNull(name))).addCategory(Intent.CATEGORY_LAUNCHER);
         Objects.requireNonNull(loader);
-        return process.instrumentation.newActivity(process.apk.getClassLoader(),name,intent);
+        android.content.pm.ActivityInfo info;
+        try{info=HostPackages.activityInfo(name);}catch(android.content.pm.PackageManager.NameNotFoundException failure){return HostUiAccess.raise(failure);}
+        return process.instrumentation.newActivity(HostApplication.splitClassLoader(info.splitName),name,intent);
     }
     private static HostActivity state(Activity activity){synchronized(activities){for(HostActivity state:activities.values()){if(state.activity==null)state.activity=HostApplication.current().thread.getActivity(state.token);if(state.activity==activity)return state;}}throw new IllegalStateException("Activity is not attached to the native process");}
     private void check(){if(Thread.currentThread()!=owner)throw new IllegalStateException("Activity lifecycle requires its owner thread");}

@@ -14,7 +14,7 @@ int klj_guest_thread_pointer_enter(unsigned long long canary);
 void *klj_guest_thread_pointer(void);
 /* Storage belongs to the retained physical thread, including late guest
  * destructors. The owner invokes retirement only after that thread is dead. */
-void *klj_executable_thread_tls(void *(*create)(void),void (*retire)(void *));
+void *klj_executable_thread_tls(void);
 int klj_executable_signal(int signal, int code, void *ucontext);
 int klj_executable_signal_enable(void);
 void klj_executable_signal_invoke(void *handler, int signal, const void *linux_info, void *ucontext);

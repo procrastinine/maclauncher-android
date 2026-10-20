@@ -13,6 +13,9 @@ int klj_thread_id_reserve(void);
  * retired only after kernel thread death, including later POSIX destructors. */
 void *klj_thread_memory_context(void);
 int klj_thread_memory_adopt(void *context, void (*retire)(void *));
+/* Publish auxiliary state under the same retirement/fork lock as adoption.
+ * prepare returns zero on success and can set errno on failure. */
+int klj_thread_memory_adopt_prepared(void *,void (*retire)(void *),int (*prepare)(void *));
 /* A retained right to a live thread in this process. Caller deallocates it. */
 thread_t klj_thread_acquire(int);
 /* Priority APIs return Darwin errno values; JNI/libc translate at their ABI. */

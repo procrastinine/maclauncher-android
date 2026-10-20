@@ -16,11 +16,11 @@ export function prepareImageSource(vendor,build) {
  replace(relroEnd,relroEnd+'\n        if (!(bits[p] & PF_X)) continue;\n');
  source='#include '+JSON.stringify(path.join(root,'elf-tls.h'))+'\n#include '+JSON.stringify(path.join(root,'image-constructor.h'))+'\n#include '+JSON.stringify(path.join(root,'native-invocation.h'))+'\n#include '+JSON.stringify(path.join(root,'image-format.h'))+'\n#include '+JSON.stringify(path.join(root,'inline-syscall.h'))+'\n#include '+JSON.stringify(path.join(root,'executable-memory/jvm.h'))+'\n#include <stdatomic.h>\n#define DT_INIT 12\n'+source;
  replace('struct kl_image {','#include '+JSON.stringify(path.join(root,'image-code-ranges.h'))+'\n#include '+JSON.stringify(path.join(root,'image-identity.h'))+'\n\nstruct kl_image {\n    const KlImageFormat *format;\n    void *format_payload;\n    char *soname;\n    int identity_captured;\n    struct kl_image **dependencies;\n    size_t dependency_count;\n    KlImageCodeMetadata code_metadata;');
- replace('    size_t     span;','    uintptr_t tls_module;\n    struct klj_elf_tls_descriptor_node *tls_descriptors;\n    size_t     span;');
+ replace('    size_t     span;','    uintptr_t tls_module;\n    struct klj_elf_tls_descriptor_node *tls_descriptors;\n    size_t inline_prefix_size,inline_pool_count;\n    KljInlinePool *inline_pools;\n    size_t     span;');
  replace('static int apply_relocs(kl_image *img, const Elf64_Rela *r, size_t count) {',
   '#include '+JSON.stringify(path.join(root,'elf-tls-image.inc'))+'\n\nstatic int apply_relocs(kl_image *img, const Elf64_Rela *r, size_t count) {');
  replace('        case R_AARCH64_RELATIVE:',
-  '        case 1028: /* R_AARCH64_TLS_DTPMOD64 */\n        case 1029: /* R_AARCH64_TLS_DTPREL64 */\n        case 1031: /* R_AARCH64_TLSDESC */\n            if(klj_image_tls_relocate(img,r,type))return -1;\n            break;\n        case R_AARCH64_RELATIVE:');
+  '        case 1028: /* R_AARCH64_TLS_DTPMOD64 */\n        case 1029: /* R_AARCH64_TLS_DTPREL64 */\n        case 1030: /* R_AARCH64_TLS_TPREL64 */\n        case 1031: /* R_AARCH64_TLSDESC */\n            if(klj_image_tls_relocate(img,r,type))return -1;\n            break;\n        case R_AARCH64_RELATIVE:');
  replace('static int bind_dynamic(kl_image *img, const Elf64_Phdr *ph, int phnum, uint64_t lo) {',
   'static int bind_dynamic(kl_image *img, const Elf64_Phdr *ph, int phnum, uint64_t lo) {\n    if(klj_image_tls_register(img,ph,phnum,lo))return -1;');
  replace('    if (bind_dynamic(img, ph, eh->e_phnum, lo) != 0) { free(img); dlclose(h); return NULL; }',
@@ -96,7 +96,7 @@ const char *klj_image_runpath(kl_image *image){
     if(format)return format->needed(format->context,path,names,max,g_err,sizeof g_err);`);
  replace('    if (!i || !i->base) return NULL;', '    if (!i || !i->base) return NULL;\n    if(i->format)return i->format->phdrs(i->format_payload,count);');
  replace('    if (img->dl_handle) dlclose(img->dl_handle);', '    if (img->format) { img->format->unmap(img->format_payload);free(img);return; }\n    if (img->dl_handle) dlclose(img->dl_handle);');
- replace('    if (!img) return;','    if (!img) return;\n    klj_image_tls_unregister(img);\n    klj_executable_code_forget(img->base,img->span);\n    free(img->soname);\n    free(img->dependencies);\n    klj_code_metadata_release(&img->code_metadata);');
+ replace('    if (!img) return;','    if (!img) return;\n    klj_image_tls_unregister(img);\n    klj_executable_code_forget(img->base,img->span);\n    free(img->soname);\n    free(img->dependencies);\n    free(img->inline_pools);\n    klj_code_metadata_release(&img->code_metadata);');
  replace('                         ? (const Elf64_Shdr *)(file + eh->e_shoff) : NULL;',`                         ? (const Elf64_Shdr *)(file + eh->e_shoff) : NULL;
     if (!klj_code_metadata_read(&img->code_metadata,file,(size_t)sb.st_size,eh,ph,sh)) {
         err("Unable to allocate native instruction metadata");
@@ -109,10 +109,28 @@ const char *klj_image_runpath(kl_image *image){
         if (sh[i].sh_offset + sh[i].sh_size > (uint64_t)sb.st_size) continue;
         x18_arena += (size_t)kl_x18_count(file + sh[i].sh_offset, (size_t)sh[i].sh_size);
     }`,`    KlImageCodeCursor reservation_cursor={.metadata=&img->code_metadata};KlImageCodeRange reservation;
-    while(klj_image_code_next(eh,ph,sh,(size_t)sb.st_size,&reservation_cursor,&reservation))
-        x18_arena += (size_t)kl_x18_capacity(file+reservation.offset,reservation.size)
-                   +klj_inline_syscall_count_context(file+reservation.offset,reservation.size,
-                        &(klx_code_context){img->code_metadata.marks,img->code_metadata.count,reservation.address,img->code_metadata.reachable,img->code_metadata.reachableCount});`);
+    size_t inline_sites=0,inline_ranges=0;
+    while(klj_image_code_next(eh,ph,sh,(size_t)sb.st_size,&reservation_cursor,&reservation)) {
+        size_t sites=klj_inline_syscall_count_context(file+reservation.offset,reservation.size,
+            &(klx_code_context){img->code_metadata.marks,img->code_metadata.count,reservation.address,img->code_metadata.reachable,img->code_metadata.reachableCount});
+        inline_sites+=sites;if(sites)inline_ranges++;
+        x18_arena += (size_t)kl_x18_capacity(file+reservation.offset,reservation.size)+sites;
+    }`);
+ replace('    img->x18_arena_size = x18_arena;',`    img->x18_arena_size = x18_arena;
+    if(inline_sites && img->map_size+x18_arena>=(1ULL<<27)) {
+        if(inline_sites>(SIZE_MAX-pg)/32 || inline_ranges>(SIZE_MAX-inline_sites*32-pg)/pg) {
+            err("Inline instruction arena size overflow");free(img);munmap(file,sb.st_size);return NULL;
+        }
+        img->inline_prefix_size=(inline_sites*32+inline_ranges*pg+pg-1)&~((size_t)pg-1);
+        img->map_off+=img->inline_prefix_size;img->map_size+=img->inline_prefix_size;
+    }`);
+ replace('static int protect_pages(kl_image *img, const Elf64_Ehdr *eh,',
+  '#include '+JSON.stringify(path.join(root,'image-inline-pools.h'))+'\n\nstatic int protect_pages(kl_image *img, const Elf64_Ehdr *eh,');
+ replace('    size_t   x18_arena_used = 0;',`    size_t   x18_arena_used = 0;
+    if(klj_image_inline_pools(img,ph,eh->e_phnum,lo)) {
+        err("Inline instruction arena metadata: %s",strerror(errno));
+        kl_unload(img);munmap(file,sb.st_size);return NULL;
+    }`);
  replaceBetween('    int veneer = sh != NULL;','    // ...and code inside those sections, not whole sections.',`    int veneer = 1;
     // Original ELF code can reach a context-completing veneer before any
     // executable mmap import. Capture the live VM's dispositions at load time.
@@ -133,11 +151,15 @@ const char *klj_image_runpath(kl_image *image){
         while(kl_x18_next_code(code.address,code.size,skip,nskip,&cursor,&cva,&csz)) {`);
  replace('            rewrite_tls(p, csz, cva, path, &img->stats);','            klx_code_context code_context={img->code_metadata.marks,img->code_metadata.count,cva,img->code_metadata.reachable,img->code_metadata.reachableCount};\n            rewrite_tls(p, csz, cva, path, &img->stats, &code_context);');
  replace('            if (kl_x18_patch(p, csz, x18_arena_base, img->x18_arena_size,\n                             &x18_arena_used, &xs) != 0) {','            if (kl_x18_patch_context(p, csz, x18_arena_base, img->x18_arena_size,\n                             &x18_arena_used, &xs, &code_context) != 0) {');
- const patchCall=(address,size)=>`            if (klj_inline_syscall_patch_context(${address}, ${size}, x18_arena_base, img->x18_arena_size, &x18_arena_used, &code_context)) {
-                err("Linux inline syscall adaptation: %s", strerror(errno));
+ const patchCall=(address,size)=>`            img->inline_pools[0].used=x18_arena_used;
+            if (klj_inline_syscall_patch_pools_context(${address}, ${size}, img->inline_pools, img->inline_pool_count, &code_context)) {
+                err("Linux inline instruction adaptation: %s", strerror(errno));
                 kl_unload(img); munmap(file, sb.st_size); return NULL;
-            }`;
+            }
+            x18_arena_used=img->inline_pools[0].used;`;
  replace('            if (!veneer) continue;',patchCall('p','csz')+'\n            if (!veneer) continue;');
+ replace('    if (protect_pages(img, eh, ph, sh, lo) != 0) {\n        munmap(file, (size_t)sb.st_size); return NULL;',
+  '    if (protect_pages(img, eh, ph, sh, lo) != 0 || klj_inline_syscall_pools_seal(img->inline_pools,img->inline_pool_count) != 0) {\n        kl_unload(img);munmap(file, (size_t)sb.st_size); return NULL;');
  replace('        uint64_t *slot = (uint64_t *)(img->base + r->r_offset);\n        uint32_t type = ELF64_R_TYPE(r->r_info);',
   '        uint32_t type = ELF64_R_TYPE(r->r_info);\n        if (type == 0) continue; // R_AARCH64_NONE has no target, addend or symbol.\n        uint64_t *slot = (uint64_t *)(img->base + r->r_offset);');
  replace('    void     (**init_array)(void);','    KlImageInitialization initialization;\n    void      (*init_function)(void);\n    void     (**init_array)(void);');

@@ -57,7 +57,7 @@ public final class Host {
             if(authority!=null&&!authority.self.processName().equals(processName))throw new SecurityException("Android process declaration differs from its supervisor identity");
             maclauncher.android.framework.HostContext.hostProcessName(processName);
             maclauncher.android.framework.HostActivityManager.hostExitHistory(config.optional("processExitHistoryJson"));
-            loader=accountService?Host.class.getClassLoader():maclauncher.android.framework.HostDexFiles.application(config.file("convertedJar"),sourceApks,config.directory("nativeRoot"),Host.class.getClassLoader());
+            loader=accountService?Host.class.getClassLoader():maclauncher.android.framework.HostDexFiles.application(config.file("convertedJar"),sourceApks,config.directory("nativeRoot"),Host.class.getClassLoader(),applicationInfo.requestsIsolatedSplitLoading());
             Thread.currentThread().setContextClassLoader(loader);maclauncher.android.framework.HostContext.hostClassLoader(loader);
             if(!accountService){GuestNativeLoader.configure(System.getProperty("klepton.bridge"),config.directory("nativeRoot").toString(),config.file("convertedJar").toString(),loader);
             DynamicDex.configure(config.directory("runtimeRoot"),config.directory("cacheRoot"),config.file("convertedJar"),loader);}

@@ -1,5 +1,6 @@
 package com.android.server.compat;
 
+import android.app.ActivityThread;
 import android.content.*;
 import android.content.pm.PackageManager;
 import android.os.*;
@@ -19,10 +20,10 @@ public final class HostPlatformCompat implements AutoCloseable {
     private static HostPlatformCompat current;
     private final ServiceContext context;
     private final PlatformCompat service;
-    private boolean closed;
+    private boolean closed,bound;
 
-    private HostPlatformCompat(Context parent,List<Path> directories)throws Exception {
-        context=new ServiceContext(parent.createAttributionContext(parent.getAttributionTag()));
+    private HostPlatformCompat(Context parent,List<Path> directories,boolean deferReceivers)throws Exception {
+        context=new ServiceContext(parent.createAttributionContext(parent.getAttributionTag()),deferReceivers);
         try {
             var classifier=new AndroidBuildClassifier();
             var config=new CompatConfig(classifier,context);
@@ -47,26 +48,45 @@ public final class HostPlatformCompat implements AutoCloseable {
         }catch(Exception|Error failure){try{context.close();}catch(RuntimeException cleanup){failure.addSuppressed(cleanup);}throw failure;}
     }
 
-    public static synchronized void install(Context context) {
-        install(context,null);
-    }
-    public static synchronized void install(Context context,List<Path> directories) {
+    /** Package policy queries compatibility before application records exist.
+     * Use the original system ContextImpl without binding an application thread.
+     * The original receiver is activated after ActivityManager is installed. */
+    public static synchronized void prepare(){prepare(null);}
+    public static synchronized void prepare(List<Path> directories){
         if(current!=null)return;
+        try {
+            var thread=ActivityThread.currentActivityThread();
+            if(thread==null){var constructor=ActivityThread.class.getDeclaredConstructor();constructor.setAccessible(true);thread=constructor.newInstance();}
+            open(thread.getSystemContext(),directories,true);
+        }catch(RuntimeException|Error failure){throw failure;}
+        catch(Exception failure){throw new IllegalStateException("Android compatibility service could not prepare",failure);}
+    }
+    private static void open(Context context,List<Path> directories,boolean deferReceivers){
         HostPlatformCompat owner;
-        try{owner=new HostPlatformCompat(context,directories==null?null:List.copyOf(directories));}
+        try{owner=new HostPlatformCompat(context,directories==null?null:List.copyOf(directories),deferReceivers);}
         catch(RuntimeException|Error failure){throw failure;}
         catch(Exception failure){throw new IllegalStateException("Android compatibility service could not start",failure);}
         try {
             HostServices.register("platform_compat",owner.service,"com.android.internal.compat.IPlatformCompat");
+            if(!HostLooper.addShutdownListener(context.getMainLooper(),owner::close))
+                throw new IllegalStateException("Android compatibility service has stopped");
+            current=owner;
+        }catch(RuntimeException|Error failure){try{owner.close();}catch(RuntimeException cleanup){failure.addSuppressed(cleanup);}throw failure;}
+    }
+    public static synchronized void install(Context context){install(context,null);}
+    public static synchronized void install(Context context,List<Path> directories){
+        if(current==null)open(context,directories,false);
+        HostPlatformCompat owner=current;
+        if(owner.bound)return;
+        try {
+            owner.context.activate(context);
             // ActivityThread normally receives these arrays from the system
             // server at bindApplication. Bind the original process delegate to
             // the same original generated change definitions and target SDK.
             var application=context.getApplicationInfo();
             android.app.AppCompatCallbacks.install(owner.service.getDisabledChanges(application),
                 owner.service.getLoggableChanges(application));
-            if(!HostLooper.addShutdownListener(context.getMainLooper(),owner::close))
-                throw new IllegalStateException("Android compatibility service has stopped");
-            current=owner;
+            owner.bound=true;
         }catch(RuntimeException|Error failure){try{owner.close();}catch(RuntimeException cleanup){failure.addSuppressed(cleanup);}throw failure;}
     }
 
@@ -74,7 +94,7 @@ public final class HostPlatformCompat implements AutoCloseable {
         if(closed)return;
         closed=true;
         HostServices.unregister("platform_compat",service,"com.android.internal.compat.IPlatformCompat");
-        android.compat.Compatibility.clearBehaviorChangeDelegate();
+        if(bound)android.compat.Compatibility.clearBehaviorChangeDelegate();
         try{context.close();}finally{synchronized(HostPlatformCompat.class){if(current==this)current=null;}}
     }
 
@@ -82,10 +102,14 @@ public final class HostPlatformCompat implements AutoCloseable {
      * callers and every override mutation retain the ordinary permission checks.
      */
     private static final class ServiceContext extends ContextWrapper implements AutoCloseable {
-        private final Set<BroadcastReceiver> receivers=new HashSet<>();
+        private record PendingReceiver(BroadcastReceiver receiver,IntentFilter filter,String permission,Handler handler){}
+        private final Map<BroadcastReceiver,Context> receivers=new HashMap<>();
+        private final List<PendingReceiver> pending=new ArrayList<>();
         private final PermissionEnforcer permissions;
-        ServiceContext(Context base) {
+        private Context receiverContext;
+        ServiceContext(Context base,boolean deferReceivers) {
             super(base);
+            receiverContext=deferReceivers?null:base;
             permissions=new PermissionEnforcer(base) {
                 private boolean localRead(String permission,int pid,int uid) {
                     return pid==android.os.Process.myPid()&&uid==android.os.Process.myUid()&&
@@ -104,15 +128,22 @@ public final class HostPlatformCompat implements AutoCloseable {
         @Override public Object getSystemService(String name) {
             return "permission_enforcer".equals(name)?permissions:super.getSystemService(name);
         }
-        @Override public Intent registerReceiverForAllUsers(BroadcastReceiver receiver,IntentFilter filter,String permission,Handler handler) {
-            Intent result=super.registerReceiverForAllUsers(receiver,filter,permission,handler);
-            synchronized(receivers){receivers.add(receiver);}return result;
+        @Override public synchronized Intent registerReceiverForAllUsers(BroadcastReceiver receiver,IntentFilter filter,String permission,Handler handler) {
+            if(receiverContext==null){pending.add(new PendingReceiver(receiver,new IntentFilter(filter),permission,handler));return null;}
+            Intent result=receiverContext.registerReceiverForAllUsers(receiver,filter,permission,handler);
+            receivers.put(receiver,receiverContext);return result;
+        }
+        synchronized void activate(Context context){
+            if(receiverContext!=null)return;
+            receiverContext=context.createAttributionContext(context.getAttributionTag());
+            for(var registration:pending)registerReceiverForAllUsers(registration.receiver(),registration.filter(),registration.permission(),registration.handler());
+            pending.clear();
         }
         @Override public void close() {
-            List<BroadcastReceiver> owned;
-            synchronized(receivers){owned=List.copyOf(receivers);receivers.clear();}
+            Map<BroadcastReceiver,Context> owned;
+            synchronized(this){owned=Map.copyOf(receivers);receivers.clear();pending.clear();}
             RuntimeException failure=null;
-            for(var receiver:owned)try{super.unregisterReceiver(receiver);}catch(RuntimeException error){if(failure==null)failure=error;else failure.addSuppressed(error);}
+            for(var entry:owned.entrySet())try{entry.getValue().unregisterReceiver(entry.getKey());}catch(RuntimeException error){if(failure==null)failure=error;else failure.addSuppressed(error);}
             if(failure!=null)throw failure;
         }
     }

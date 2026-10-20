@@ -29,6 +29,7 @@ final class HostSharedLibraries {
     static String[] names(){return Platform.LIBRARIES.keySet().toArray(String[]::new);}
     static List<SharedLibraryInfo> libraries(){return List.copyOf(Platform.LIBRARIES.values());}
     static void prepare(ParsedPackage parsed,boolean system){
+        com.android.server.compat.HostPlatformCompat.prepare();
         PackageBackwardCompatibility.modifySharedLibraries(parsed,system,false);
     }
     static void install(ParsedPackage parsed,PackageSetting state){

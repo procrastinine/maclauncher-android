@@ -2,6 +2,7 @@
 #include "api.h"
 #include "../thread-identity.h"
 #include "../signal-bridge.h"
+#include "../elf-tls.h"
 #include <errno.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -24,9 +25,10 @@ typedef struct {
     void *storage;
     void *stack;
     size_t stack_size;
-    void *tls[BIONIC_TLS_SLOTS];
+    void **tls;
+    void *tls_mapping;
+    size_t tls_mapping_size;
     void *elf_tls;
-    void (*retire_elf_tls)(void *);
     NativeCall native_call;
 } ExecutableThread;
 
@@ -50,9 +52,15 @@ int klj_guest_thread_pointer_offset(void){
 
 static void retire_thread(void *opaque){
     ExecutableThread *thread=opaque;
-    if(thread->elf_tls)thread->retire_elf_tls(thread->elf_tls);
+    if(thread->elf_tls)klj_elf_tls_thread_destroy(thread->elf_tls);
+    if(thread->tls_mapping)munmap(thread->tls_mapping,thread->tls_mapping_size);
     munmap(thread->stack,thread->stack_size);
     free(thread);
+}
+static int prepare_thread_tls(void *opaque){
+    ExecutableThread *thread=opaque;
+    thread->elf_tls=klj_elf_tls_thread_create(thread->tls);
+    return thread->elf_tls?0:-1;
 }
 
 int klj_executable_thread_enter(void){
@@ -81,12 +89,19 @@ int klj_executable_thread_enter(void){
     }
     int64_t result=klj_guest_executable_context_init(thread->storage,size,(uintptr_t)thread->stack+page,usable);
     if(result<0){error=kl_errno_from_linux((int)-result);retire_thread(thread);errno=error;return -1;}
+    _Static_assert((MAX_TLS_SLOT+1)*sizeof(void *)<=KLJ_ELF_STATIC_TLS_START,"ELF TLS follows the original Bionic TCB");
+    _Static_assert(-MIN_TLS_SLOT*sizeof(void *)<=KLJ_ELF_STATIC_TLS_ALIGNMENT,"Negative Bionic TCB fits before aligned TP");
+    thread->tls_mapping_size=KLJ_ELF_STATIC_TLS_SIZE+2*KLJ_ELF_STATIC_TLS_ALIGNMENT;
+    thread->tls_mapping=mmap(NULL,thread->tls_mapping_size,PROT_READ|PROT_WRITE,MAP_ANON|MAP_PRIVATE,-1,0);
+    if(thread->tls_mapping==MAP_FAILED){thread->tls_mapping=NULL;error=errno;retire_thread(thread);errno=error;return -1;}
+    uintptr_t pointer=((uintptr_t)thread->tls_mapping-MIN_TLS_SLOT*sizeof(void *)+KLJ_ELF_STATIC_TLS_ALIGNMENT-1)&~(uintptr_t)(KLJ_ELF_STATIC_TLS_ALIGNMENT-1);
+    thread->tls=(void **)pointer;
     klj_guest_executable_native_stack(thread->storage,&thread->native_call.cursor,&thread->native_call.in_host);
     thread->native_call.low=(uintptr_t)thread->stack+page;
     thread->native_call.high=thread->native_call.low+usable;
     error=pthread_setspecific(native_call_key,&thread->native_call);
     if(error){retire_thread(thread);errno=error;return -1;}
-    if(klj_thread_memory_adopt(thread,retire_thread)){
+    if(klj_thread_memory_adopt_prepared(thread,retire_thread,prepare_thread_tls)){
         pthread_setspecific(native_call_key,NULL);
         error=errno;retire_thread(thread);errno=error;return -1;
     }
@@ -96,7 +111,7 @@ int klj_executable_thread_enter(void){
 int klj_guest_thread_pointer_enter(unsigned long long canary){
     if(klj_guest_thread_pointer_offset()<0||klj_executable_thread_enter())return -1;
     ExecutableThread *thread=klj_thread_memory_context();
-    void **pointer=thread->tls-MIN_TLS_SLOT;
+    void **pointer=thread->tls;
     pointer[TLS_SLOT_STACK_GUARD]=(void *)(uintptr_t)canary;
     int error=pthread_setspecific(pointer_key,pointer);
     if(error){errno=error;return -1;}
@@ -106,7 +121,7 @@ int klj_guest_thread_pointer_enter(unsigned long long canary){
 void *klj_guest_thread_pointer(void){
     ExecutableThread *thread=klj_thread_memory_context();
     if(!thread){if(klj_executable_thread_enter())return NULL;thread=klj_thread_memory_context();}
-    void **pointer=thread->tls-MIN_TLS_SLOT;
+    void **pointer=thread->tls;
     if(pthread_getspecific(pointer_key)!=pointer){
         int error=pthread_setspecific(pointer_key,pointer);
         if(error){errno=error;return NULL;}
@@ -114,13 +129,9 @@ void *klj_guest_thread_pointer(void){
     return pointer;
 }
 
-void *klj_executable_thread_tls(void *(*create)(void),void (*retire)(void *)){
+void *klj_executable_thread_tls(void){
     ExecutableThread *thread=klj_thread_memory_context();
     if(!thread){if(klj_executable_thread_enter())return NULL;thread=klj_thread_memory_context();}
-    if(!thread->elf_tls){
-        void *value=create();if(!value)return NULL;
-        thread->retire_elf_tls=retire;thread->elf_tls=value;
-    }
     return thread->elf_tls;
 }
 

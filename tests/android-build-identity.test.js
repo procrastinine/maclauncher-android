@@ -30,6 +30,8 @@ test('Normal Android builder snapshots helpers without evaluating the platform g
   for(const name of ['build.mjs','build-sources.mjs','upstream/source-files.mjs'])
     write('src/modules/android/native/'+name,fs.readFileSync(path.join(original,name)));
   write('src/modules/android/profile.js','module.exports={};\n');
+  write('src/modules/android/apk.js','module.exports={originalApkHelper:true};\n');
+  write('src/modules/android/binary-manifest.js','module.exports={originalManifestHelper:true};\n');
   write('src/modules/android/art/source.mjs','export const adapter="original ART adapter";\n');
   write('src/modules/android/art/native/original.rs','original ART native boundary\n');
   write('src/modules/android/art/launch.mjs','launcher-only orchestration\n');
@@ -57,6 +59,7 @@ test('Normal Android builder snapshots helpers without evaluating the platform g
     assert.deepEqual(identity.artSources.map(row=>row.path),['native/original.rs','source.mjs']);
     assert.equal(fs.existsSync(path.join(source,'art/launch.mjs')),false);
     assert.deepEqual(identity.buildToolsSources.map(row=>row.path),[
+      'src/modules/android/apk.js','src/modules/android/binary-manifest.js',
       'src/modules/nitroplus/runtime/portable-media.json','src/modules/shared/runtime/helper.js','src/modules/shared/runtime/nested/new-helper.js']);
     assert.equal(JSON.stringify(identity).includes(temporary),false);
     captures.push(identity);

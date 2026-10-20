@@ -1,0 +1,39 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {verifyBinaryInputs} from './binary-inputs.mjs';
+import {platformPackageRecord} from './platform-packages.mjs';
+
+/** Reuse the recorded original APK alongside the complete framework input.
+ * Source/image identities describe provenance, not a byte reproduction claim. */
+export function platformPackageInputs(root,directory){
+ const definition=JSON.parse(fs.readFileSync(path.join(root,'platform-packages-binary.json')));
+ if(definition.schemaVersion!==1||!Array.isArray(definition.files)||!definition.files.length)throw Error('Invalid platform package binary catalog');
+ const files=verifyBinaryInputs(directory,definition.files);
+ const notices=verifyBinaryInputs(path.join(root,'notices/platform-packages'),definition.notices);
+ const destinations=new Set(),packages=new Set();
+ const records=files.map((file,index)=>{
+  const entry=definition.files[index],source=entry.destination;
+  if(typeof source!=='string'||!source.startsWith('packages/')||!source.endsWith('.apk')||source.includes('\\')||source.split('/').some(part=>!part||part==='.'||part==='..')||destinations.has(source))throw Error('Invalid platform package destination');
+  const record=platformPackageRecord(file.file,source);
+  if(!record||record.packageName!==entry.packageName||packages.has(record.packageName))throw Error('Platform package manifest does not match its binary catalog: '+file.name);
+  destinations.add(source);packages.add(record.packageName);
+  return {...record,sha256:file.sha256,size:file.size};
+ });
+ return {definition,files,notices,catalog:{schemaVersion:1,packages:records}};
+}
+
+/** Output is a fresh producer runtime, never a writable application profile. */
+export function stagePlatformPackages({input,output}){
+ const platform=path.join(output,'platform'),notices=path.join(output,'notices/platform-packages');
+ for(let n=0;n<input.files.length;n++){
+  const target=path.join(platform,input.catalog.packages[n].source);
+  fs.mkdirSync(path.dirname(target),{recursive:true});
+  fs.copyFileSync(input.files[n].file,target,fs.constants.COPYFILE_FICLONE);
+ }
+ fs.mkdirSync(notices,{recursive:true});
+ for(const notice of input.notices)fs.copyFileSync(notice.file,path.join(notices,notice.name));
+ const catalog=path.join(platform,'packages.json');
+ fs.writeFileSync(catalog,JSON.stringify(input.catalog,null,2)+'\n');
+ fs.writeFileSync(path.join(notices,'provenance.json'),JSON.stringify(input.definition,null,2)+'\n');
+ return {catalog,platform,notices,packages:input.catalog.packages};
+}

@@ -17,15 +17,24 @@ final class HostPlatformPackages {
     private HostPlatformPackages(){}
     static void inspect()throws Exception {
         Path runtime=HostFilesystem.runtimeRoot();
-        Path catalog=runtime.resolve("art/config/platform-packages.json");
-        // ART sees the same catalog through its read-only system mapping.
-        if(runtime.equals(Path.of("/")))catalog=Path.of("/system/etc/maclauncher-platform-packages.json");
-        sources=List.of();if(!Files.isRegularFile(catalog))return;
+        sources=List.of();
+        var discovered=new ArrayList<PackageSource>();
+        // ART sees its original package catalog through the read-only system
+        // mapping. JVM packages can also supply the original platform APKs
+        // independently of an ART image or any optional Google integration.
+        if(runtime.equals(Path.of("/"))){
+            inspectCatalog(runtime,Path.of("/system/etc/maclauncher-platform-packages.json"),discovered);
+        }else{
+            inspectCatalog(runtime.resolve("art/image"),runtime.resolve("art/config/platform-packages.json"),discovered);
+            inspectCatalog(runtime.resolve("platform"),runtime.resolve("platform/packages.json"),discovered);
+        }
+        sources=List.copyOf(discovered);
+    }
+    private static void inspectCatalog(Path image,Path catalog,List<PackageSource> discovered)throws Exception {
+        if(!Files.isRegularFile(catalog))return;
         JSONObject value=new JSONObject(new String(Files.readAllBytes(catalog),java.nio.charset.StandardCharsets.UTF_8));
         if(value.getInt("schemaVersion")!=1)throw new IOException("Android platform package catalog version is unsupported");
         JSONArray packages=value.getJSONArray("packages");
-        Path image=runtime.equals(Path.of("/"))?runtime:runtime.resolve("art/image");
-        var discovered=new ArrayList<PackageSource>();
         for(int i=0;i<packages.length();i++){
             JSONObject entry=packages.getJSONObject(i);
             // Shared-user ownership comes from the supplied manifest, never a
@@ -33,7 +42,6 @@ final class HostPlatformPackages {
             if(!"android.uid.system".equals(entry.optString("sharedUserId")))continue;
             discovered.add(new PackageSource(image,entry));
         }
-        sources=List.copyOf(discovered);
     }
     /** The manifest index only locates source bytes. The original parser still
      * supplies every component, permission, alias and enabled-state decision. */

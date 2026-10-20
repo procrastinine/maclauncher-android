@@ -121,10 +121,17 @@ int klj_thread_id_reserve(void){
     return klj_thread_id_allocate();
 }
 void *klj_thread_memory_context(void){return current?current->memory_context:NULL;}
-int klj_thread_memory_adopt(void *context,void (*retire)(void *)){
+int klj_thread_memory_adopt_prepared(void *context,void (*retire)(void *),int (*prepare)(void *)){
     if(!current&&klj_thread_id()<0)return -1;
-    if(current->memory_context){errno=EALREADY;return -1;}
-    current->memory_context=context;current->retire_memory=retire;return 0;
+    pthread_mutex_lock(&lock);
+    int error=current->memory_context?EALREADY:0;
+    if(!error&&prepare&&prepare(context))error=errno?errno:ENOMEM;
+    if(!error){current->memory_context=context;current->retire_memory=retire;}
+    pthread_mutex_unlock(&lock);
+    if(error){errno=error;return -1;}return 0;
+}
+int klj_thread_memory_adopt(void *context,void (*retire)(void *)){
+    return klj_thread_memory_adopt_prepared(context,retire,NULL);
 }
 thread_t klj_thread_acquire(int id){
     if(id==0)return mach_thread_self();

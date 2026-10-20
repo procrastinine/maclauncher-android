@@ -36,5 +36,19 @@ actions; this source project performs no background update checks.
 Native instruction analysis is shared by the JVM and ART producers. Intact
 stack-protected continuations retain the original Android thread-pointer and
 register behavior without changing opaque prefixes or explicit data. APK
-metadata inspection supports ordinary feature components with base application
-defaults. Packages requesting isolated split class loaders remain unsupported.
+metadata inspection supports feature components with base application defaults.
+Non-isolated splits share the application loader. Isolated feature splits retain
+Android's original dependency loaders and split-specific component contexts.
+
+The `framework` binary input directory contains
+`android-all-16-robolectric-13921718.jar` and `SettingsProvider.apk`. Exact names,
+checksums and provenance are recorded in `native/framework-binary.json` and
+`native/platform-packages-binary.json` under `src/modules/android/`. The original
+provider APK is extracted unchanged from
+`system/priv-app/SettingsProvider/SettingsProvider.apk` in the Android system image
+identified by the latter catalog. The build consumes the separately supplied
+APK; a Google-enabled system image is not a build or runtime prerequisite. The
+producer stages this Apache-licensed component and its notice under `platform/`;
+no complete image or Google package is included in the platform component
+collection. The APK is a binary build input and is not committed to this source
+repository.

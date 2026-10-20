@@ -524,9 +524,10 @@
     },
     {
       "id": "aosp-platform-compatibility-service",
-      "reason": "Original PlatformCompat and CompatConfig evaluate every generated compatibility definition supplied in the framework archive, including disabled defaults and target SDK thresholds. A process-owned context scopes local read/report permissions and receiver lifetime; original override permission checks remain intact.",
+      "reason": "Original PlatformCompat and CompatConfig evaluate every generated compatibility definition before original package shared-library policy, including disabled defaults and target SDK thresholds. The original system ContextImpl supplies preparation; package-receiver registration and parsed-application callbacks bind when application services are ready. A process-owned context scopes local read/report permissions and receiver lifetime; original override permission checks remain intact.",
       "javaSources": [
         "java/com/android/server/compat/HostPlatformCompat.java",
+        "java/maclauncher/android/framework/HostSharedLibraries.java",
         "java/maclauncher/android/framework/HostContextServices.java"
       ],
       "normalizers": [

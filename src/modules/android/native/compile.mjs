@@ -14,6 +14,7 @@ import crypto from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {verifyBinaryInputs} from './binary-inputs.mjs';
+import {platformPackageInputs,stagePlatformPackages} from './platform-package-delivery.mjs';
 import {verifyGlesHeaders} from './gles-headers.mjs';
 import {generate} from './loader-generate-jni-calls.mjs';
 import {prepareLooperSource} from './looper-sources.mjs';
@@ -93,6 +94,7 @@ const angleManifest=options['angle-manifest']||path.join(root,'angle-binary.json
 const angle=JSON.parse(fs.readFileSync(angleManifest));
 if(pins.angleVulkanVersion===1&&!(angle.buildArguments?.angle_enable_metal&&angle.buildArguments?.angle_enable_vulkan))throw Error('The Android Vulkan EGL source requires its combined ANGLE provider.');
 const framework=frameworkInputs(root,options.framework);
+const platformPackages=platformPackageInputs(root,options.framework);
 const glesHeaders=verifyGlesHeaders(options['gles-headers']);
 const angleFiles=verifyBinaryInputs(options.angle,angle.files);
 const angleNoticeDirectory=path.join(path.dirname(angleManifest),'notices');
@@ -113,7 +115,7 @@ const sourceIdentity=JSON.parse(fs.readFileSync(path.join(output,'build-source.j
 // Existing publisher binaries remain inputs. Their bytes, complete supplied
 // header trees and pinned source revisions identify the compiled closure.
 const inputFile=file=>crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-const inputs={sourceHash:sourceIdentity.sourceHash,pins,framework:framework.definition,glesHeaders,angle:angle.files,
+const inputs={sourceHash:sourceIdentity.sourceHash,pins,framework:framework.definition,platformPackages:platformPackages.definition,glesHeaders,angle:angle.files,
   converter:inputFile(path.join(options.converter,'build/dex2jvm.jar')),
   supplied:Object.fromEntries(['sdl','codecs','codec-notices','vulkan-headers','sndfile-headers',...(pins.arm32Version===1?['ndk-headers']:[])].map(name=>[name,sourceInventory(options[name],undefined,{links:true})])),
   jdk:{version:read(path.join(options.jdk,'bin/java'),['--version']).split('\n')[0],release:inputFile(path.join(options.jdk,'release')),headers:sourceInventory(path.join(options.jdk,'include'))},
@@ -123,6 +125,7 @@ const inputs={sourceHash:sourceIdentity.sourceHash,pins,framework:framework.defi
   toolchain:{compiler:read('clang',['--version']).split('\n')[0],sdk:read('xcrun',['--show-sdk-version'])}};
 const native=path.join(output,'native'),build=options['build-work']?path.join(options['build-work'],'build'):path.join(output,'build');
 fs.mkdirSync(native);fs.mkdirSync(build,{recursive:true});
+stagePlatformPackages({input:platformPackages,output});
 const fonts=stageAndroidFonts({sources:Object.fromEntries(fontSuppliers.map(supplier=>[supplier.key,options[supplier.option]])),output:path.join(build,'fonts')});
 fs.cpSync(fonts.root,path.join(output,'android-root'),{recursive:true,verbatimSymlinks:true,mode:fs.constants.COPYFILE_FICLONE});
 fs.cpSync(fonts.notices,path.join(output,'notices/fonts'),{recursive:true});

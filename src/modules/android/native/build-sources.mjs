@@ -61,9 +61,16 @@ export function snapshotSources(root,destination){
 /** Native suppliers reuse the complete shared build helpers and their binary
  * catalog. Capturing those inputs does not evaluate the Android platform graph. */
 export function snapshotBuildCompanions({repository,destination}){
-  const helpers='src/modules/shared/runtime',catalog='src/modules/nitroplus/runtime/portable-media.json';
+  const helpers='src/modules/shared/runtime',companions=[
+    'src/modules/nitroplus/runtime/portable-media.json',
+    'src/modules/android/apk.js','src/modules/android/binary-manifest.js'
+  ];
   sourceInventory(path.join(repository,helpers),path.join(destination,helpers));
-  const target=path.join(destination,catalog);fs.mkdirSync(path.dirname(target),{recursive:true});
-  fs.copyFileSync(path.join(repository,catalog),target);
+  // apk.js also imports shared/runtime/zip, already retained above. The
+  // original relative layout keeps that complete metadata-only closure intact.
+  for(const companion of companions){
+    const target=path.join(destination,companion);fs.mkdirSync(path.dirname(target),{recursive:true});
+    fs.copyFileSync(path.join(repository,companion),target);
+  }
   return {root:destination};
 }

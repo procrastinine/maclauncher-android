@@ -81,16 +81,19 @@ public final class HostDexFiles {
             }else try(var input=new DataInputStream(jar.getInputStream(entry))){
                 if(input.readInt()!=1)return;
                 int count=input.readInt();if(count!=files.size())return;
-                var found=new LinkedHashMap<Path,PreparedSource>();boolean independent=true;
+                var found=new LinkedHashMap<Path,PreparedSource>();var seenFiles=new HashSet<Path>();var earlierClasses=new HashSet<String>();
                 for(int i=0;i<count;i++){
-                    Path file=files.get(input.readUTF());boolean unique=input.readBoolean();int length=input.readInt();
-                    if(file==null||length<0)return;var members=new LinkedHashSet<String>();
+                    Path file=files.get(input.readUTF());input.readBoolean();int length=input.readInt();
+                    if(file==null||!seenFiles.add(file)||length<0)return;var members=new LinkedHashSet<String>();
                     for(int j=0;j<length;j++)members.add(input.readUTF());
-                    independent&=unique;found.put(file,new PreparedSource(classes,Set.copyOf(members),dependencies,apks,demand));
+                    if(Collections.disjoint(earlierClasses,members))found.put(file,new PreparedSource(classes,Set.copyOf(members),dependencies,apks,demand));
+                    earlierClasses.addAll(members);
                 }
                 // A combined conversion keeps the first duplicate definition.
-                // Arbitrary split ordering needs the original per-APK converter.
-                if(independent&&found.size()==files.size()&&input.read()==-1)next.putAll(found);
+                // Only APKs whose definitions all originate here reuse it. Later
+                // duplicate sources use their original per-APK DEX conversion,
+                // so isolated sibling loaders can define different same-name code.
+                if(seenFiles.size()==files.size()&&input.read()==-1)next.putAll(found);
             }
         }
         installations=Map.copyOf(next);
@@ -128,9 +131,19 @@ public final class HostDexFiles {
     }
     /** Original PathClassLoader owns delegation, native paths and APK resources. */
     public static PathClassLoader application(Path converted,List<Path> sourceApks,Path nativeRoot,ClassLoader parent)throws IOException{
+        return application(converted,sourceApks,nativeRoot,parent,false);
+    }
+    public static PathClassLoader application(Path converted,List<Path> sourceApks,Path nativeRoot,ClassLoader parent,boolean isolatedSplits)throws IOException{
         Path classes=converted.toRealPath();var apks=new LinkedHashSet<Path>();
         for(Path source:sourceApks)apks.add(source.toRealPath());
         PathClassLoader loader=new ApplicationLoader(nativeRoot.toRealPath().toString(),parent(parent));
+        if(isolatedSplits){
+            // LoadedApk owns the dependency graph and creates each feature's
+            // original loader. Prepared bytes retain their DEX APK membership;
+            // putting the combined archive on the base path would leak siblings.
+            installed(classes,List.copyOf(apks));
+            loader.addDexPath(apks.getFirst().toString());return loader;
+        }
         synchronized(applications){applications.put(loader,new ApplicationSources(classes,List.copyOf(apks),DynamicDex.isDemand(classes)));}
         var paths=new ArrayList<String>();paths.add(classes.toString());apks.forEach(file->paths.add(file.toString()));
         loader.addDexPath(String.join(File.pathSeparator,paths));return loader;

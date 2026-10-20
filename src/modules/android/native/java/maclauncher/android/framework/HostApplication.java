@@ -120,6 +120,7 @@ public final class HostApplication {
     static Context implementation(Context context){return (Context)HostUiAccess.call(HostUiAccess.method(HostUiAccess.type("android.app.ContextImpl"),"getImpl",Context.class),null,Objects.requireNonNull(context));}
     static void outerContext(Context context,Context outer){HostUiAccess.call(HostUiAccess.method(HostUiAccess.type("android.app.ContextImpl"),"setOuterContext",Context.class),implementation(context),Objects.requireNonNull(outer));}
     static Context activityContext(android.content.pm.ActivityInfo info,android.os.IBinder token){HostApplication process=current();return (Context)HostUiAccess.call(HostUiAccess.method(HostUiAccess.type("android.app.ContextImpl"),"createActivityContext",ActivityThread.class,LoadedApk.class,android.content.pm.ActivityInfo.class,android.os.IBinder.class,int.class,Configuration.class),null,process.thread,process.apk,info,token,android.view.Display.DEFAULT_DISPLAY,new Configuration(process.context.getResources().getConfiguration()));}
+    static ClassLoader splitClassLoader(String splitName){HostApplication value=current();return splitName==null?value.apk.getClassLoader():(ClassLoader)HostUiAccess.call(HostUiAccess.method(LoadedApk.class,"getSplitClassLoader",String.class),value.apk,splitName);}
     static HostApplication current(){HostApplication value=current;if(value==null)throw new IllegalStateException("No application process is bound");value.check();return value;}
     private void check(){if(Thread.currentThread()!=owner)throw new IllegalStateException("Application lifecycle requires its owner thread");}
     /** Original Instrumentation preserves the APK's AppComponentFactory and attaches exactly once. */
@@ -144,10 +145,22 @@ public final class HostApplication {
     }
     public static void create(Application application){HostApplication value=current();if(value.application!=application)throw new IllegalStateException("Application is not attached");value.instrumentation.callApplicationOnCreate(application);}
     /** Original LoadedApk factory retains the declared Service and application loader. */
-    static Service instantiateService(String name,Intent intent)throws ReflectiveOperationException{HostApplication value=current();return value.apk.getAppFactory().instantiateService(value.apk.getClassLoader(),name,intent);}
+    private static android.content.pm.ServiceInfo serviceInfo(String name){
+        HostApplication value=current();
+        try{return value.context.getPackageManager().getServiceInfo(new ComponentName(value.context.getPackageName(),name),android.content.pm.PackageManager.GET_META_DATA);}
+        catch(android.content.pm.PackageManager.NameNotFoundException failure){return HostUiAccess.raise(failure);}
+    }
+    static Service instantiateService(String name,Intent intent)throws ReflectiveOperationException{HostApplication value=current();return value.apk.getAppFactory().instantiateService(splitClassLoader(serviceInfo(name).splitName),name,intent);}
     public static void attachService(Service service,Application application){attachService(service,application,new android.os.Binder());}
     static void attachService(Service service,Application application,android.os.IBinder token){attachService(service,application,token,service.getClass().getName());}
-    static void attachService(Service service,Application application,android.os.IBinder token,String name){HostApplication value=current();if(value.application!=application)throw new IllegalArgumentException("Service belongs to another application");Context context=(Context)HostUiAccess.call(HostUiAccess.method(HostUiAccess.type("android.app.ContextImpl"),"createAppContext",ActivityThread.class,LoadedApk.class),null,value.thread,value.apk);outerContext(context,service);service.attach(context,value.thread,name,token,application,ActivityManager.getService());}
+    static void attachService(Service service,Application application,android.os.IBinder token,String name){
+        HostApplication value=current();if(value.application!=application)throw new IllegalArgumentException("Service belongs to another application");
+        Context context=(Context)HostUiAccess.call(HostUiAccess.method(HostUiAccess.type("android.app.ContextImpl"),"createAppContext",ActivityThread.class,LoadedApk.class),null,value.thread,value.apk);
+        String splitName=serviceInfo(name).splitName;
+        if(splitName!=null)try{context=context.createContextForSplit(splitName);}catch(android.content.pm.PackageManager.NameNotFoundException failure){HostUiAccess.raise(failure);}
+        context.getResources().addLoaders(application.getResources().getLoaders().toArray(android.content.res.loader.ResourcesLoader[]::new));
+        outerContext(context,service);service.attach(context,value.thread,name,token,application,ActivityManager.getService());
+    }
     public static void releaseContext(Context context,String owner){HostUiAccess.call(HostUiAccess.method(HostUiAccess.type("android.app.ContextImpl"),"performFinalCleanup",String.class,String.class),implementation(context),owner,"Context");}
     /** Retires registrations made by a host-owned service Context through the
      * original LoadedApk receiver owner, before releasing that Context. */

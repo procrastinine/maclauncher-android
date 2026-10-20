@@ -60,9 +60,26 @@ Native ABI metadata lookup retains the calling library's class-loader namespace.
 The configured application ABI selects ELF dependencies and system library paths
 before native constructors run. ARM32 and ARM64 imports retain the same platform
 service providers and per-library class-loader ownership.
-ARM64 dynamic ELF TLS supports `PT_TLS`, `DTPMOD64`, `DTPREL64` and `TLSDESC`
-through per-thread module storage while preserving the original host thread
-pointer. Initial-exec `TPREL64` relocations remain unsupported.
+Large ARM64 ELF images reserve instruction veneers at both ends of their mapping
+and use original gaps between load segments for sites outside both branch
+windows. Every entry and return branch is checked before instructions change.
+Original segment bytes retain their addresses; packed veneer pages contain no
+writable original segment, and used pools finish read-only and executable.
+Layouts without sufficient reachable storage report a loader error.
+ARM64 ELF TLS supports `PT_TLS`, `DTPMOD64`, `DTPREL64`, `TPREL64` and `TLSDESC`
+while preserving the real Android thread pointer and original Bionic slots.
+Initial-exec and dynamic references share the same per-thread address. A private
+demand-zero reserve provides one MiB of fixed TLS layout with alignment up to
+64 KiB; module offsets remain reserved after unloading. New modules initialize
+existing physical threads before native entry points become available. Modules
+beyond that layout retain dynamic TLS; an initial-exec reference to one reports
+a loader error rather than exposing an unrelated address.
+The framework binary input directory also contains the recorded original
+SettingsProvider APK. The producer verifies its checksum and manifest, includes
+the unchanged APK and resources under `platform/packages/`, and emits the
+original package metadata in `platform/packages.json`. Its Apache license notice
+and separate source/image identities accompany the component. The image's other
+packages are not part of this platform component collection.
 Native ARM64 GLES imports, dynamic symbols and procedure lookups adapt spilled
 arguments from Android's eight-byte stack slots to Darwin's natural alignment.
 The complete pinned GLES headers supply the function types. Signatures with

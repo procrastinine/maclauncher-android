@@ -618,6 +618,16 @@
           "kind": "json",
           "path": "src/modules/android/native/keystore/sources.json",
           "property": "16.revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/framework-binary.json",
+          "property": "declarationSource.revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/platform-packages-binary.json",
+          "property": "declarationSource.revision"
         }
       ]
     },

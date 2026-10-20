@@ -68,6 +68,13 @@ static int klj_image_tls_relocate(kl_image *image,const Elf64_Rela *relocation,u
     if(type==1028 /* R_AARCH64_TLS_DTPMOD64 */){*target=index.module;return 0;}
     index.offset+=(uintptr_t)relocation->r_addend;
     if(type==1029 /* R_AARCH64_TLS_DTPREL64 */){*target=index.offset;return 0;}
+    if(type==1030 /* R_AARCH64_TLS_TPREL64 */){
+        uintptr_t offset;
+        if(klj_elf_tls_static_offset(&index,&offset)){
+            err("ELF initial-exec TLS has no compatible TP-relative storage: %s",strerror(errno));return -1;
+        }
+        *target=offset;return 0;
+    }
     struct klj_elf_tls_descriptor_node *node=malloc(sizeof *node);
     if(!node){err("ELF TLS descriptor allocation: %s",strerror(errno));return -1;}
     *node=(struct klj_elf_tls_descriptor_node){index,image->tls_descriptors};image->tls_descriptors=node;

@@ -66,6 +66,8 @@ final class ArtActivity implements AutoCloseable {
   List<Path> sources=new ArrayList<>();var sourceNames=launch.optJSONArray("sourceApks");
   if(sourceNames==null)sources.add(source);else for(int i=0;i<sourceNames.length();i++)sources.add(Path.of(sourceNames.getString(i)));
   FrameworkResources.configure(Path.of("/system/framework/framework-res.apk"),sources);
+  var compatibility=compatibilityDirectories();
+  com.android.server.compat.HostPlatformCompat.prepare(compatibility);
   System.out.println("Activity bootstrap: original package inspection");
   var providerInfo=HostPackages.inspectSources(sources);
   HostPackages.inspectInstalled(launch.optString("installedPackagesJson",null));
@@ -83,7 +85,8 @@ final class ArtActivity implements AutoCloseable {
   // DEX files to ART's background verifier.
   processRecord(info);
   ArtLibraryCompatibility.configure(info);
-  ClassLoader loader=new PathClassLoader(String.join(java.io.File.pathSeparator,sources.stream().map(Path::toString).toList()),nativeLibraryDir,ArtActivity.class.getClassLoader());
+  var codeSources=info.requestsIsolatedSplitLoading()?List.of(Path.of(info.sourceDir)):sources;
+  ClassLoader loader=new PathClassLoader(String.join(java.io.File.pathSeparator,codeSources.stream().map(Path::toString).toList()),nativeLibraryDir,ArtActivity.class.getClassLoader());
   Thread.currentThread().setContextClassLoader(loader);HostContext.hostClassLoader(loader);
   System.out.println("Activity bootstrap: shared application owner");
   var audio=new maclauncher.android.media.HostAudioManager();
@@ -92,7 +95,7 @@ final class ArtActivity implements AutoCloseable {
   HostContextServices.configureMedia(inputSettings);
   Path sensorSource=launch.optBoolean("serviceProcess",false)?null:Path.of(launch.getString("sensorSource"));
   windows=HostApplication.prepare(loader,new HostContextServices.PhysicalBindings(originalHardwareRenderer,audio,
-   sensorSource==null?null:()->HostSensorPublication.open(sensorSource),compatibilityDirectories()));
+   sensorSource==null?null:()->HostSensorPublication.open(sensorSource),compatibility));
   Context context=HostApplication.applicationContext();context.setTheme(info.theme);
   if(authority!=null){var handler=new Handler(Looper.myLooper());authority.monitor(context,()->handler.post(()->{throw new EndLoop();}));}
   if(!launch.optBoolean("serviceProcess",false))ArtPlatform.service(Context.CONNECTIVITY_SERVICE,HostServiceEndpoints.export(HostConnectivityManager.service(),"android.net.IConnectivityManager",context));
