@@ -24,6 +24,7 @@ import {prepareVdsoVersions} from './vdso-source.mjs';
 import {prepareMulticastOptions,prepareSocketPendingBytes} from './network-source.mjs';
 import {prepareA64Execution} from './a64-execution-source.mjs';
 import {prepareOpenedOrigins} from './opened-origin-source.mjs';
+import {prepareHardwareCapabilities} from './hwcap-source.mjs';
 const root=import.meta.dirname;
 export const supplier=JSON.parse(fs.readFileSync(path.join(root,'supplier.json'),'utf8'));
 
@@ -36,6 +37,7 @@ export function prepareAimSource({source,output,klepton}){
    execFileSync('git',['apply','--unsafe-paths',path.join(root,'adapters',name)],{cwd:temporary,stdio:'inherit',env:{...process.env,GIT_CEILING_DIRECTORIES:path.dirname(temporary)}});
   copyChanged(path.join(root,'native/opened-path.rs'),path.join(temporary,'crates/aim-linux-abi/src/sys/opened-path.rs'));
   prepareOpenedOrigins(temporary);
+  prepareHardwareCapabilities(temporary);
   copyChanged(path.join(root,'native/process-identity.rs'),path.join(temporary,'crates/aim-linux-abi/src/process-identity.rs'));
   prepareAimRegisters({aim:temporary,klepton});
   prepareRegisterContexts(temporary);
