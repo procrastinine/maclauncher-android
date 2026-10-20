@@ -1,0 +1,24 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const os=require('node:os');
+const {spawnSync}=require('node:child_process');
+test('Android process boundaries translate complete errno identities and native process results',async t=>{
+ if(process.platform!=='darwin'||process.arch!=='arm64')return t.skip('Requires Apple Silicon');
+ const runtime=process.env.KLEPTON_NATIVE_RUNTIME,bionic=process.env.ANDROID_BIONIC_SOURCE;
+ if(!runtime||!bionic)return t.skip('Requires native runtime and pinned Bionic source');
+ const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'android-process-abi-'));t.after(()=>fs.rmSync(temporary,{recursive:true,force:true}));
+ const source=path.resolve(__dirname,'../src/modules/android/native');
+ const libc=path.join(temporary,'libc.c');
+ fs.writeFileSync(libc,'static const struct { int darwin, linux_; } g_errno_map[] = {\n};\n// bionic spells it __errno()\n');
+ const {prepareProcessAbi}=await import('../src/modules/android/native/process-abi/build.mjs');
+ const result=prepareProcessAbi({bionicSource:bionic,build:temporary,libc});
+ assert.ok(result.pairs.length>80);
+ fs.writeFileSync(libc,'#include <stddef.h>\n'+fs.readFileSync(libc,'utf8'));
+ const run=(command,args)=>{const r=spawnSync(command,args,{encoding:'utf8',timeout:30000,env:{...process.env,DYLD_LIBRARY_PATH:path.resolve(runtime,'native')}});assert.equal(r.error,undefined,r.error?.message);assert.equal(r.status,0,r.stdout+r.stderr);return r.stdout;};
+ const executable=path.join(temporary,'probe');
+ run('clang',['-arch','arm64','-mmacosx-version-min=13.0','-std=gnu11','-Wall','-Wextra','-Werror','-I'+source,path.join(__dirname,'fixtures/android-native/process-abi.c'),libc,path.join(source,'signal-bridge.c'),path.resolve(runtime,'native/libklepton-jvm.dylib'),'-o',executable]);
+ const namespace=path.join(temporary,'ids');fs.mkdirSync(namespace,{mode:0o700});
+ assert.match(run(executable,[namespace]),/PASS original errno identities/);
+});

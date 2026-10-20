@@ -4,6 +4,7 @@
 #include "process-ids.h"
 #include "thread-identity.h"
 #include "process-memory.h"
+#include "descriptor-limits.h"
 #include <sys/resource.h>
 #include <sys/wait.h>
 #include <sys/ptrace.h>
@@ -50,10 +51,15 @@ static int klj_process_resource(int value){
 }
 static int klj_process_getrlimit(int resource,klj_process_limit *limit){
  if(!limit){errno=EFAULT;return -1;}int host=klj_process_resource(resource);if(host<0){errno=EINVAL;return -1;}
- struct rlimit native;int result=getrlimit(host,&native);if(!result){limit->current=native.rlim_cur==RLIM_INFINITY?UINT64_MAX:native.rlim_cur;limit->maximum=native.rlim_max==RLIM_INFINITY?UINT64_MAX:native.rlim_max;}return result;
+ struct rlimit native;int result=getrlimit(host,&native);if(!result){
+  uint64_t current=native.rlim_cur==RLIM_INFINITY?UINT64_MAX:native.rlim_cur,maximum=native.rlim_max==RLIM_INFINITY?UINT64_MAX:native.rlim_max;
+  if(resource==7&&klj_descriptor_limits(&current,&maximum))return -1;
+  limit->current=current;limit->maximum=maximum;
+ }return result;
 }
 static int klj_process_setrlimit(int resource,const klj_process_limit *limit){
  if(!limit){errno=EFAULT;return -1;}int host=klj_process_resource(resource);if(host<0||limit->current>limit->maximum){errno=EINVAL;return -1;}
+ if(resource==7){uint64_t ceiling;if(klj_descriptor_ceiling(&ceiling))return -1;if(limit->maximum>ceiling){errno=EPERM;return -1;}}
  struct rlimit native={limit->current>=RLIM_INFINITY?RLIM_INFINITY:limit->current,limit->maximum>=RLIM_INFINITY?RLIM_INFINITY:limit->maximum};return setrlimit(host,&native);
 }
 static int klj_process_status(int status){

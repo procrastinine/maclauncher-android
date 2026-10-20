@@ -153,6 +153,7 @@ const compile=(name,inputs,extra=[])=>{ownedNativeProducts.add(name);return comp
 const object=(name,input,extra=[],compiler='clang++')=>compileHostObject({name:name.replaceAll('/','_')+'.o',inputs:[input],flags:[...flags,...extra],directory:path.join(build,'host-objects'),cwd:options.klepton,ninja:options.ninja,python:options.python,compiler,pathRoots:nativePathRoots}).output;
 const executable=(name,inputs,flags,extra=[],compiler='clang')=>{ownedNativeProducts.add(name);return compileHostExecutable({name,inputs,flags,extra,directory:path.join(build,'host-objects'),output:path.join(native,name),cwd:options.klepton,ninja:options.ninja,python:options.python,compiler,pathRoots:nativePathRoots});};
 compile('libandroid-storage.dylib',[path.join(root,'native-storage.c')]);
+compile('libandroid-jvm-process.dylib',[path.join(root,'jvm-process.c')]);
 const executableMemory=buildExecutableMemory({source:options['aim-source'],revision:pins.aim,
   output:path.join(build,'executable-memory'),rustToolchain:options['rust-toolchain']});
 fs.cpSync(executableMemory.notices,path.join(output,'notices/executable-memory'),{recursive:true});
