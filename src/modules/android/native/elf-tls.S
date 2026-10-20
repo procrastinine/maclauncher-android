@@ -35,7 +35,8 @@ _klj_elf_tls_resolver:
     stp q30,q31,[sp,#640]
     mrs x9,fpcr
     mrs x10,fpsr
-    stp x9,x10,[sp,#672]
+    str x9,[sp,#672]
+    str x10,[sp,#680]
     ldr x0,[x0,#8]
     bl _klj_elf_tls_descriptor
     ldp q0,q1,[sp,#160]
@@ -54,7 +55,8 @@ _klj_elf_tls_resolver:
     ldp q26,q27,[sp,#576]
     ldp q28,q29,[sp,#608]
     ldp q30,q31,[sp,#640]
-    ldp x9,x10,[sp,#672]
+    ldr x9,[sp,#672]
+    ldr x10,[sp,#680]
     msr fpcr,x9
     msr fpsr,x10
     ldp x1,x2,[sp,#0]

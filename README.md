@@ -32,3 +32,9 @@ tracked changes. The source check performs no downloads.
 
 maclauncher-builds packages runtime releases and their corresponding sources. Runtime installation and updates are explicit launcher
 actions; this source project performs no background update checks.
+
+Native instruction analysis is shared by the JVM and ART producers. Intact
+stack-protected continuations retain the original Android thread-pointer and
+register behavior without changing opaque prefixes or explicit data. APK
+metadata inspection supports ordinary feature components with base application
+defaults. Packages requesting isolated split class loaders remain unsupported.

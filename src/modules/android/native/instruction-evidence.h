@@ -20,6 +20,69 @@ static int klj_evidence_branch_cmp(const void *a,const void *b) {
     size_t x=((const klj_evidence_branch *)a)->target,y=((const klj_evidence_branch *)b)->target;
     return x<y?-1:x>y;
 }
+
+/* A protected function can retain an opaque entry while its compiler-emitted
+ * body is ordinary code. Its unwind root alone does not prove that body. The
+ * complete Bionic canary contract does: a TP load, the original canary slot,
+ * a saved stack slot, the same paired comparison and an intact return path.
+ * This only supplies another control-flow root. The normal decoder still
+ * decides each reachable word, and explicit ELF data never becomes code. */
+static int klj_evidence_canary_tail(const uint32_t *words,size_t begin,size_t end,
+                                    const uint8_t *state) {
+    uint32_t read=words[begin];
+    if(end-begin<7||(read&0xffffffe0u)!=0xd53bd040u||
+       ((state[begin]|state[begin+1])&KLX_EVIDENCE_DATA))return 0;
+    unsigned tp=read&31u,guard=words[begin+1]&31u;
+    if(tp==31||guard==31||
+       (words[begin+1]&0xffffffe0u)!=(0xf9401400u|(tp<<5)))return 0;
+    size_t saved=end;unsigned slot=0;
+    for(size_t k=begin+2;k<end&&k-begin<9;k++) {
+        uint32_t w=words[k];klx_info info;klx_decode(w,&info);
+        if(!info.ok||(state[k]&KLX_EVIDENCE_DATA))return 0;
+        if((w&0xffc003ffu)==(0xf90003e0u|guard)) {
+            slot=(w>>10)&4095u;saved=k;break;
+        }
+        if((info.gp_written&((1u<<guard)|(1u<<tp)))||(w&0xfc000000u)==0x94000000u||
+           (w&0xfffffc1fu)==0xd63f0000u)return 0;
+    }
+    if(saved==end)return 0;
+    uint32_t pointers=tp==guard?0u:1u<<tp;
+    for(size_t k=saved+1;k<end;k++) {
+        uint32_t w=words[k];klx_info info;klx_decode(w,&info);
+        if(!info.ok||(state[k]&KLX_EVIDENCE_DATA))return 0;
+        unsigned base=(w>>5)&31u;
+        if(end-k>=4&&(w&0xffc00000u)==0xf9400000u&&base<31&&
+           (pointers&(1u<<base))&&((w>>10)&4095u)==5u) {
+            unsigned live=w&31u,stack=words[k+1]&31u;
+            uint32_t compare=words[k+2];
+            if(live!=31&&stack!=31&&live!=stack&&
+               (words[k+1]&0xffffffe0u)==(0xf94003e0u|(slot<<10))&&
+               (compare&0xffe0fc1fu)==0xeb00001fu&&
+               ((((compare>>5)&31u)==live&&((compare>>16)&31u)==stack)||
+                (((compare>>5)&31u)==stack&&((compare>>16)&31u)==live))&&
+               (words[k+3]&0xff00001fu)==0x54000001u) {
+                for(size_t tail=k+4;tail<end;tail++) {
+                    uint32_t next=words[tail];klx_decode(next,&info);
+                    if(!info.ok||(state[tail]&KLX_EVIDENCE_DATA))return 0;
+                    if(next==0xd65f03c0u)return 1;
+                    /* The successful epilogue must reach its own return,
+                     * not borrow a different function's terminal word. */
+                    if((next&0x7c000000u)==0x14000000u||
+                       (next&0xff000010u)==0x54000000u||
+                       (next&0x7e000000u)==0x34000000u||
+                       (next&0x7e000000u)==0x36000000u||
+                       ((next>>25)&0x7fu)==0x6bu)return 0;
+                }
+                return 0;
+            }
+        }
+        pointers&=~info.gp_written;
+        if((w&0xffffffe0u)==0xd53bd040u&&((w&31u)!=31u))pointers|=1u<<(w&31u);
+        if((w&0xfc000000u)==0x94000000u||(w&0xfffffc1fu)==0xd63f0000u)
+            pointers&=0x3ff80000u; /* AAPCS callee-saved x19..x29. */
+    }
+    return 0;
+}
 int klx_instruction_evidence(const uint32_t *words,size_t count,uint64_t base,
                             const uint64_t *roots,size_t root_count,uint8_t *state) {
     if(count>SIZE_MAX/(2*sizeof(size_t)))return -1;
@@ -38,8 +101,25 @@ int klx_instruction_evidence(const uint32_t *words,size_t count,uint64_t base,
             branches=grown;branch_capacity=next;} \
         branches[branch_count++]=(klj_evidence_branch){branch_target_index,begin,at+1}; \
     }}while(0)
-    for(size_t k=0;k<root_count;k++)KLJ_QUEUE(roots[k]);
-    for(size_t k=0;k+1<count;k++)if(klj_code_frame_record(words[k],words[k+1]))KLJ_QUEUE(base+k*4);
+    for(size_t k=0;k<root_count;k++) {
+        size_t index=klj_evidence_index(roots[k],base,count);
+        if(index<count)state[index]|=16u;
+        KLJ_QUEUE(roots[k]);
+    }
+    for(size_t k=0;k+1<count;k++)if(klj_code_frame_record(words[k],words[k+1])) {
+        state[k]|=16u;KLJ_QUEUE(base+k*4);
+    }
+    /* Original roots bound each recovery, even when supplied out of order or
+     * repeated. Internal bit16 avoids another ELF-size allocation/sort. The
+     * canary is a prologue operation; only its first few instructions can
+     * establish this seed, never an arbitrary interior constant table. */
+    size_t function=count;
+    for(size_t end=0;end<=count;end++)if(end==count||(state[end]&16u)) {
+        if(function<count)for(size_t k=function;k<end&&k-function<16;k++)
+            if(!(state[k]&KLX_EVIDENCE_DATA)&&
+               klj_evidence_canary_tail(words,k,end,state))KLJ_QUEUE(base+k*4);
+        function=end;
+    }
     while(head<tail) {
         size_t at=queue[head++],begin=at;int complete=0;
         uint64_t addresses[31]={0};uint32_t known=0;
@@ -142,7 +222,7 @@ int klx_instruction_evidence(const uint32_t *words,size_t count,uint64_t base,
             if(klj_x18_data_context(words,count,k,NULL))state[k]|=KLX_EVIDENCE_DATA;
         start=end;
     }
-    for(size_t k=0;k<count;k++)state[k]&=~8u;
+    for(size_t k=0;k<count;k++)state[k]&=~24u;
     free(branches);free(queue);return 0;
 #undef KLJ_QUEUE
 #undef KLJ_BRANCH

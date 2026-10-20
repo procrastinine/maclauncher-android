@@ -2,7 +2,7 @@
 // Format: AOSP androidfw/ResourceTypes.h (ResXMLTree and ResStringPool).
 const ANDROID = "http://schemas.android.com/apk/res/android";
 const NONE = 0xffffffff;
-const INSPECTION_VERSION = 9;
+const INSPECTION_VERSION = 10;
 const LIMITS = Object.freeze({ bytes: 2 * 1024 * 1024, strings: 32768, nodes: 8192, attributes: 256, depth: 64 });
 
 function readBinaryManifest(bytes) {
@@ -115,8 +115,7 @@ function readBinaryManifest(bytes) {
   return document;
 }
 
-function parseBinaryManifest(bytes) {
-  const document=readBinaryManifest(bytes);
+function inspectManifest(document) {
   function invalid() { throw new Error("The APK contains an invalid Android manifest."); }
   const attribute = (node, name, android = true) => node?.attrs.get((android ? ANDROID : "") + ":" + name);
   // Only required declarations constrain provider selection. The original
@@ -160,7 +159,7 @@ function parseBinaryManifest(bytes) {
     const target = activity.name === "activity-alias" ? className(attribute(activity, "targetActivity")) : declared;
     if (!declared || !target) continue;
     if (activity.name === "activity-alias" && !activities.some(node => node.name === "activity" &&
-      className(attribute(node, "name")) === target)) invalid();
+      className(attribute(node, "name")) === target) && !attribute(document, "split", false)) invalid();
     for (const filter of activity.children.filter(node => node.name === "intent-filter")) {
       const main = filter.children.some(node => node.name === "action" && attribute(node, "name") === "android.intent.action.MAIN");
       const launcher = filter.children.some(node => node.name === "category" && attribute(node, "name") === "android.intent.category.LAUNCHER");
@@ -218,7 +217,8 @@ function parseBinaryManifest(bytes) {
       const appEnabled = boolean(app, "enabled", true), appPermission = text(app, "permission");
       const providerNodes = app.children.filter(node => node.name === "provider");
       const serviceNodes = app.children.filter(node => node.name === "service");
-      if (providerNodes.length > 128 || serviceNodes.length > 128) throw unknown;
+      const receiverNodes = app.children.filter(node => node.name === "receiver");
+      if (providerNodes.length > 128 || serviceNodes.length > 128 || receiverNodes.length > 128) throw unknown;
       const names = new Set();
       function common(owner) {
         const name = className(attribute(owner, "name")), metadata = applicationMetadata(owner);
@@ -257,6 +257,9 @@ function parseBinaryManifest(bytes) {
           exported: boolean(owner, "exported", owner.children.some(node => node.name === "intent-filter"), true),
           permission: text(owner, "permission", appPermission) || null };
       });
+      const applicationReceivers = receiverNodes.map(owner => ({ ...common(owner),
+        exported: boolean(owner, "exported", owner.children.some(node => node.name === "intent-filter"), true),
+        permission: text(owner, "permission", appPermission) || null }));
       const launcherProcesses = Object.create(null);
       for (const launcher of launchers) {
         const target = activities.find(node => node.name === "activity" && className(attribute(node, "name")) === launcher.activity);
@@ -264,7 +267,7 @@ function parseBinaryManifest(bytes) {
         launcherProcesses[launcher.name] = processName(target, applicationProcessName);
       }
       return { applicationComponentsInspected: true, applicationProcessName, launcherProcesses,
-        applicationProviders, applicationServices };
+        applicationProviders, applicationServices, applicationReceivers };
     } catch (error) {
       if (error !== unknown && error !== unknownProcess) throw error;
       return { applicationComponentsInspected: false };
@@ -353,4 +356,27 @@ function parseBinaryManifest(bytes) {
       .map(node => attribute(node, "name")).filter(value => typeof value === "string"))] };
 }
 
-module.exports = { LIMITS, INSPECTION_VERSION, parseBinaryManifest, readBinaryManifest };
+function parseBinaryManifest(bytes) { return inspectManifest(readBinaryManifest(bytes)); }
+
+/** Inspection follows parseSplitApplication's base defaults. The original
+ * PackageParser still owns actual component registration and split loaders. */
+function parseBinaryManifestSet(manifests) {
+  const documents = manifests.map(readBinaryManifest), base = documents[0];
+  if (!base || base.attrs.get(":split")) throw new Error("An Android manifest set requires its base first.");
+  const application = document => {
+    const applications = document.children.filter(node => node.name === "application");
+    if (applications.length !== 1) throw new Error("The APK contains an invalid Android manifest.");
+    return applications[0];
+  };
+  const app = application(base);
+  // Android parses cluster splits by their manifest names, independently of
+  // the topological order used to validate the installation dependencies.
+  const splits = documents.slice(1).sort((a, b) => {
+    const left = String(a.attrs.get(":split")), right = String(b.attrs.get(":split"));
+    return left < right ? -1 : left > right ? 1 : 0;
+  });
+  const children = [...app.children, ...splits.flatMap(document => application(document).children)];
+  return inspectManifest({ ...base, children: base.children.map(node => node === app ? { ...app, children } : node) });
+}
+
+module.exports = { LIMITS, INSPECTION_VERSION, parseBinaryManifest, parseBinaryManifestSet, readBinaryManifest };
