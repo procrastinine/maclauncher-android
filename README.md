@@ -67,6 +67,11 @@ it. Disabling dumpability restricts peer inspection; self-access remains
 available. Inspection also remains subject to the host sandbox and task-port
 restrictions. These controls do not grant host debugger access.
 
+Native POSIX memory advice preserves errno and modified private bytes. The ARM64
+`sendfile` and `sendfile64` interfaces retain Linux argument order, explicit or
+current input offsets, partial-transfer counts and nonblocking errors for
+regular-file input with file, socket or pipe output.
+
 The ART package producer is `src/modules/android/art/package.mjs`. Its inputs
 include the completed supplier, common runtime, verified original image identity,
 extractor and corresponding source archive. `commonDeclaration` supplies the

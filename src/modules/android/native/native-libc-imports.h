@@ -195,6 +195,7 @@ static void *klj_native_libc_lookup(const char *name) {
     KLJ_LIBC("umask",klj_umask);KLJ_LIBC("__umask_chk",klj_umask_chk);
     KLJ_LIBC("mremap",klj_mremap);
     KLJ_LIBC("msync",klj_msync);KLJ_LIBC("mincore",klj_mincore);
+    KLJ_LIBC("posix_madvise",klj_posix_madvise);
     // These ARM64 LP64 interfaces have the same value ABI on both platforms.
     KLJ_LIBC("memmem",klj_memmem);
     KLJ_LIBC("strndup",strndup);KLJ_LIBC("arc4random_uniform",arc4random_uniform);

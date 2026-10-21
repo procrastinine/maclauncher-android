@@ -13,6 +13,33 @@
 #include <mach/mach_vm.h>
 #include "signal-critical.h"
 
+/* Bionic preserves errno and deliberately does not submit POSIX DONTNEED:
+ * Linux MADV_DONTNEED discards private modifications, unlike POSIX advice. */
+static int klj_posix_madvise(void *address,size_t length,int advice){
+    int saved=errno,error=0;
+    if(advice<0||advice>4)error=EINVAL;
+    else if(advice!=4){
+        uintptr_t start=(uintptr_t)address,mask=vm_page_size-1;
+        if((start&mask)||length>UINTPTR_MAX-mask)error=EINVAL;
+        else{
+            size_t rounded=(length+mask)&~mask;
+            if(start>UINTPTR_MAX-rounded)error=ENOMEM;
+            else{
+                mach_vm_address_t cursor=start,end=start+rounded;
+                while(cursor<end){
+                    mach_vm_address_t base=cursor;mach_vm_size_t size=0;natural_t depth=0;
+                    vm_region_submap_info_data_64_t info;mach_msg_type_number_t fields;kern_return_t status;
+                    do{fields=VM_REGION_SUBMAP_INFO_COUNT_64;status=mach_vm_region_recurse(mach_task_self(),&base,&size,&depth,(vm_region_recurse_info_t)&info,&fields);if(status!=KERN_SUCCESS)break;if(info.is_submap)depth++;}while(info.is_submap);
+                    if(status!=KERN_SUCCESS||base>cursor||size<=cursor-base||size>UINT64_MAX-base){error=ENOMEM;break;}
+                    cursor=base+size;
+                }
+                if(!error){int (*call)(void *,size_t,int)=kl_upstream_shim_lookup("madvise");error=!call?ENOSYS:call(address,length,advice)?errno:0;}
+            }
+        }
+    }
+    errno=saved;return kl_errno_to_linux(error);
+}
+
 // Linux and Darwin assign different MS_* values. A zero Linux mode is valid
 // (asynchronous writeback); Darwin requires an explicit sync/async selection.
 static int klj_msync(void *address,size_t length,int flags) {

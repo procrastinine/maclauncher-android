@@ -10,6 +10,9 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
 #include "pollable-fds/bridge.h"
 #include "file-xattrs.h"
 #include "proc-maps.h"
@@ -85,6 +88,89 @@ static int klj_file_allocate(int fd,int mode,off_t offset,off_t length){
     int result=klj_file_allocate_retained(retained,mode,offset,length),error=errno;
     close(retained);errno=error;return result;
 }
+/* Both ARM64 names use a 64-bit offset. Keep descriptions alive across the
+ * host operations and advance the source only by bytes the destination took.
+ * Socket output uses Darwin's actual zero-copy transfer; ordinary output keeps
+ * Linux's regular-file/pipe support through bounded positioned reads. */
+static ssize_t klj_sendfile_retained(int output,int input,off_t *offset,size_t count){
+    struct stat source,destination;
+    if(fstat(input,&source)||fstat(output,&destination))return -1;
+    int in_flags=fcntl(input,F_GETFL),out_flags=fcntl(output,F_GETFL);
+    if(in_flags<0||out_flags<0)return -1;
+    if((in_flags&O_ACCMODE)==O_WRONLY||(out_flags&O_ACCMODE)==O_RDONLY){errno=EBADF;return -1;}
+    if(out_flags&O_APPEND){errno=EINVAL;return -1;}
+    if(!S_ISREG(source.st_mode)){
+        if(offset&&lseek(input,0,SEEK_CUR)<0&&errno==ESPIPE)return -1;
+        errno=EINVAL;return -1;
+    }
+    off_t position=offset?*offset:lseek(input,0,SEEK_CUR);
+    if(position<0){if(offset)errno=EINVAL;return -1;}
+    if(count>0x7ffff000u)count=0x7ffff000u;
+    if(count>(uint64_t)(INT64_MAX-position)){errno=EOVERFLOW;return -1;}
+    if(!count)return 0;
+    int saved=errno,error=0;size_t done=0;
+    if(S_ISSOCK(destination.st_mode)){
+        off_t transferred=(off_t)count;
+        if(sendfile(input,output,position,&transferred,NULL,0)<0)error=errno;
+        if(transferred<0||(uint64_t)transferred>count){errno=EIO;return -1;}
+        done=(size_t)transferred;
+    }else{
+        char buffer[65536];
+        while(done<count){
+            size_t wanted=count-done;if(wanted>sizeof buffer)wanted=sizeof buffer;
+            ssize_t got=pread(input,buffer,wanted,position+(off_t)done);
+            if(got<0){error=errno;break;}if(!got)break;
+            ssize_t sent=klj_pollable_write(output,buffer,(size_t)got);
+            if(sent<0){error=errno;break;}
+            if((size_t)sent>(size_t)got){error=EIO;break;}
+            done+=(size_t)sent;if(sent<got)break;
+        }
+    }
+    if(done){
+        if(offset)*offset=position+(off_t)done;
+        else if(lseek(input,(off_t)done,SEEK_CUR)<0)return -1;
+        errno=saved;return (ssize_t)done;
+    }
+    if(error){errno=error;return -1;}errno=saved;return 0;
+}
+/* Use the same own-task fault-contained copy as process_vm. Validate both
+ * permissions before I/O; a stale mapping at final copyout remains EFAULT. */
+static int klj_sendfile_offset(off_t *guest,off_t *value,int write_value){
+    uintptr_t start=(uintptr_t)guest;if(start>UINTPTR_MAX-sizeof(*value)){errno=EFAULT;return -1;}
+    uintptr_t end=start+sizeof(*value),cursor=start;
+    while(cursor<end){
+        mach_vm_address_t base=cursor;mach_vm_size_t length=0;natural_t depth=0;
+        vm_region_submap_info_data_64_t info;mach_msg_type_number_t fields;
+        kern_return_t status;
+        do{fields=VM_REGION_SUBMAP_INFO_COUNT_64;status=mach_vm_region_recurse(mach_task_self(),&base,&length,&depth,(vm_region_recurse_info_t)&info,&fields);if(status!=KERN_SUCCESS)break;if(info.is_submap)depth++;}while(info.is_submap);
+        if(status!=KERN_SUCCESS||base>cursor||length<=cursor-base||length>UINT64_MAX-base||
+           (info.protection&(VM_PROT_READ|VM_PROT_WRITE))!=(VM_PROT_READ|VM_PROT_WRITE)){errno=EFAULT;return -1;}
+        cursor=base+length;
+    }
+    mach_vm_size_t copied=0;
+    mach_vm_address_t source=write_value?(uintptr_t)value:start,destination=write_value?start:(uintptr_t)value;
+    if(mach_vm_read_overwrite(mach_task_self(),source,sizeof(*value),destination,&copied)!=KERN_SUCCESS||copied!=sizeof(*value)){errno=EFAULT;return -1;}
+    if(!write_value){
+        // Writing the unchanged value also validates the actual copyout path
+        // before a transfer can consume input or produce output.
+        copied=0;if(mach_vm_read_overwrite(mach_task_self(),(uintptr_t)value,sizeof(*value),start,&copied)!=KERN_SUCCESS||copied!=sizeof(*value)){errno=EFAULT;return -1;}
+    }
+    return 0;
+}
+static ssize_t klj_sendfile(int output,int input,off_t *offset,size_t count){
+    off_t position=0;if(offset&&klj_sendfile_offset(offset,&position,0))return -1;
+    if(kl_obbmap_is_vfd(input)||kl_obbmap_is_vfd(output)){errno=EINVAL;return -1;}
+    if((klj_pollable_owned(input)&&!klj_pollable_physical(input))||
+       (klj_pollable_owned(output)&&!klj_pollable_physical(output))){errno=EINVAL;return -1;}
+    int cancellation;pthread_setcancelstate(PTHREAD_CANCEL_DISABLE,&cancellation);
+    int in=klj_pollable_fcntl(input,F_DUPFD_CLOEXEC,0),out=-1;
+    if(in>=0)out=klj_pollable_fcntl(output,F_DUPFD_CLOEXEC,0);
+    ssize_t result=out<0?-1:klj_sendfile_retained(out,in,offset?&position:NULL,count);int error=errno;
+    if(result>=0&&offset&&klj_sendfile_offset(offset,&position,1)){result=-1;error=EFAULT;}
+    if(out>=0)klj_pollable_close(out);if(in>=0)klj_pollable_close(in);
+    pthread_setcancelstate(cancellation,NULL);errno=error;return result;
+}
+
 static int klj_posix_fallocate(int fd,off_t offset,off_t length){
     int saved=errno,result=klj_file_allocate(fd,0,offset,length);
     int error=result?kl_errno_to_linux(errno):0;errno=saved;return error;
@@ -169,6 +255,7 @@ static void *klj_native_file_lookup(const char *name) {
     if(!strcmp(name,"fstatat")||!strcmp(name,"fstatat64"))return (void *)klj_fstatat;
     if(!strcmp(name,"faccessat"))return (void *)klj_faccessat;
     if(!strcmp(name,"fallocate")||!strcmp(name,"fallocate64"))return (void *)klj_file_allocate;
+    if(!strcmp(name,"sendfile")||!strcmp(name,"sendfile64"))return (void *)klj_sendfile;
     if(!strcmp(name,"posix_fallocate")||!strcmp(name,"posix_fallocate64"))return (void *)klj_posix_fallocate;
     if(!strcmp(name,"readlink"))return (void *)klj_readlink;
     if(!strcmp(name,"readlinkat"))return (void *)klj_readlinkat;
