@@ -114,6 +114,7 @@ APK's membership and ordering. Original AOSP DEX and package class loaders reque
 converted class bytes as needed. A resident dex2jvm subprocess shares its parsed
 DEX and constructor-resolution plan across those requests; converter dependencies
 remain outside the game JVM. Dynamically loaded DEX uses the same boundary.
+DexFile retains its original native declarations; JNI bridges use the existing JVM DEX owner and preserve native re-registration and unregister semantics.
 
 Converted bytes are immutable cache products identified by the DEX, converter,
 framework hierarchy and the actual parent-loader types consulted by conversion.

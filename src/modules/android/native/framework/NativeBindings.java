@@ -31,7 +31,6 @@ final class NativeBindings implements Opcodes {
         Map.entry("android/os/incremental/IncrementalManager",framework("HostIncrementalFilesystem")),
         Map.entry("android/util/jar/StrictJarFile",framework("HostStrictJarFile")),
         Map.entry("dalvik/system/VMDebug",framework("HostVmDebug")),
-        Map.entry("dalvik/system/DexFile",framework("HostDexFiles")),
         Map.entry("dalvik/system/BaseDexClassLoader",framework("HostDexFiles")),
         Map.entry("android/os/FileObserver$ObserverThread",framework("HostFileObserver")),
         Map.entry("libcore/io/Linux",new Adapter("maclauncher/android/framework/HostFileDescriptor",false)),
