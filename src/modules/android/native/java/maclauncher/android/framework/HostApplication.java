@@ -67,8 +67,14 @@ public final class HostApplication {
         HostUiAccess.set(null,ActivityThread.class,"sMainThreadHandler",thread.getHandler());
         @SuppressWarnings("unchecked")var packages=(Map<String,java.lang.ref.WeakReference<LoadedApk>>)HostUiAccess.get(thread,ActivityThread.class,"mPackages");packages.put(info.packageName,new java.lang.ref.WeakReference<>(apk));
         @SuppressWarnings("unchecked")var resourcePackages=(Map<String,java.lang.ref.WeakReference<LoadedApk>>)HostUiAccess.get(thread,ActivityThread.class,"mResourcePackages");resourcePackages.put(info.packageName,new java.lang.ref.WeakReference<>(apk));
-        context=(Context)HostUiAccess.call(HostUiAccess.method(HostUiAccess.type("android.app.ContextImpl"),"createAppContext",ActivityThread.class,LoadedApk.class),null,thread,apk);
-        services=new HostActivityService(context);
+        services=new HostActivityService();
+        try{
+            context=(Context)HostUiAccess.call(HostUiAccess.method(HostUiAccess.type("android.app.ContextImpl"),"createAppContext",ActivityThread.class,LoadedApk.class),null,thread,apk);
+            services.attach(context);
+        }catch(RuntimeException|Error failure){
+            try{services.close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
+            throw failure;
+        }
         HostStartupTiming.mark("application-records-ready");
     }
     private void initializeClassLoader(ClassLoader loader){

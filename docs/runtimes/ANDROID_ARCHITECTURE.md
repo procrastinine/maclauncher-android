@@ -1262,6 +1262,8 @@ session directory, including profiles with long filesystem paths.
 The two VM entries use the same application bootstrap, Activity lifecycle,
 context-service and application-job initializer. Original ActivityThread,
 LoadedApk and Instrumentation records share their initialization and retirement.
+The process activity endpoint is available before the first original ContextImpl
+checks permissions; its context-dependent owners attach to that same real context.
 The original process bind record, package context and services are published
 before the APK's component factory initializes. Its original class-loader
 factory supplies the loader used for Application and initial Activity creation.

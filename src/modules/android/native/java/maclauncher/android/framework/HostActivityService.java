@@ -9,20 +9,36 @@ import java.util.*;
 
 /** Local process and intent-token endpoint beneath Android's original service clients. */
 public final class HostActivityService extends IActivityManager.Default implements AutoCloseable {
-    private final Context context;
-    private final HostPendingIntentInjector pendingIntents;
-    private final HostProviderConnections providers;
-    private final com.android.server.am.HostUidObservers uidObservers;
+    private Context context;
+    private HostPendingIntentInjector pendingIntents;
+    private HostProviderConnections providers;
+    private com.android.server.am.HostUidObservers uidObservers;
     private final IActivityManager localClient;
     private volatile boolean closed;
-    HostActivityService(Context context){
-        this.context=context;pendingIntents=new HostPendingIntentInjector(context);providers=new HostProviderConnections(context);uidObservers=new com.android.server.am.HostUidObservers(context);HostServices.register(Context.ACTIVITY_SERVICE,this,"android.app.IActivityManager");
+    /** The original ContextImpl queries permissions while creating its first
+     * Context. Publish the existing process endpoint before that construction. */
+    HostActivityService(){
         localClient=(IActivityManager)HostServiceClients.local(this,"android.app.IActivityManager");
+        HostServices.register(Context.ACTIVITY_SERVICE,this,"android.app.IActivityManager");
         // LoadedApk may query the shared profile before this process has its
         // application Context. Adopt the local owner in the original client's
         // cache too; service-directory precedence cannot replace a cached hop.
         Object singleton=activitySingleton();
         synchronized(singleton){HostUiAccess.set(singleton,android.util.Singleton.class,"mInstance",localClient);}
+    }
+    HostActivityService(Context context){this();attach(context);}
+    /** Context-dependent original owners start after the real Context exists. */
+    synchronized void attach(Context context){
+        if(closed||this.context!=null)throw new IllegalStateException("Activity service is already attached or retired");
+        this.context=Objects.requireNonNull(context);
+        try{
+            pendingIntents=new HostPendingIntentInjector(context);
+            providers=new HostProviderConnections(context);
+            uidObservers=new com.android.server.am.HostUidObservers(context);
+        }catch(RuntimeException|Error failure){
+            try{close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
+            throw failure;
+        }
     }
     private static Object activitySingleton(){return HostUiAccess.get(null,ActivityManager.class,"IActivityManagerSingleton");}
     private void retireClient(){Object singleton=activitySingleton();synchronized(singleton){if(HostUiAccess.get(singleton,android.util.Singleton.class,"mInstance")==localClient)HostUiAccess.set(singleton,android.util.Singleton.class,"mInstance",null);}}
@@ -122,10 +138,18 @@ public final class HostActivityService extends IActivityManager.Default implemen
     @Override public int getForegroundServiceType(ComponentName component,IBinder token){return HostLocalServices.foregroundType(component,token);}
     @Override public List<ActivityManager.RunningServiceInfo> getServices(int max,int flags){var peer=HostBinderRpc.callingPeer();return closed||peer!=null&&peer.uid()!=android.os.Process.myUid()?new ArrayList<>():HostLocalServices.running(max);}
     @Override public List<ActivityManager.RunningAppProcessInfo> getRunningAppProcesses(){return HostActivityManager.getRunningAppProcesses(context);}
-    @Override public void close(){synchronized(this){if(closed)return;closed=true;}uidObservers.close();providers.close();pendingIntents.close();HostServices.unregister(Context.ACTIVITY_SERVICE,this,"android.app.IActivityManager");
-        // Earlier service listeners still unregister their original receivers
-        // during Looper retirement. Their cached local client remains valid
-        // through those callbacks, then retires with this same process owner.
-        if(!HostLooper.addShutdownListener(context.getMainLooper(),this::retireClient))retireClient();
+    @Override public void close(){
+        synchronized(this){if(closed)return;closed=true;}
+        try{
+            if(uidObservers!=null)uidObservers.close();
+            if(providers!=null)providers.close();
+            if(pendingIntents!=null)pendingIntents.close();
+        }finally{
+            HostServices.unregister(Context.ACTIVITY_SERVICE,this,"android.app.IActivityManager");
+            // Earlier service listeners still unregister their original receivers
+            // during Looper retirement. A bootstrap failure before Context attach
+            // has no such listeners and retires its cached client immediately.
+            if(context==null||!HostLooper.addShutdownListener(context.getMainLooper(),this::retireClient))retireClient();
+        }
     }
 }
