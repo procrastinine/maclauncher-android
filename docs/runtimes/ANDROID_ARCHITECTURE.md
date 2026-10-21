@@ -1304,6 +1304,9 @@ Initial and navigated Activities use original `ActivityThread` destruction,
 which marks an Activity as finishing before pause, stop and destroy callbacks.
 Activity task removal follows the original root-only and always-remove modes;
 ordinary Activity finish retains the remaining task records.
+An accepted local Activity launch owns its queued handoff until its main-thread
+callback completes. A display-turn boundary between finishing a launcher and
+creating its successor therefore does not retire their shared output.
 Up navigation uses the same task owner, retaining the original destination
 Intent, caller result and launch mode. Reusable parents receive a new Intent;
 standard parents use ordinary Activity creation and replacement.

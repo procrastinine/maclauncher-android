@@ -77,6 +77,7 @@ public final class HostActivity {
     }
     private static final Map<IBinder,HostActivity> activities=new IdentityHashMap<>();
     private static final ArrayList<HostActivity> task=new ArrayList<>();
+    private static int pendingLaunches;
     private static int taskId=-1,nextTaskId;
     private static Boolean excludedFromRecents;
     private static final Controller controller=new Controller();
@@ -185,7 +186,7 @@ public final class HostActivity {
             HostWindowManager.hostSleepChanged();
         }
     }
-    public boolean closing(){return top()==null;}
+    public boolean closing(){synchronized(activities){return task.isEmpty()&&pendingLaunches==0;}}
     public long titleRevision(){check();String next=String.valueOf(foreground().getTitle());if(!next.equals(title)){title=next;titleRevision++;}return titleRevision;}
     public String title(){titleRevision();return title;}
     public boolean back(){HostActivity top=top();return top!=null&&!top.closed&&back(top.activity);}
@@ -276,7 +277,18 @@ public final class HostActivity {
     static void launch(ActivityInfo info,Intent original,IApplicationThread caller,IBinder resultTo,String who,int request,Bundle options){
         Intent intent=new Intent(original);
         Bundle windowOptions=options==null?null:new Bundle(options);
-        new Handler(Looper.getMainLooper()).post(()->launchOnMain(info,intent,caller,resultTo,who,request,windowOptions));
+        // A completed finishing callback can exhaust the physical display turn
+        // before its already accepted successor runs. The queued task request,
+        // rather than the finished Activity, owns that exact handoff interval.
+        synchronized(activities){pendingLaunches++;}
+        boolean accepted=false;
+        try{
+            accepted=new Handler(Looper.getMainLooper()).post(()->{
+                try{launchOnMain(info,intent,caller,resultTo,who,request,windowOptions);}
+                finally{synchronized(activities){pendingLaunches--;}}
+            });
+            if(!accepted)throw new IllegalStateException("Android activity queue is closed");
+        }finally{if(!accepted)synchronized(activities){pendingLaunches--;}}
     }
     static void launchUp(ActivityInfo info,Intent intent,IApplicationThread caller,IBinder parent){
         if(!Looper.getMainLooper().isCurrentThread())throw new IllegalStateException("Activity Up requires the task owner thread");
