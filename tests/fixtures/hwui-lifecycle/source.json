@@ -1,0 +1,18 @@
+{
+  "repository": "https://android.googlesource.com/platform/frameworks/base",
+  "revision": "99b01a65cc4c104933788b3143285ab6bae65827",
+  "files": [
+    {
+      "source": "libs/hwui/thread/CommonPool.h",
+      "fixture": "original/thread/CommonPool.h",
+      "sha256": "dc2711bacdd058e739ef842fb04670f002aa3e8734820fe506abb937ed60d969"
+    },
+    {
+      "source": "libs/hwui/thread/CommonPool.cpp",
+      "fixture": "original/thread/CommonPool.cpp",
+      "sha256": "9d62ca2567ae7c8db1957dd85b23c37b00adc75742862c39bb9e78d0abe8d45b"
+    }
+  ],
+  "platformBase": "libs/hwui/platform/host/thread/CommonPoolBase.h",
+  "testSupport": "Isolated host translation-unit logging, tracing and thread-start hook seams. Runtime builds use the complete original platform headers."
+}

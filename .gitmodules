@@ -443,3 +443,146 @@
 	maclauncher-revision = 83b71974f00edaef78b72e212d60168b4bc4a70a
 	maclauncher-role = reference
 	maclauncher-init = false
+[submodule "aosp-hwui-av"]
+	path = src/external/aosp-hwui/av
+	url = https://android.googlesource.com/platform/frameworks/av
+	maclauncher-revision = 4b2111885ff934799e70eddae2527a9848c3be29
+	maclauncher-role = source
+
+[submodule "aosp-hwui-crabbyavif"]
+	path = src/external/aosp-hwui/crabbyavif
+	url = https://android.googlesource.com/platform/external/rust/crabbyavif
+	maclauncher-revision = 9f3e32a2ffc45466eaed69ad522080cbf67f827b
+	maclauncher-role = source
+
+[submodule "aosp-hwui-dng-sdk"]
+	path = src/external/aosp-hwui/dng-sdk
+	url = https://android.googlesource.com/platform/external/dng_sdk
+	maclauncher-revision = 4bcadf0d12acea137f176d15852ec275560da806
+	maclauncher-role = source
+
+[submodule "aosp-hwui-expat"]
+	path = src/external/aosp-hwui/expat
+	url = https://android.googlesource.com/platform/external/expat
+	maclauncher-revision = 7b60c4bbc175e795903c47ea9434289eb1d5e605
+	maclauncher-role = source
+
+[submodule "aosp-hwui-libfmq"]
+	path = src/external/aosp-hwui/libfmq
+	url = https://android.googlesource.com/platform/system/libfmq
+	maclauncher-revision = 674a2103f2bd9bd5505c58e83af3042be2a24adf
+	maclauncher-role = source
+
+[submodule "aosp-hwui-freetype"]
+	path = src/external/aosp-hwui/freetype
+	url = https://android.googlesource.com/platform/external/freetype
+	maclauncher-revision = d968d2541f7158e18ab22680bfa08a538019bf6a
+	maclauncher-role = source
+
+[submodule "aosp-hwui-giflib"]
+	path = src/external/aosp-hwui/giflib
+	url = https://android.googlesource.com/platform/external/giflib
+	maclauncher-revision = ad011248e266cc1bad1489704cc214942231cf09
+	maclauncher-role = source
+
+[submodule "aosp-hwui-harfbuzz-ng"]
+	path = src/external/aosp-hwui/harfbuzz-ng
+	url = https://android.googlesource.com/platform/external/harfbuzz_ng
+	maclauncher-revision = e489c416b6f8d2a9a2e0e85b781d1e4a0c431401
+	maclauncher-role = source
+
+[submodule "aosp-hwui-libhidl"]
+	path = src/external/aosp-hwui/libhidl
+	url = https://android.googlesource.com/platform/system/libhidl
+	maclauncher-revision = 93f79786f64c02b71ba899a46c34829266f9c370
+	maclauncher-role = source
+
+[submodule "aosp-hwui-libjpeg-turbo"]
+	path = src/external/aosp-hwui/libjpeg-turbo
+	url = https://android.googlesource.com/platform/external/libjpeg-turbo
+	maclauncher-revision = 6cedbd6ff13946bef76a015693d02723b0d3226e
+	maclauncher-role = source
+
+[submodule "aosp-hwui-libyuv"]
+	path = src/external/aosp-hwui/libyuv
+	url = https://android.googlesource.com/platform/external/libyuv
+	maclauncher-revision = 741c38751c436f60c583110f617340b7f3322d94
+	maclauncher-role = source
+
+[submodule "aosp-hwui-minikin"]
+	path = src/external/aosp-hwui/minikin
+	url = https://android.googlesource.com/platform/frameworks/minikin
+	maclauncher-revision = 1e1d5d137d487df875d7db69b5ff24e7d0291612
+	maclauncher-role = source
+
+[submodule "aosp-hwui-pdfium"]
+	path = src/external/aosp-hwui/pdfium
+	url = https://android.googlesource.com/platform/external/pdfium
+	maclauncher-revision = 61aafefc3df2bda22588c7764d1177018f0af4e4
+	maclauncher-role = source
+
+[submodule "aosp-hwui-perfetto"]
+	path = src/external/aosp-hwui/perfetto
+	url = https://android.googlesource.com/platform/external/perfetto
+	maclauncher-revision = 94a71474cc396db2b0fcff6755b8f2d3f7e304d0
+	maclauncher-role = source
+
+[submodule "aosp-hwui-piex"]
+	path = src/external/aosp-hwui/piex
+	url = https://android.googlesource.com/platform/external/piex
+	maclauncher-revision = 6d3d1e7dc6e4b0d348c60160f5a9397a28eae630
+	maclauncher-role = source
+
+[submodule "aosp-hwui-libpng"]
+	path = src/external/aosp-hwui/libpng
+	url = https://android.googlesource.com/platform/external/libpng
+	maclauncher-revision = 6dd415783321a0c670387f0a5d51776b2c1f629a
+	maclauncher-role = source
+
+[submodule "aosp-hwui-proto-logging"]
+	path = src/external/aosp-hwui/proto-logging
+	url = https://android.googlesource.com/platform/frameworks/proto_logging
+	maclauncher-revision = 29d96a39adaffda3ad1b08ae17b6befbe2a625fa
+	maclauncher-role = source
+
+[submodule "aosp-hwui-protobuf"]
+	path = src/external/aosp-hwui/protobuf
+	url = https://android.googlesource.com/platform/external/protobuf
+	maclauncher-revision = da98e5a6593907dd162bb6c206570c0afa5326ac
+	maclauncher-role = source
+
+[submodule "aosp-hwui-sysprop"]
+	path = src/external/aosp-hwui/sysprop
+	url = https://android.googlesource.com/platform/system/tools/sysprop
+	maclauncher-revision = 5612a6cb5b56b654f6cd4f1c955606b732a62710
+	maclauncher-role = source
+
+[submodule "aosp-hwui-libultrahdr"]
+	path = src/external/aosp-hwui/libultrahdr
+	url = https://android.googlesource.com/platform/external/libultrahdr
+	maclauncher-revision = 8ca5f9daff887eb2fd412bb66e00f850f582a3f5
+	maclauncher-role = source
+
+[submodule "aosp-hwui-webp"]
+	path = src/external/aosp-hwui/webp
+	url = https://android.googlesource.com/platform/external/webp
+	maclauncher-revision = 7698c1d3a5cbecdf336510eeb3366d1de752454a
+	maclauncher-role = source
+
+[submodule "aosp-hwui-wuffs-mirror-release-c"]
+	path = src/external/aosp-hwui/wuffs-mirror-release-c
+	url = https://android.googlesource.com/platform/external/wuffs-mirror-release-c
+	maclauncher-revision = ecaeabeb59e4fb29313f893ead3c9d90dc2fb586
+	maclauncher-role = source
+
+[submodule "aosp-hwui-googletest"]
+	path = src/external/aosp-hwui/googletest
+	url = https://android.googlesource.com/platform/external/googletest
+	maclauncher-revision = ed43ae9f2f62df2b77e2400da414c126e7203e7a
+	maclauncher-role = source
+
+[submodule "aosp-hwui-soong"]
+	path = src/external/aosp-hwui/soong
+	url = https://android.googlesource.com/platform/build/soong
+	maclauncher-revision = 533c3c2c9166b49caa556518bb547d8f9acf9594
+	maclauncher-role = source

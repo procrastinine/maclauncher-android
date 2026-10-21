@@ -475,6 +475,11 @@
           "kind": "json",
           "path": "src/modules/android/native/source-pins.json",
           "property": "aospBionic"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.33.revision"
         }
       ]
     },
@@ -493,6 +498,11 @@
           "kind": "json",
           "path": "src/modules/android/native/source-pins.json",
           "property": "aospBoringSSL"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.38.revision"
         }
       ]
     },
@@ -529,6 +539,11 @@
           "kind": "json",
           "path": "src/modules/android/native/keystore/sources.json",
           "property": "13.revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.2.revision"
         }
       ]
     },
@@ -583,6 +598,11 @@
           "kind": "json",
           "path": "src/modules/android/native/source-pins.json",
           "property": "aospFmt"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.36.revision"
         }
       ]
     },
@@ -601,6 +621,11 @@
           "kind": "json",
           "path": "src/modules/android/native/source-pins.json",
           "property": "aospFramework"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.31.revision"
         }
       ]
     },
@@ -628,6 +653,11 @@
           "kind": "json",
           "path": "src/modules/android/native/platform-packages-binary.json",
           "property": "declarationSource.revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.1.revision"
         }
       ]
     },
@@ -730,6 +760,11 @@
           "kind": "json",
           "path": "src/modules/android/native/keystore/sources.json",
           "property": "5.revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.12.revision"
         }
       ]
     },
@@ -748,6 +783,11 @@
           "kind": "json",
           "path": "src/modules/android/native/ndk-graphics/sources.json",
           "property": "1.revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.34.revision"
         }
       ]
     },
@@ -782,6 +822,11 @@
           "kind": "json",
           "path": "src/modules/android/native/source-pins.json",
           "property": "aospLibbase"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.0.revision"
         }
       ]
     },
@@ -816,6 +861,11 @@
           "kind": "json",
           "path": "src/modules/android/native/keystore/sources.json",
           "property": "3.revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.37.revision"
         }
       ]
     },
@@ -833,6 +883,11 @@
           "kind": "json",
           "path": "src/modules/android/native/source-pins.json",
           "property": "aospLibnativehelper"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.32.revision"
         }
       ]
     },
@@ -850,6 +905,11 @@
           "kind": "json",
           "path": "src/modules/android/native/ndk-graphics/sources.json",
           "property": "2.revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.35.revision"
         }
       ],
       "licenseStatus": "Original source header or build license declaration"
@@ -868,6 +928,11 @@
           "kind": "json",
           "path": "src/modules/android/native/keystore/sources.json",
           "property": "4.revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.17.revision"
         }
       ]
     },
@@ -885,6 +950,11 @@
           "kind": "json",
           "path": "src/modules/android/native/source-pins.json",
           "property": "aospNative"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.19.revision"
         }
       ]
     },
@@ -1151,6 +1221,11 @@
           "kind": "json",
           "path": "src/modules/android/native/keystore/sources.json",
           "property": "8.revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.39.revision"
         }
       ],
       "licenseStatus": "Original source header or build license declaration"
@@ -1222,6 +1297,11 @@
           "kind": "json",
           "path": "src/modules/android/native/ndk-graphics/sources.json",
           "property": "0.revision"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.3.revision"
         }
       ]
     },
@@ -1239,6 +1319,11 @@
           "kind": "json",
           "path": "src/modules/android/native/source-pins.json",
           "property": "aospStatsd"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.26.revision"
         }
       ],
       "licenseStatus": "Original source header or build license declaration"
@@ -1258,6 +1343,11 @@
           "kind": "json",
           "path": "src/modules/android/native/source-pins.json",
           "property": "aospSystemCore"
+        },
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.5.revision"
         }
       ]
     },
@@ -1480,6 +1570,448 @@
         }
       ],
       "referenceOnly": true
+    },
+    {
+      "id": "aosp-hwui-av",
+      "repository": "https://android.googlesource.com/platform/frameworks/av",
+      "path": "src/external/aosp-hwui/av",
+      "revision": "4b2111885ff934799e70eddae2527a9848c3be29",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.4.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-crabbyavif",
+      "repository": "https://android.googlesource.com/platform/external/rust/crabbyavif",
+      "path": "src/external/aosp-hwui/crabbyavif",
+      "revision": "9f3e32a2ffc45466eaed69ad522080cbf67f827b",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.6.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-dng-sdk",
+      "repository": "https://android.googlesource.com/platform/external/dng_sdk",
+      "path": "src/external/aosp-hwui/dng-sdk",
+      "revision": "4bcadf0d12acea137f176d15852ec275560da806",
+      "licensePaths": [
+        "LICENSE",
+        "LICENSE.source_code",
+        "LICENSE.technology",
+        "NOTICE",
+        "PATENTS"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.7.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-expat",
+      "repository": "https://android.googlesource.com/platform/external/expat",
+      "path": "src/external/aosp-hwui/expat",
+      "revision": "7b60c4bbc175e795903c47ea9434289eb1d5e605",
+      "licensePaths": [
+        "COPYING",
+        "expat/COPYING"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.8.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-libfmq",
+      "repository": "https://android.googlesource.com/platform/system/libfmq",
+      "path": "src/external/aosp-hwui/libfmq",
+      "revision": "674a2103f2bd9bd5505c58e83af3042be2a24adf",
+      "licensePaths": [
+        "include/fmq/MessageQueue.h"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.9.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-freetype",
+      "repository": "https://android.googlesource.com/platform/external/freetype",
+      "path": "src/external/aosp-hwui/freetype",
+      "revision": "d968d2541f7158e18ab22680bfa08a538019bf6a",
+      "licensePaths": [
+        "LICENSE.TXT",
+        "LICENSE",
+        "NOTICE",
+        "docs/FTL.TXT",
+        "LICENSE_APACHE2.TXT",
+        "LICENSE_MIT.TXT",
+        "LICENSE_BSD_3_CLAUSE.TXT",
+        "LICENSE_MIT_MODERN_VARIANT.TXT",
+        "builds/unix/LICENSE_GPLv2_WITH_AUTOCONF_EXCEPTION.TXT",
+        "builds/unix/LICENSE_GPLv3_WITH_AUTOCONF_EXCEPTION.TXT",
+        "src/gzip/LICENSE_ZLIB.TXT",
+        "LICENSE_FSFAP.TXT",
+        "docs/GPLv2.TXT"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.10.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-giflib",
+      "repository": "https://android.googlesource.com/platform/external/giflib",
+      "path": "src/external/aosp-hwui/giflib",
+      "revision": "ad011248e266cc1bad1489704cc214942231cf09",
+      "licensePaths": [
+        "NOTICE",
+        "COPYING"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.11.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-harfbuzz-ng",
+      "repository": "https://android.googlesource.com/platform/external/harfbuzz_ng",
+      "path": "src/external/aosp-hwui/harfbuzz-ng",
+      "revision": "e489c416b6f8d2a9a2e0e85b781d1e4a0c431401",
+      "licensePaths": [
+        "COPYING",
+        "NOTICE",
+        "LICENSE_APACHE2.TXT",
+        "LICENSE_ISC.TXT",
+        "LICENSE_OFL.TXT",
+        "src/ms-use/COPYING",
+        "LICENSE_MIT_MODERN_VARIANT.TXT",
+        "LICENSE_GPLv3_WITH_AUTOCONF_EXCEPTION.TXT",
+        "LICENSE_GPLv2.TXT",
+        "LICENSE_GPLv2_WITH_AUTOCONF_EXCEPTION.TXT",
+        "LICENSE_FSFAP.TXT",
+        "LICENSE_HPND_SELL_VARIANT.TXT",
+        "LICENSE"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.13.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-libhidl",
+      "repository": "https://android.googlesource.com/platform/system/libhidl",
+      "path": "src/external/aosp-hwui/libhidl",
+      "revision": "93f79786f64c02b71ba899a46c34829266f9c370",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.14.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-libjpeg-turbo",
+      "repository": "https://android.googlesource.com/platform/external/libjpeg-turbo",
+      "path": "src/external/aosp-hwui/libjpeg-turbo",
+      "revision": "6cedbd6ff13946bef76a015693d02723b0d3226e",
+      "licensePaths": [
+        "LICENSE.md"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.15.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-libyuv",
+      "repository": "https://android.googlesource.com/platform/external/libyuv",
+      "path": "src/external/aosp-hwui/libyuv",
+      "revision": "741c38751c436f60c583110f617340b7f3322d94",
+      "licensePaths": [
+        "LICENSE",
+        "PATENTS"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.16.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-minikin",
+      "repository": "https://android.googlesource.com/platform/frameworks/minikin",
+      "path": "src/external/aosp-hwui/minikin",
+      "revision": "1e1d5d137d487df875d7db69b5ff24e7d0291612",
+      "licensePaths": [
+        "include/minikin/Font.h"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.18.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-pdfium",
+      "repository": "https://android.googlesource.com/platform/external/pdfium",
+      "path": "src/external/aosp-hwui/pdfium",
+      "revision": "61aafefc3df2bda22588c7764d1177018f0af4e4",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.20.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-perfetto",
+      "repository": "https://android.googlesource.com/platform/external/perfetto",
+      "path": "src/external/aosp-hwui/perfetto",
+      "revision": "94a71474cc396db2b0fcff6755b8f2d3f7e304d0",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.21.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-piex",
+      "repository": "https://android.googlesource.com/platform/external/piex",
+      "path": "src/external/aosp-hwui/piex",
+      "revision": "6d3d1e7dc6e4b0d348c60160f5a9397a28eae630",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.22.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-libpng",
+      "repository": "https://android.googlesource.com/platform/external/libpng",
+      "path": "src/external/aosp-hwui/libpng",
+      "revision": "6dd415783321a0c670387f0a5d51776b2c1f629a",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.23.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-proto-logging",
+      "repository": "https://android.googlesource.com/platform/frameworks/proto_logging",
+      "path": "src/external/aosp-hwui/proto-logging",
+      "revision": "29d96a39adaffda3ad1b08ae17b6befbe2a625fa",
+      "licensePaths": [
+        "stats/stats_log_api_gen/native_writer.h"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.24.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-protobuf",
+      "repository": "https://android.googlesource.com/platform/external/protobuf",
+      "path": "src/external/aosp-hwui/protobuf",
+      "revision": "da98e5a6593907dd162bb6c206570c0afa5326ac",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.25.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-sysprop",
+      "repository": "https://android.googlesource.com/platform/system/tools/sysprop",
+      "path": "src/external/aosp-hwui/sysprop",
+      "revision": "5612a6cb5b56b654f6cd4f1c955606b732a62710",
+      "licensePaths": [
+        "CppGen.cpp"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.27.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-libultrahdr",
+      "repository": "https://android.googlesource.com/platform/external/libultrahdr",
+      "path": "src/external/aosp-hwui/libultrahdr",
+      "revision": "8ca5f9daff887eb2fd412bb66e00f850f582a3f5",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.28.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-webp",
+      "repository": "https://android.googlesource.com/platform/external/webp",
+      "path": "src/external/aosp-hwui/webp",
+      "revision": "7698c1d3a5cbecdf336510eeb3366d1de752454a",
+      "licensePaths": [
+        "COPYING",
+        "NOTICE",
+        "PATENTS",
+        "LICENSE"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.29.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-wuffs-mirror-release-c",
+      "repository": "https://android.googlesource.com/platform/external/wuffs-mirror-release-c",
+      "path": "src/external/aosp-hwui/wuffs-mirror-release-c",
+      "revision": "ecaeabeb59e4fb29313f893ead3c9d90dc2fb586",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.30.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-googletest",
+      "repository": "https://android.googlesource.com/platform/external/googletest",
+      "path": "src/external/aosp-hwui/googletest",
+      "revision": "ed43ae9f2f62df2b77e2400da414c126e7203e7a",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.40.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-hwui-soong",
+      "repository": "https://android.googlesource.com/platform/build/soong",
+      "path": "src/external/aosp-hwui/soong",
+      "revision": "533c3c2c9166b49caa556518bb547d8f9acf9594",
+      "licensePaths": [
+        "cc/config/global.go"
+      ],
+      "usage": "Original sources and interfaces for the Android API 36 HWUI component.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/hwui/sources.json",
+          "property": "sources.41.revision"
+        }
+      ]
     }
   ]
 }

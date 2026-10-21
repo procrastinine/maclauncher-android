@@ -1,0 +1,2556 @@
+{
+  "schema": 1,
+  "target": {
+    "androidApi": 36,
+    "abi": "arm64-v8a",
+    "imageContentSha256": "cc3e94ea29cb3c7ee6c9bd2805610efbf16a20a27335c18cc80a503ee61cb8ab"
+  },
+  "sources": [
+    {
+      "key": "base",
+      "alias": "base",
+      "project": "platform/system/libbase",
+      "repository": "https://android.googlesource.com/platform/system/libbase",
+      "revision": "0ac7ea4a65d981166d6e5617e1e4ef0572f774e5",
+      "gitTree": "9358979d34b763e206b47c370e2ad08fd29190e0",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "checks": [
+        {
+          "path": "include",
+          "type": "tree",
+          "object": "82bb63baeb4a14c4c036d35ff5d02aac9d2299fb",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "framework",
+      "alias": "framework",
+      "project": "platform/frameworks/base",
+      "repository": "https://android.googlesource.com/platform/frameworks/base",
+      "revision": "99b01a65cc4c104933788b3143285ab6bae65827",
+      "gitTree": "667eabe80eb4251d8a67da9bd694fd87afad322a",
+      "licensePaths": [
+        "NOTICE",
+        "libs/hwui/NOTICE"
+      ],
+      "checks": [
+        {
+          "path": "core/java/android/text/flags",
+          "type": "tree",
+          "object": "0d61c8a0688555f973b898caef3aa9fa8e275ec8",
+          "mode": 16384
+        },
+        {
+          "path": "core/java/android/view/accessibility/flags",
+          "type": "tree",
+          "object": "54e67d4f32aa639a5c05509328b2e46c1c26a19d",
+          "mode": 16384
+        },
+        {
+          "path": "libs/hwui",
+          "type": "tree",
+          "object": "52454bb6f1893d354b3e741963def7ac7f69640a",
+          "mode": 16384
+        },
+        {
+          "path": "libs/protoutil",
+          "type": "tree",
+          "object": "718077e857a3f56974a4a77fec8886ec117c1d05",
+          "mode": 16384
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "libs/hwui/NOTICE",
+          "type": "blob",
+          "object": "c5b1efa7aac764ae6d8da63476a2d5cec02a6a5d",
+          "mode": 33188,
+          "output": "aosp-hwui/NOTICE"
+        }
+      ]
+    },
+    {
+      "key": "release",
+      "alias": "release",
+      "project": "platform/build/release",
+      "repository": "https://android.googlesource.com/platform/build/release",
+      "revision": "5da94f17b7a143d754a3b250c08bff210d3b046b",
+      "gitTree": "cb54e866045a4506d304490daf1dbbbacaf90ac1",
+      "licensePaths": [
+        "Android.bp"
+      ],
+      "checks": [
+        {
+          "path": "aconfig",
+          "type": "tree",
+          "object": "a1f3354fdec32d95e6dc913284b14290ffe0ab95",
+          "mode": 16384
+        },
+        {
+          "path": "flag_declarations/RELEASE_ACONFIG_REQUIRE_ALL_READ_ONLY.textproto",
+          "type": "blob",
+          "object": "8396f1e4ac6d2c5e8d5d3dc1acbf76a91f4213e3",
+          "mode": 33188
+        },
+        {
+          "path": "flag_values/ap2a/RELEASE_ACONFIG_FLAG_DEFAULT_PERMISSION.textproto",
+          "type": "blob",
+          "object": "aeffb82136cfdaa90fd4088af997346cea76c8ba",
+          "mode": 33188
+        },
+        {
+          "path": "release_configs/bp2a.textproto",
+          "type": "blob",
+          "object": "0a8af71ba2724f86565a7d7afbd997655c418b67",
+          "mode": 33188
+        },
+        {
+          "path": "release_configs/user.textproto",
+          "type": "blob",
+          "object": "6d7344ee93363388dc90752a53688dc2eb1d7b00",
+          "mode": 33188
+        }
+      ]
+    },
+    {
+      "key": "skia",
+      "alias": "skia",
+      "project": "platform/external/skia",
+      "repository": "https://android.googlesource.com/platform/external/skia",
+      "revision": "bcb0f77c44783b1800ba37641ba7ecab04f05e07",
+      "gitTree": "3fc1e4f507f8c3cb7f59c3858c1ff466282815c1",
+      "licensePaths": [
+        "LICENSE",
+        "NOTICE"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "a29ee91eb581d75e379f3d78a12a65280fee91ce",
+          "mode": 33188
+        },
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "e32636d5668d51ca7a938ae6cef93c795c656d7c",
+          "mode": 33188
+        },
+        {
+          "path": "NOTICE",
+          "type": "blob",
+          "object": "41570e88f9920aed39cfae8cc0f2bb6ed5b5683f",
+          "mode": 33188
+        },
+        {
+          "path": "android",
+          "type": "tree",
+          "object": "372befcd56fb07de0f9ace530320bc0bec17b05c",
+          "mode": 16384
+        },
+        {
+          "path": "client_utils",
+          "type": "tree",
+          "object": "7862627d9dc1ab001198944505d2335a28ea9764",
+          "mode": 16384
+        },
+        {
+          "path": "include",
+          "type": "tree",
+          "object": "e99ae840f1f671237e2cc53b060f2c42eafd45d9",
+          "mode": 16384
+        },
+        {
+          "path": "modules/skcms",
+          "type": "tree",
+          "object": "b8b761be084bc8ee73a10c3b2f075ad8b74db60b",
+          "mode": 16384
+        },
+        {
+          "path": "src",
+          "type": "tree",
+          "object": "e530185b2c559a668937a8ce76f43792c0d4aa90",
+          "mode": 16384
+        },
+        {
+          "path": "tools/SkSharingProc.cpp",
+          "type": "blob",
+          "object": "c2803b32ed07d8558bdcfa56ceebfa0d134beeb9",
+          "mode": 33188
+        },
+        {
+          "path": "tools/SkSharingProc.h",
+          "type": "blob",
+          "object": "d51c8782f8b8752cb6acd2da5dc537c1442328e1",
+          "mode": 33188
+        },
+        {
+          "path": "vma_android",
+          "type": "tree",
+          "object": "1844d1c4bcd0aa3fe6cc62d3b571962412ba296b",
+          "mode": 16384
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "e32636d5668d51ca7a938ae6cef93c795c656d7c",
+          "mode": 33188,
+          "output": "skia/LICENSE"
+        },
+        {
+          "path": "NOTICE",
+          "type": "blob",
+          "object": "41570e88f9920aed39cfae8cc0f2bb6ed5b5683f",
+          "mode": 33188,
+          "output": "skia/NOTICE"
+        },
+        {
+          "path": "vma_android/LICENSE.txt",
+          "type": "blob",
+          "object": "fcf8b67de1f433634963108bee518f51ddee71f5",
+          "mode": 33188,
+          "output": "skia-vma-android/LICENSE.txt"
+        }
+      ]
+    },
+    {
+      "key": "av",
+      "alias": "av",
+      "project": "platform/frameworks/av",
+      "repository": "https://android.googlesource.com/platform/frameworks/av",
+      "revision": "4b2111885ff934799e70eddae2527a9848c3be29",
+      "gitTree": "00dea032dd130b3a5db9a9dc7b0af4447ed68fc2",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "checks": [
+        {
+          "path": "media/libheif/include",
+          "type": "tree",
+          "object": "2fc4eade958592b6b385b6e904812d27f705f7bc",
+          "mode": 16384
+        },
+        {
+          "path": "media/libstagefright/include",
+          "type": "tree",
+          "object": "53cdc1b8bc08acfa7256148b77b75318e69d6495",
+          "mode": 16384
+        },
+        {
+          "path": "media/libstagefright/omx/include",
+          "type": "tree",
+          "object": "2aa2911a1f926d2b0f9dfbede6992d4a9fc020ea",
+          "mode": 16384
+        },
+        {
+          "path": "media/module/foundation/include",
+          "type": "tree",
+          "object": "4f5ee547f668adbc10ee66f890c5540344def088",
+          "mode": 16384
+        },
+        {
+          "path": "media/ndk/include",
+          "type": "tree",
+          "object": "b05bf9b834079095b423ef734aa2eed45936bf1d",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "core",
+      "alias": "core",
+      "project": "platform/system/core",
+      "repository": "https://android.googlesource.com/platform/system/core",
+      "revision": "68be0c2c0006a0740d0b1809abe4717308f90d15",
+      "gitTree": "4764fb7af8b29a350fd2ed2b60d0772dbeebb58f",
+      "licensePaths": [
+        "libutils/NOTICE",
+        "libcutils/NOTICE"
+      ],
+      "checks": [
+        {
+          "path": "libcutils/include",
+          "type": "tree",
+          "object": "4268f5736daa8737e18abac2c8968e8dc27ffeb3",
+          "mode": 16384
+        },
+        {
+          "path": "libprocessgroup/include",
+          "type": "tree",
+          "object": "e8a54dd4662fb1a55eab3e5af69d4626d872b33b",
+          "mode": 16384
+        },
+        {
+          "path": "libstats",
+          "type": "tree",
+          "object": "c4d91d2bda21cf5cceefd1a431e1278dd42e9d0d",
+          "mode": 16384
+        },
+        {
+          "path": "libsync/include",
+          "type": "tree",
+          "object": "76de55fb1cf141289c8bf95fcb13665317ecf4e9",
+          "mode": 16384
+        },
+        {
+          "path": "libsystem/include",
+          "type": "tree",
+          "object": "ec7f6045d24cc43adb53725a3829c8c08e9baf84",
+          "mode": 16384
+        },
+        {
+          "path": "libutils/Android.bp",
+          "type": "blob",
+          "object": "305cbf0a8834d90e83432b7cf24c1cd8b9670f12",
+          "mode": 33188
+        },
+        {
+          "path": "libutils/binder/include",
+          "type": "tree",
+          "object": "4874a25fef2b3ad0f60534fc724f88f473668acb",
+          "mode": 16384
+        },
+        {
+          "path": "libutils/include",
+          "type": "tree",
+          "object": "b46a2c594717fcb069f00fbbe7f86cc5fbb9bee3",
+          "mode": 16384
+        },
+        {
+          "path": "property_service/libpropertyinfoparser",
+          "type": "tree",
+          "object": "c19ad712bcb3c21f2c6db7681356e78d3ff1c8ce",
+          "mode": 16384
+        },
+        {
+          "path": "property_service/libpropertyinfoserializer",
+          "type": "tree",
+          "object": "42aafcf0d90244ea89e1b51b4ba2f08f628bf150",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "crabbyavif",
+      "alias": "crabbyavif",
+      "project": "platform/external/rust/crabbyavif",
+      "repository": "https://android.googlesource.com/platform/external/rust/crabbyavif",
+      "revision": "9f3e32a2ffc45466eaed69ad522080cbf67f827b",
+      "gitTree": "3b397c97b17029bef7934ad2d9b13db60bf19bd7",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "4db5ebb61534cc8692e0b70d285d1490fde05aa8",
+          "mode": 33188
+        },
+        {
+          "path": "Cargo.toml",
+          "type": "blob",
+          "object": "cdd294c7304497acf34b607f5b60adef2b0cbd5e",
+          "mode": 33188
+        },
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+          "mode": 33188
+        },
+        {
+          "path": "build.rs",
+          "type": "blob",
+          "object": "508726c646f66263cec2e310837cf4ca9f0f1850",
+          "mode": 33188
+        },
+        {
+          "path": "cbindgen.toml",
+          "type": "blob",
+          "object": "ea06850dbb278b31fd4b783318c38bb24922fda7",
+          "mode": 33188
+        },
+        {
+          "path": "include",
+          "type": "tree",
+          "object": "47e3ba2c682114dfc08864047fccb87d22235253",
+          "mode": 16384
+        },
+        {
+          "path": "src",
+          "type": "tree",
+          "object": "c7e864e3c729146d5b2de910165d90b6f8035186",
+          "mode": 16384
+        },
+        {
+          "path": "sys",
+          "type": "tree",
+          "object": "1c2706042f59e2eaeb848a8535dd3d01b1482f81",
+          "mode": 16384
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+          "mode": 33188,
+          "output": "sources/crabbyavif/LICENSE"
+        }
+      ]
+    },
+    {
+      "key": "dng",
+      "alias": "dng",
+      "project": "platform/external/dng_sdk",
+      "repository": "https://android.googlesource.com/platform/external/dng_sdk",
+      "revision": "4bcadf0d12acea137f176d15852ec275560da806",
+      "gitTree": "d2c0129581c79678afb2d439ffd6152ef5fc4605",
+      "licensePaths": [
+        "LICENSE",
+        "LICENSE.source_code",
+        "LICENSE.technology",
+        "NOTICE",
+        "PATENTS"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "f7933b35c74928fb04c7b8b38bcf0d30847cfbaa",
+          "mode": 33188
+        },
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "ad9c2722ae1dd2193fb787d978e8748db33632ab",
+          "mode": 33188
+        },
+        {
+          "path": "source",
+          "type": "tree",
+          "object": "27a2a1c3c6f3e3671aa94f565493a8aaa89a809d",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "expat",
+      "alias": "expat",
+      "project": "platform/external/expat",
+      "repository": "https://android.googlesource.com/platform/external/expat",
+      "revision": "7b60c4bbc175e795903c47ea9434289eb1d5e605",
+      "gitTree": "93fbda1c8c09bac7f47d2eb25a18a57d0f30db33",
+      "licensePaths": [
+        "COPYING",
+        "expat/COPYING"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "5537fb0def11b6305e12528b51e3d4f12b95fa2a",
+          "mode": 33188
+        },
+        {
+          "path": "COPYING",
+          "type": "blob",
+          "object": "ce9e5939291e45f9633f540efc6ae58a26c041ef",
+          "mode": 33188
+        },
+        {
+          "path": "expat/lib",
+          "type": "tree",
+          "object": "cd2def8a34f14116724d272ad2df4358016de1f8",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "fmq",
+      "alias": "fmq",
+      "project": "platform/system/libfmq",
+      "repository": "https://android.googlesource.com/platform/system/libfmq",
+      "revision": "674a2103f2bd9bd5505c58e83af3042be2a24adf",
+      "gitTree": "07558eb41bf16fad03941ddab8107810084feee4",
+      "licensePaths": [
+        "include/fmq/MessageQueue.h"
+      ],
+      "checks": [
+        {
+          "path": "base",
+          "type": "tree",
+          "object": "d6821400ac346ab3aa06f3b52f638c6d87ed208f",
+          "mode": 16384
+        },
+        {
+          "path": "include",
+          "type": "tree",
+          "object": "b96a40fa00a9849fe18937304e20f63815418d8e",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "freetype",
+      "alias": "freetype",
+      "project": "platform/external/freetype",
+      "repository": "https://android.googlesource.com/platform/external/freetype",
+      "revision": "d968d2541f7158e18ab22680bfa08a538019bf6a",
+      "gitTree": "6d2e75fbc0522d45d94f7b961d7db08849e49f07",
+      "licensePaths": [
+        "LICENSE.TXT",
+        "LICENSE",
+        "NOTICE",
+        "docs/FTL.TXT",
+        "LICENSE_APACHE2.TXT",
+        "LICENSE_MIT.TXT",
+        "LICENSE_BSD_3_CLAUSE.TXT",
+        "LICENSE_MIT_MODERN_VARIANT.TXT",
+        "builds/unix/LICENSE_GPLv2_WITH_AUTOCONF_EXCEPTION.TXT",
+        "builds/unix/LICENSE_GPLv3_WITH_AUTOCONF_EXCEPTION.TXT",
+        "src/gzip/LICENSE_ZLIB.TXT",
+        "LICENSE_FSFAP.TXT",
+        "docs/GPLv2.TXT"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "142865a06c867df3d449840820c430e592448ced",
+          "mode": 33188
+        },
+        {
+          "path": "LICENSE.TXT",
+          "type": "blob",
+          "object": "8b9ce9e2e6e32e71b2a3f4ec4a0c1308f1811083",
+          "mode": 33188
+        },
+        {
+          "path": "include",
+          "type": "tree",
+          "object": "7587ae805e8f2567b2a1d4f26e7985761b3132f3",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "giflib",
+      "alias": "giflib",
+      "project": "platform/external/giflib",
+      "repository": "https://android.googlesource.com/platform/external/giflib",
+      "revision": "ad011248e266cc1bad1489704cc214942231cf09",
+      "gitTree": "20142c1069ea081fd7485719a5aff18997f9745c",
+      "licensePaths": [
+        "NOTICE",
+        "COPYING"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "578569998fe87969bfeca8c91932c7f66ea96f80",
+          "mode": 33188
+        },
+        {
+          "path": "COPYING",
+          "type": "blob",
+          "object": "b9c0b50126076f30f0f9db7e940eac64e60febd6",
+          "mode": 33188
+        },
+        {
+          "path": "dgif_lib.c",
+          "type": "blob",
+          "object": "cbcf23f930e4b23f5d7047fe37de5984a5efc099",
+          "mode": 33188
+        },
+        {
+          "path": "egif_lib.c",
+          "type": "blob",
+          "object": "152686828680e0c0d188e80f096a0daa27a10fda",
+          "mode": 33188
+        },
+        {
+          "path": "gif_err.c",
+          "type": "blob",
+          "object": "0226194e00079083fc28e05715398f3551f7192d",
+          "mode": 33188
+        },
+        {
+          "path": "gif_hash.c",
+          "type": "blob",
+          "object": "ad777cd0bcac8be9d5251e6dda4da45b75e82114",
+          "mode": 33188
+        },
+        {
+          "path": "gif_hash.h",
+          "type": "blob",
+          "object": "e393d8060cd97f9fde7e6309faf9708aef776b55",
+          "mode": 33188
+        },
+        {
+          "path": "gif_lib.h",
+          "type": "blob",
+          "object": "b3c7b191b9198e2793812b5e7f452cd4ce521fd0",
+          "mode": 33188
+        },
+        {
+          "path": "gif_lib_private.h",
+          "type": "blob",
+          "object": "19578d4530c6495322941c6c31418d1aa200f361",
+          "mode": 33188
+        },
+        {
+          "path": "gifalloc.c",
+          "type": "blob",
+          "object": "47c653930f6df33a33ed219863ff82687b4ad420",
+          "mode": 33188
+        },
+        {
+          "path": "quantize.c",
+          "type": "blob",
+          "object": "11948767c14e22082b22c7c75aca6bc53688a5fd",
+          "mode": 33188
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "COPYING",
+          "type": "blob",
+          "object": "b9c0b50126076f30f0f9db7e940eac64e60febd6",
+          "mode": 33188,
+          "output": "sources/giflib/COPYING"
+        }
+      ]
+    },
+    {
+      "key": "hardware-interfaces",
+      "alias": "hardware-interfaces",
+      "project": "platform/hardware/interfaces",
+      "repository": "https://android.googlesource.com/platform/hardware/interfaces",
+      "revision": "5688f7eb1e117ed26e642a695de300b7683acb87",
+      "gitTree": "7a44469460ecc179cf6aa1dc937356a713132b9f",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "checks": [
+        {
+          "path": "common/aidl",
+          "type": "tree",
+          "object": "4faa083341393a2724b052424ff0c72fc66896ef",
+          "mode": 16384
+        },
+        {
+          "path": "drm/aidl",
+          "type": "tree",
+          "object": "9c9b8c6f0f08c931697dd04f875338fc90ac8800",
+          "mode": 16384
+        },
+        {
+          "path": "drm/common",
+          "type": "tree",
+          "object": "d601ec0b20229e498f182d486c4311eebf4482fc",
+          "mode": 16384
+        },
+        {
+          "path": "graphics/common",
+          "type": "tree",
+          "object": "43cca5d14a5dae54138c3274fbe501073975b236",
+          "mode": 16384
+        },
+        {
+          "path": "graphics/composer/aidl",
+          "type": "tree",
+          "object": "53dc89ba78ec9c8609bc1d3ee060a20850b616b2",
+          "mode": 16384
+        },
+        {
+          "path": "graphics/mapper/4.0",
+          "type": "tree",
+          "object": "3d0a4ac504688af3954f241d99d7c6410a0b7092",
+          "mode": 16384
+        },
+        {
+          "path": "graphics/bufferqueue/1.0",
+          "type": "tree",
+          "object": "1425618bfb4ea65fa93176ace7d1721d47acf46c",
+          "mode": 16384
+        },
+        {
+          "path": "graphics/bufferqueue/2.0",
+          "type": "tree",
+          "object": "dd8505ec357211bc55a313a659b84dd7fe047340",
+          "mode": 16384
+        },
+        {
+          "path": "media/1.0",
+          "type": "tree",
+          "object": "296eea41bc27c28f41da196e383180ecd5041443",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "harfbuzz",
+      "alias": "harfbuzz",
+      "project": "platform/external/harfbuzz_ng",
+      "repository": "https://android.googlesource.com/platform/external/harfbuzz_ng",
+      "revision": "e489c416b6f8d2a9a2e0e85b781d1e4a0c431401",
+      "gitTree": "2f53b1f88a75db56c87907932807a9d16b9327fe",
+      "licensePaths": [
+        "COPYING",
+        "NOTICE",
+        "LICENSE_APACHE2.TXT",
+        "LICENSE_ISC.TXT",
+        "LICENSE_OFL.TXT",
+        "src/ms-use/COPYING",
+        "LICENSE_MIT_MODERN_VARIANT.TXT",
+        "LICENSE_GPLv3_WITH_AUTOCONF_EXCEPTION.TXT",
+        "LICENSE_GPLv2.TXT",
+        "LICENSE_GPLv2_WITH_AUTOCONF_EXCEPTION.TXT",
+        "LICENSE_FSFAP.TXT",
+        "LICENSE_HPND_SELL_VARIANT.TXT",
+        "LICENSE"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "1c25b6c726160886e39cb5a72dac019fe43f4d1a",
+          "mode": 33188
+        },
+        {
+          "path": "NOTICE",
+          "type": "blob",
+          "object": "9d1056f40b1c56950c9434dc78e21d9e4a175dc6",
+          "mode": 33188
+        },
+        {
+          "path": "src",
+          "type": "tree",
+          "object": "09f9a25c9e1f12c4d4c4723bb7e6674a77194e0d",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "hidl",
+      "alias": "hidl",
+      "project": "platform/system/libhidl",
+      "repository": "https://android.googlesource.com/platform/system/libhidl",
+      "revision": "93f79786f64c02b71ba899a46c34829266f9c370",
+      "gitTree": "2998032cc3ad1d158c2f75e593464748485051f6",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "checks": [
+        {
+          "path": ".",
+          "type": "tree",
+          "object": "2998032cc3ad1d158c2f75e593464748485051f6",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "jpeg",
+      "alias": "jpeg",
+      "project": "platform/external/libjpeg-turbo",
+      "repository": "https://android.googlesource.com/platform/external/libjpeg-turbo",
+      "revision": "6cedbd6ff13946bef76a015693d02723b0d3226e",
+      "gitTree": "f2461a35fc068959be4a35b1a105fdb6b781e40f",
+      "licensePaths": [
+        "LICENSE.md"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "5cbb5e97e7f8ea7f86fc2e352a75187e3b88b56d",
+          "mode": 33188
+        },
+        {
+          "path": "LICENSE.md",
+          "type": "blob",
+          "object": "bf8a7fda7f57699207fafde0c19c9801fb143e28",
+          "mode": 33188
+        },
+        {
+          "path": "jconfig.h",
+          "type": "blob",
+          "object": "944a47887e209a093955ea8d12c056c17f992e3e",
+          "mode": 33188
+        },
+        {
+          "path": "jerror.h",
+          "type": "blob",
+          "object": "eb44a1140a2e2f8c9d50cfb23d95915f789024d4",
+          "mode": 33188
+        },
+        {
+          "path": "jmorecfg.h",
+          "type": "blob",
+          "object": "b33a991914ee729e0f4a8664a50859f54590dff5",
+          "mode": 33188
+        },
+        {
+          "path": "jpeglib.h",
+          "type": "blob",
+          "object": "a7179282089372deecb92d413b416f2bf6c1fc6f",
+          "mode": 33188
+        }
+      ]
+    },
+    {
+      "key": "libyuv",
+      "alias": "libyuv",
+      "project": "platform/external/libyuv",
+      "repository": "https://android.googlesource.com/platform/external/libyuv",
+      "revision": "741c38751c436f60c583110f617340b7f3322d94",
+      "gitTree": "1c4c5b9e7e1f989100c58eaa084a7066dbf64547",
+      "licensePaths": [
+        "LICENSE",
+        "PATENTS"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "e93b4b1e6dd8ea86a47dfad4f9a984bacb67954e",
+          "mode": 33188
+        },
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "c911747a6b53f063503992c3903d932f54cf6c57",
+          "mode": 33188
+        },
+        {
+          "path": "include",
+          "type": "tree",
+          "object": "00ad97dbe932596cd828755460f912ca21cb9d53",
+          "mode": 16384
+        },
+        {
+          "path": "source",
+          "type": "tree",
+          "object": "2b67f73c623c4a3024f22b2e55fc0561d9746555",
+          "mode": 16384
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "c911747a6b53f063503992c3903d932f54cf6c57",
+          "mode": 33188,
+          "output": "sources/libyuv/LICENSE"
+        },
+        {
+          "path": "PATENTS",
+          "type": "blob",
+          "object": "64aa5c90d8fd97484876870a6722163468e9c0e7",
+          "mode": 33188,
+          "output": "sources/libyuv/PATENTS"
+        }
+      ]
+    },
+    {
+      "key": "logging",
+      "alias": "logging",
+      "project": "platform/system/logging",
+      "repository": "https://android.googlesource.com/platform/system/logging",
+      "revision": "d78b713380007d3c0dde14712cbcbec27f491ad9",
+      "gitTree": "0ae00e20c933202462a9a3a3cf329635507bf93f",
+      "licensePaths": [
+        "liblog/NOTICE"
+      ],
+      "checks": [
+        {
+          "path": "liblog/include",
+          "type": "tree",
+          "object": "70241331f270ff7e82fc8cd23a2c98b509e27dd3",
+          "mode": 16384
+        },
+        {
+          "path": "rust",
+          "type": "tree",
+          "object": "469f58852f04b4d66870f0da28403f95340d8c90",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "minikin",
+      "alias": "minikin",
+      "project": "platform/frameworks/minikin",
+      "repository": "https://android.googlesource.com/platform/frameworks/minikin",
+      "revision": "1e1d5d137d487df875d7db69b5ff24e7d0291612",
+      "gitTree": "457579b53156accd5c3621e7d23d6c0e8c3b80a4",
+      "licensePaths": [
+        "include/minikin/Font.h"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "1dea8255943040dd9ccfd5cce8717ba141db7d4f",
+          "mode": 33188
+        },
+        {
+          "path": "include",
+          "type": "tree",
+          "object": "05c9bfdf76d6b09e9e0c944f8546e824db598fba",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "native",
+      "alias": "native",
+      "project": "platform/frameworks/native",
+      "repository": "https://android.googlesource.com/platform/frameworks/native",
+      "revision": "2827a4a16b0340ecd07c2d5a6c89991799b362bb",
+      "gitTree": "7b9b9705546fdad50c1a0dc6bd44cff755f12df6",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "a689b2d60117d9d4c78e84594a7451532d2aa7f5",
+          "mode": 33188
+        },
+        {
+          "path": "include",
+          "type": "tree",
+          "object": "ae648c209de78abd0fbe5fd3b6c4c6a28b02eaa7",
+          "mode": 16384
+        },
+        {
+          "path": "libs/arect",
+          "type": "tree",
+          "object": "558f6034ec2b25a6fbe41f33b5ae015294b01063",
+          "mode": 16384
+        },
+        {
+          "path": "libs/binder/aidl",
+          "type": "tree",
+          "object": "a50fe68a7e03ee067d689d7d8fd529c8be8c2ec8",
+          "mode": 16384
+        },
+        {
+          "path": "libs/binder/include",
+          "type": "tree",
+          "object": "f107f4e0f2c8d6cd50dcc9a0f39a5e18d5d192a7",
+          "mode": 16384
+        },
+        {
+          "path": "libs/binder/ndk/include_cpp",
+          "type": "tree",
+          "object": "100ff849088de2859a86abd7244eb647a0eb1926",
+          "mode": 16384
+        },
+        {
+          "path": "libs/binder/ndk/include_ndk",
+          "type": "tree",
+          "object": "3ffa05e57b5abf28c9fcabeed4042ab06d575673",
+          "mode": 16384
+        },
+        {
+          "path": "libs/binder/ndk/include_platform",
+          "type": "tree",
+          "object": "66dceb5566f68235224255321e7ff37ef02f00c2",
+          "mode": 16384
+        },
+        {
+          "path": "libs/ftl",
+          "type": "tree",
+          "object": "06ce418f79bf026354fe1a100ccd402f42455d8a",
+          "mode": 16384
+        },
+        {
+          "path": "libs/graphicsenv",
+          "type": "tree",
+          "object": "d4a9262c76d58a6b9fad7e008f4c5decd14452ff",
+          "mode": 16384
+        },
+        {
+          "path": "libs/gui",
+          "type": "tree",
+          "object": "838d42eea940cb4033a1d86c865f3dd6a9562539",
+          "mode": 16384
+        },
+        {
+          "path": "libs/math",
+          "type": "tree",
+          "object": "73826b8db3c9c78351e28c9009aaac72e4b6861f",
+          "mode": 16384
+        },
+        {
+          "path": "libs/nativebase/include",
+          "type": "tree",
+          "object": "a350bb407fad40dc2b570184ecabce4cf7e998cd",
+          "mode": 16384
+        },
+        {
+          "path": "libs/nativedisplay",
+          "type": "tree",
+          "object": "c9dbde66f5835e07a6bcc535345ee39fbff3e7b8",
+          "mode": 16384
+        },
+        {
+          "path": "libs/nativewindow",
+          "type": "tree",
+          "object": "43a9f4a564f8242259b9968946e0dff90ca336d0",
+          "mode": 16384
+        },
+        {
+          "path": "libs/shaders",
+          "type": "tree",
+          "object": "748e75774e1bb305dcfb685854d185513bb56479",
+          "mode": 16384
+        },
+        {
+          "path": "libs/tonemap",
+          "type": "tree",
+          "object": "907bdb88ec72e48ca243e5bc2d5c7474d003ccbf",
+          "mode": 16384
+        },
+        {
+          "path": "libs/ui",
+          "type": "tree",
+          "object": "28fccc2b5c9b0ee4c640571afebabdf03dce1dc0",
+          "mode": 16384
+        },
+        {
+          "path": "opengl/include",
+          "type": "tree",
+          "object": "90121fb39fc3b5719d0ecfc504bf898131e51283",
+          "mode": 16384
+        },
+        {
+          "path": "opengl/libs/Android.bp",
+          "type": "blob",
+          "object": "eb747c767eaf814b579ca9a92a733d93b522e3d1",
+          "mode": 33188
+        },
+        {
+          "path": "opengl/libs/EGL",
+          "type": "tree",
+          "object": "6603a535a74a0a5ad4cef45bdda804fd0c402d0c",
+          "mode": 16384
+        },
+        {
+          "path": "services/surfaceflinger/surfaceflinger_flags.aconfig",
+          "type": "blob",
+          "object": "56bca7fb187832d0889d6c83d932325e4d2d2f11",
+          "mode": 33188
+        },
+        {
+          "path": "services/surfaceflinger/surfaceflinger_flags_new.aconfig",
+          "type": "blob",
+          "object": "e8b75cfa6def6212c7d01f0e48f261d03b576ff0",
+          "mode": 33188
+        },
+        {
+          "path": "vulkan/include",
+          "type": "tree",
+          "object": "5c342cba8ada4712c381eb1d2e25b87d0999d683",
+          "mode": 16384
+        },
+        {
+          "path": "headers/media_plugin/media/hardware/VideoAPI.h",
+          "type": "blob",
+          "object": "54666804c06e3373f1274659608d4412bed89411",
+          "mode": 33188
+        },
+        {
+          "path": "libs/input/Android.bp",
+          "type": "blob",
+          "object": "52e0276cad3a3e51a66c0a3be5f0c0321cd80efd",
+          "mode": 33188
+        },
+        {
+          "path": "libs/input/android/os/IInputConstants.aidl",
+          "type": "blob",
+          "object": "4b87dab01bbffbd4b59f778e147ee3388c3fa962",
+          "mode": 33188
+        },
+        {
+          "path": "libs/input/android/os/InputConfig.aidl",
+          "type": "blob",
+          "object": "e5f7b56561c314c5a190e63aa1c66b12ec058a22",
+          "mode": 33188
+        },
+        {
+          "path": "libs/input/android/os/InputEventInjectionResult.aidl",
+          "type": "blob",
+          "object": "e80c2a52dc9857e7badd3f33422adce539bd6c62",
+          "mode": 33188
+        },
+        {
+          "path": "libs/input/android/os/InputEventInjectionSync.aidl",
+          "type": "blob",
+          "object": "2d225fa452e4962bc5f91e4628fad922fb26d8ff",
+          "mode": 33188
+        },
+        {
+          "path": "libs/input/android/os/MotionEventFlag.aidl",
+          "type": "blob",
+          "object": "6c9ccfbd044654125d48b864e58c7bb9b3f216b2",
+          "mode": 33188
+        },
+        {
+          "path": "libs/input/android/os/PointerIconType.aidl",
+          "type": "blob",
+          "object": "f244c62ed6564ecc838cf8b45a83e3d1a06ec406",
+          "mode": 33188
+        }
+      ]
+    },
+    {
+      "key": "pdfium",
+      "alias": "pdfium",
+      "project": "platform/external/pdfium",
+      "repository": "https://android.googlesource.com/platform/external/pdfium",
+      "revision": "61aafefc3df2bda22588c7764d1177018f0af4e4",
+      "gitTree": "f4b650487ba4f7b037da33b5e102d1842660f18a",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "971bc6c4f1f6817426782d0f97d22da42e3d182b",
+          "mode": 33188
+        },
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "161ca160d6fa51df6e3e594aeb2b1097b55e3866",
+          "mode": 33188
+        },
+        {
+          "path": "public",
+          "type": "tree",
+          "object": "45c0a16ae67c6a235d08e0d4c6f470a4a42fff60",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "perfetto",
+      "alias": "perfetto",
+      "project": "platform/external/perfetto",
+      "repository": "https://android.googlesource.com/platform/external/perfetto",
+      "revision": "94a71474cc396db2b0fcff6755b8f2d3f7e304d0",
+      "gitTree": "b7ef010a0fe366666cfeb207a4bb9b98c78a3927",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "97934508a92502a0ed23479356ebc5622ad3edd1",
+          "mode": 33188
+        },
+        {
+          "path": "CHANGELOG",
+          "type": "blob",
+          "object": "28b15e7c92f6878c3f101fe412e12af3e6d25129",
+          "mode": 33188
+        },
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "bbcb67ccd64692c0e9df4aa87a7277d5b300f0f7",
+          "mode": 33188
+        },
+        {
+          "path": "include",
+          "type": "tree",
+          "object": "2711381a61cb42aaacbcd1850cd4ff881c5bfe0f",
+          "mode": 16384
+        },
+        {
+          "path": "protos",
+          "type": "tree",
+          "object": "ec0466451c87f079d55cbaf79b47dd56020450b9",
+          "mode": 16384
+        },
+        {
+          "path": "src",
+          "type": "tree",
+          "object": "554726fa2959d1fc3ee419e9f25d24536fce32ac",
+          "mode": 16384
+        },
+        {
+          "path": "tools/write_version_header.py",
+          "type": "blob",
+          "object": "170f24ae793b2d3e407e0049faf1731c642bbe98",
+          "mode": 33261
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "bbcb67ccd64692c0e9df4aa87a7277d5b300f0f7",
+          "mode": 33188,
+          "output": "perfetto/LICENSE"
+        }
+      ]
+    },
+    {
+      "key": "piex",
+      "alias": "piex",
+      "project": "platform/external/piex",
+      "repository": "https://android.googlesource.com/platform/external/piex",
+      "revision": "6d3d1e7dc6e4b0d348c60160f5a9397a28eae630",
+      "gitTree": "7682f4e7561d1bd71e9b7415e419697bd1bb4df1",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "e27638f9830f516f26b5b28e4ace303aceb0ee00",
+          "mode": 33188
+        },
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "7a4a3ea2424c09fbe48d455aed1eaa94d9124835",
+          "mode": 33261
+        },
+        {
+          "path": "src",
+          "type": "tree",
+          "object": "1750a60c3ff56bc0ca82d650680b69705a2f4726",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "png",
+      "alias": "png",
+      "project": "platform/external/libpng",
+      "repository": "https://android.googlesource.com/platform/external/libpng",
+      "revision": "6dd415783321a0c670387f0a5d51776b2c1f629a",
+      "gitTree": "b91036e48d064fe0abca44d7e89ae2636d18103a",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "d565f7d6d45505fb796172ec1f2a21c6b8beb4c7",
+          "mode": 33188
+        },
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "25f298f0fcfd8757bbd9a6386d8fcb2d644cfce9",
+          "mode": 33188
+        },
+        {
+          "path": "png.h",
+          "type": "blob",
+          "object": "04a233f393edb00c0146ad96aac5824555e6af83",
+          "mode": 33188
+        },
+        {
+          "path": "pngconf.h",
+          "type": "blob",
+          "object": "4a4b58ac81e2c4239069d625057c53f70bf4fa35",
+          "mode": 33188
+        },
+        {
+          "path": "pnglibconf.h",
+          "type": "blob",
+          "object": "9873bcf196f2cb10cd859bfae72f901b6970b70c",
+          "mode": 33188
+        }
+      ]
+    },
+    {
+      "key": "proto_logging",
+      "alias": "proto_logging",
+      "project": "platform/frameworks/proto_logging",
+      "repository": "https://android.googlesource.com/platform/frameworks/proto_logging",
+      "revision": "29d96a39adaffda3ad1b08ae17b6befbe2a625fa",
+      "gitTree": "c57d5da93d0c3003f9498093fb1d01a52060cc06",
+      "licensePaths": [
+        "stats/stats_log_api_gen/native_writer.h"
+      ],
+      "checks": [
+        {
+          "path": "stats",
+          "type": "tree",
+          "object": "e635db14f54cd4cdfabfe48674661d4580869094",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "protobuf",
+      "alias": "protobuf",
+      "project": "platform/external/protobuf",
+      "repository": "https://android.googlesource.com/platform/external/protobuf",
+      "revision": "da98e5a6593907dd162bb6c206570c0afa5326ac",
+      "gitTree": "089efd81aa5326d912c72894b71c09b0431be5a4",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "checks": [
+        {
+          "path": "CMakeLists.txt",
+          "type": "blob",
+          "object": "04cb3303ac6a5f1e79945edbe30c88f1a8659e7d",
+          "mode": 33188
+        },
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "19b305b00060a774a9180fb916c14b49edb2008f",
+          "mode": 33188
+        },
+        {
+          "path": "cmake",
+          "type": "tree",
+          "object": "d89903d57094f4a5a6299d11b3a4e0ad7262fb72",
+          "mode": 16384
+        },
+        {
+          "path": "config",
+          "type": "tree",
+          "object": "ff2d8ce3d1e73ad0faf49dcfe9de1a79a09f0618",
+          "mode": 16384
+        },
+        {
+          "path": "configure.ac",
+          "type": "blob",
+          "object": "7243fd3118e9497b35df14e6e67d11759ac32e18",
+          "mode": 33188
+        },
+        {
+          "path": "src",
+          "type": "tree",
+          "object": "020668458445117f97210e22cc4e569f7f657790",
+          "mode": 16384
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "19b305b00060a774a9180fb916c14b49edb2008f",
+          "mode": 33188,
+          "output": "protobuf/LICENSE"
+        }
+      ]
+    },
+    {
+      "key": "statsd",
+      "alias": "statsd",
+      "project": "platform/packages/modules/StatsD",
+      "repository": "https://android.googlesource.com/platform/packages/modules/StatsD",
+      "revision": "8022cc37e35d424fb0eab65f79cd272759b5dc54",
+      "gitTree": "57d633f9abf34f9bca3f5751979324e414506224",
+      "licensePaths": [
+        "service/Android.bp"
+      ],
+      "checks": [
+        {
+          "path": "lib/libstatspull",
+          "type": "tree",
+          "object": "ddc720001b3b9c509beae133dc9428b8a9a8b569",
+          "mode": 16384
+        },
+        {
+          "path": "lib/libstatssocket",
+          "type": "tree",
+          "object": "0f852605d040a42442dbb721f3290406074ee606",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "sysprop",
+      "alias": "sysprop",
+      "project": "platform/system/tools/sysprop",
+      "repository": "https://android.googlesource.com/platform/system/tools/sysprop",
+      "revision": "5612a6cb5b56b654f6cd4f1c955606b732a62710",
+      "gitTree": "26973af5cd61a498d842fa9a8956b519afcc0478",
+      "licensePaths": [
+        "CppGen.cpp"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "3b7c4676d0b59cdc501863d6f20a2b5fae7ed761",
+          "mode": 33188
+        },
+        {
+          "path": "CodeWriter.cpp",
+          "type": "blob",
+          "object": "62b73305e1954d9c4175d18c4e6e55a8ee5ec593",
+          "mode": 33188
+        },
+        {
+          "path": "Common.cpp",
+          "type": "blob",
+          "object": "fc64099dddc8287eaf02b6239e86d096a223abf1",
+          "mode": 33188
+        },
+        {
+          "path": "CppGen.cpp",
+          "type": "blob",
+          "object": "58efde27c0533971355c667fffa80c0d1a2b743b",
+          "mode": 33188
+        },
+        {
+          "path": "CppMain.cpp",
+          "type": "blob",
+          "object": "6f280fc1873d244878391fe5a8371098f43698ff",
+          "mode": 33188
+        },
+        {
+          "path": "include",
+          "type": "tree",
+          "object": "8169228d9209a60a0c64eb3c03b09fce3b05908d",
+          "mode": 16384
+        },
+        {
+          "path": "sysprop.proto",
+          "type": "blob",
+          "object": "29922d8928733b23310e2ff0cde0281fcb15bb23",
+          "mode": 33188
+        }
+      ]
+    },
+    {
+      "key": "ultrahdr",
+      "alias": "ultrahdr",
+      "project": "platform/external/libultrahdr",
+      "repository": "https://android.googlesource.com/platform/external/libultrahdr",
+      "revision": "8ca5f9daff887eb2fd412bb66e00f850f582a3f5",
+      "gitTree": "527f8e19cc05aaf5ba0a0ceaa7c03eb844b0e202",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "09ee9d5e15d6797316561f29993cbab4e6666759",
+          "mode": 33188
+        },
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+          "mode": 33188
+        },
+        {
+          "path": "lib/include",
+          "type": "tree",
+          "object": "74c44f9dcd39173ece97f196e42b3918393a33cb",
+          "mode": 16384
+        },
+        {
+          "path": "ultrahdr_api.h",
+          "type": "blob",
+          "object": "43b83734f58b2c14a29d5453379290ba0f91a8b9",
+          "mode": 33188
+        }
+      ]
+    },
+    {
+      "key": "webp",
+      "alias": "webp",
+      "project": "platform/external/webp",
+      "repository": "https://android.googlesource.com/platform/external/webp",
+      "revision": "7698c1d3a5cbecdf336510eeb3366d1de752454a",
+      "gitTree": "4b74f00fda44350bd83767eccdb16ce22a000bbe",
+      "licensePaths": [
+        "COPYING",
+        "NOTICE",
+        "PATENTS",
+        "LICENSE"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "e0389cc25e9b592c2b5a6167b808c646e61e8075",
+          "mode": 33188
+        },
+        {
+          "path": "COPYING",
+          "type": "blob",
+          "object": "7a6f99547d4d6b4c5e6d5321acfaeba313e08de3",
+          "mode": 33188
+        },
+        {
+          "path": "sharpyuv",
+          "type": "tree",
+          "object": "0a36cba63da2580e1c6ace083b33b48ca5022e14",
+          "mode": 16384
+        },
+        {
+          "path": "src",
+          "type": "tree",
+          "object": "1dc56b9ef1b646cdcade88ddba0bed8ce570e64d",
+          "mode": 16384
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "COPYING",
+          "type": "blob",
+          "object": "7a6f99547d4d6b4c5e6d5321acfaeba313e08de3",
+          "mode": 33188,
+          "output": "sources/webp/COPYING"
+        },
+        {
+          "path": "PATENTS",
+          "type": "blob",
+          "object": "caedf607e95ae4c3dc84d057fddcc301cd0e4863",
+          "mode": 33188,
+          "output": "sources/webp/PATENTS"
+        }
+      ]
+    },
+    {
+      "key": "wuffs",
+      "alias": "wuffs",
+      "project": "platform/external/wuffs-mirror-release-c",
+      "repository": "https://android.googlesource.com/platform/external/wuffs-mirror-release-c",
+      "revision": "ecaeabeb59e4fb29313f893ead3c9d90dc2fb586",
+      "gitTree": "fbe2fc2383d6e05c79f986863b3f04c437ded070",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "checks": [
+        {
+          "path": "Android.bp",
+          "type": "blob",
+          "object": "c92840577fc5eee533ceca26833abf54b963e2bd",
+          "mode": 33188
+        },
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+          "mode": 33188
+        },
+        {
+          "path": "release/c/wuffs-v0.3.c",
+          "type": "blob",
+          "object": "91181f8c558b691396fee939ee7b61978ce3ee56",
+          "mode": 33188
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+          "mode": 33188,
+          "output": "sources/wuffs/LICENSE"
+        }
+      ]
+    },
+    {
+      "key": "frameworkLegacy",
+      "project": "platform/frameworks/base",
+      "repository": "https://android.googlesource.com/platform/frameworks/base",
+      "revision": "4e43ad12e1b211f15152e9c5b16b0fe88e6b93f3",
+      "gitTree": "9583c6d9586b84169697623a44af09e8ac3d79b9",
+      "licensePaths": [
+        "core/java/android/content/UriMatcher.java",
+        "data/fonts/NOTICE",
+        "NOTICE",
+        "libs/hwui/NOTICE"
+      ],
+      "checks": [
+        {
+          "path": ".",
+          "type": "tree",
+          "object": "9583c6d9586b84169697623a44af09e8ac3d79b9",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "nativehelper",
+      "project": "platform/libnativehelper",
+      "repository": "https://android.googlesource.com/platform/libnativehelper",
+      "revision": "5c36ece5ac42b20f0e384d9e57400f2f22aad9fb",
+      "gitTree": "6e2c5f30d8fb68dbfa7b0e36388a10697b755743",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "checks": [
+        {
+          "path": ".",
+          "type": "tree",
+          "object": "6e2c5f30d8fb68dbfa7b0e36388a10697b755743",
+          "mode": 16384
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "NOTICE",
+          "type": "blob",
+          "object": "c5b1efa7aac764ae6d8da63476a2d5cec02a6a5d",
+          "mode": 33188,
+          "output": "sources/aosp-libnativehelper/NOTICE"
+        }
+      ]
+    },
+    {
+      "key": "bionic",
+      "project": "platform/bionic",
+      "repository": "https://android.googlesource.com/platform/bionic",
+      "revision": "09a271af557444c9a6b3f3146d6d474156fd6cdb",
+      "gitTree": "1bac74d22fb909b11f577743371b34bcc4966d15",
+      "licensePaths": [
+        "libc/NOTICE"
+      ],
+      "checks": [
+        {
+          "path": "libc/platform/bionic/android_unsafe_frame_pointer_chase.h",
+          "type": "blob",
+          "object": "406ad9223c20369a7e2b70e37b3530b7e590c395",
+          "mode": 33188
+        },
+        {
+          "path": "libc/platform/bionic/crash_detail_internal.h",
+          "type": "blob",
+          "object": "d8508a5096ecdf72f82515ec3487b107e2d8119b",
+          "mode": 33188
+        },
+        {
+          "path": "libc/platform/bionic/fdtrack.h",
+          "type": "blob",
+          "object": "7fc304af1501fcd2eb73105d0c1d899417307ee3",
+          "mode": 33188
+        },
+        {
+          "path": "libc/platform/bionic/macros.h",
+          "type": "blob",
+          "object": "c4af3b9eb38781f63c1085af74e23dbfb255a16a",
+          "mode": 33188
+        },
+        {
+          "path": "libc/platform/bionic/malloc.h",
+          "type": "blob",
+          "object": "da85cf526b0e277956d9c76f0353b5f2e9f5e549",
+          "mode": 33188
+        },
+        {
+          "path": "libc/platform/bionic/mte.h",
+          "type": "blob",
+          "object": "27cbae1d15b2d21000e6174d28736dc2966d2c31",
+          "mode": 33188
+        },
+        {
+          "path": "libc/platform/bionic/pac.h",
+          "type": "blob",
+          "object": "34efc48aea9e94b618c79856faa0055dbb37763f",
+          "mode": 33188
+        },
+        {
+          "path": "libc/platform/bionic/page.h",
+          "type": "blob",
+          "object": "4dbe4baeab6b80e184be6740ca3cf2d69e9711a9",
+          "mode": 33188
+        },
+        {
+          "path": "libc/platform/bionic/reserved_signals.h",
+          "type": "blob",
+          "object": "1c7076b0ccba2d580c1b8faae4bf69f451f20e54",
+          "mode": 33188
+        },
+        {
+          "path": "libc/platform/bionic/tls.h",
+          "type": "blob",
+          "object": "3e0ef53c652c2f8ee4e7a0feb162b7b95ce4e87e",
+          "mode": 33188
+        },
+        {
+          "path": "libc/platform/bionic/tls_defines.h",
+          "type": "blob",
+          "object": "dd3563d674386ce1288792812222da95847a2bae",
+          "mode": 33188
+        },
+        {
+          "path": "libc/platform/scudo_platform_tls_slot.h",
+          "type": "blob",
+          "object": "a86b828f21eedf5f76b980f239e83a9134cca605",
+          "mode": 33188
+        }
+      ]
+    },
+    {
+      "key": "incfs",
+      "project": "platform/system/incremental_delivery",
+      "repository": "https://android.googlesource.com/platform/system/incremental_delivery",
+      "revision": "c999e3e207ec7633a172d773dda162746b6eaf18",
+      "gitTree": "e58b67636511af2cae18c475e548c8313f65572e",
+      "licensePaths": [
+        "incfs/NOTICE",
+        "libdataloader/NOTICE"
+      ],
+      "checks": [
+        {
+          "path": ".",
+          "type": "tree",
+          "object": "e58b67636511af2cae18c475e548c8313f65572e",
+          "mode": 16384
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "incfs/NOTICE",
+          "type": "blob",
+          "object": "9f460527a821be59a0070aabec78436732fa1594",
+          "mode": 33188,
+          "output": "sources/aosp-incremental-delivery/incfs/NOTICE"
+        }
+      ]
+    },
+    {
+      "key": "ziparchive",
+      "project": "platform/system/libziparchive",
+      "repository": "https://android.googlesource.com/platform/system/libziparchive",
+      "revision": "8c51527debf9394dfa515f7e6c7941d2720c6d01",
+      "gitTree": "ec90603179b014abf479ec803638204531ecea60",
+      "licensePaths": [
+        "Android.bp"
+      ],
+      "checks": [
+        {
+          "path": ".",
+          "type": "tree",
+          "object": "ec90603179b014abf479ec803638204531ecea60",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "fmt",
+      "project": "platform/external/fmtlib",
+      "repository": "https://android.googlesource.com/platform/external/fmtlib",
+      "revision": "b94c6ae0bc963c4f38bce355fe74bec30eaf0be2",
+      "gitTree": "a07c98f7895ff34751cf729f3ad08b461ecb2260",
+      "licensePaths": [
+        "LICENSE",
+        "NOTICE"
+      ],
+      "checks": [
+        {
+          "path": "include",
+          "type": "tree",
+          "object": "94d983f5563e4168434fa36857bc3ccd65e744c3",
+          "mode": 16384
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "1cd1ef92696b65b2ecb0e560e622f0a0e869dcf3",
+          "mode": 33188,
+          "output": "sources/aosp-fmt/LICENSE"
+        },
+        {
+          "path": "NOTICE",
+          "type": "blob",
+          "object": "eb6be6503e93cc384f912841c7c7cbc65e5aa709",
+          "mode": 33188,
+          "output": "sources/aosp-fmt/NOTICE"
+        }
+      ]
+    },
+    {
+      "key": "libhardware",
+      "project": "platform/hardware/libhardware",
+      "repository": "https://android.googlesource.com/platform/hardware/libhardware",
+      "revision": "cd2b68d71a1dd9a45668ddd9a507000ccd7ff114",
+      "gitTree": "159a6cefc1a1df378ce0e7145291422047a03cc6",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "checks": [
+        {
+          "path": ".",
+          "type": "tree",
+          "object": "159a6cefc1a1df378ce0e7145291422047a03cc6",
+          "mode": 16384
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "NOTICE",
+          "type": "blob",
+          "object": "c5b1efa7aac764ae6d8da63476a2d5cec02a6a5d",
+          "mode": 33188,
+          "output": "sources/aosp-libhardware/NOTICE"
+        }
+      ]
+    },
+    {
+      "key": "boringssl",
+      "project": "platform/external/boringssl",
+      "repository": "https://android.googlesource.com/platform/external/boringssl",
+      "revision": "ecc1358826150d6a1851c517c325b0e6c0e1b8be",
+      "gitTree": "cb920d76df247d1b99c7a80d9cef2540cfe1eabf",
+      "licensePaths": [
+        "NOTICE"
+      ],
+      "checks": [
+        {
+          "path": ".",
+          "type": "tree",
+          "object": "cb920d76df247d1b99c7a80d9cef2540cfe1eabf",
+          "mode": 16384
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "src/LICENSE",
+          "type": "blob",
+          "object": "3aa5aa6911da87a6dd95105c27b0e0aed946970c",
+          "mode": 33188,
+          "output": "sources/aosp-boringssl/LICENSE"
+        },
+        {
+          "path": "NOTICE",
+          "type": "blob",
+          "object": "3aa5aa6911da87a6dd95105c27b0e0aed946970c",
+          "mode": 33188,
+          "output": "sources/aosp-boringssl/NOTICE"
+        }
+      ]
+    },
+    {
+      "key": "rustutils",
+      "project": "platform/system/librustutils",
+      "repository": "https://android.googlesource.com/platform/system/librustutils",
+      "revision": "1110a8083ad83dc1b77c1cd03d39665555a34521",
+      "gitTree": "4337812903fbfb09dd9b6c5fb0850c4f284d3dd3",
+      "licensePaths": [
+        "lib.rs"
+      ],
+      "checks": [
+        {
+          "path": ".",
+          "type": "tree",
+          "object": "4337812903fbfb09dd9b6c5fb0850c4f284d3dd3",
+          "mode": 16384
+        }
+      ]
+    },
+    {
+      "key": "googletest",
+      "project": "platform/external/googletest",
+      "repository": "https://android.googlesource.com/platform/external/googletest",
+      "revision": "ed43ae9f2f62df2b77e2400da414c126e7203e7a",
+      "gitTree": "1945169f458807ba86c8b75812e11613fd4bac77",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "checks": [
+        {
+          "path": "googletest/include/gtest/gtest_prod.h",
+          "mode": 33188,
+          "type": "blob",
+          "name": "gtest_prod.h",
+          "object": "1f37dc31c347228e21f2474e1dbf0aed6b988189"
+        }
+      ],
+      "noticeChecks": [
+        {
+          "path": "LICENSE",
+          "type": "blob",
+          "object": "1941a11f8ce94389160b458927a29ba217542818",
+          "mode": 33188,
+          "output": "googletest/LICENSE"
+        }
+      ]
+    },
+    {
+      "key": "soong",
+      "project": "platform/build/soong",
+      "repository": "https://android.googlesource.com/platform/build/soong",
+      "revision": "533c3c2c9166b49caa556518bb547d8f9acf9594",
+      "gitTree": "a31a40af88d891bd6ad1ac41e95c9e8bf28d1e29",
+      "licensePaths": [
+        "cc/config/global.go"
+      ],
+      "checks": [
+        {
+          "path": "cc/config/integer_overflow_blocklist.txt",
+          "type": "blob",
+          "object": "3480c3c08dba15fe20cbd2dfe4d28674a5886088",
+          "mode": 33188
+        }
+      ]
+    }
+  ],
+  "derivedWork": {
+    "source": "module/source",
+    "gen": "module/gen",
+    "adapted": "module/adapted",
+    "objects": "module/objects",
+    "components": "module/components",
+    "link": "module/link"
+  },
+  "includes": [
+    {
+      "work": "module/gen/libcxx"
+    },
+    {
+      "work": "module/gen/include"
+    },
+    {
+      "work": "module/adapted/framework/libs/hwui"
+    },
+    {
+      "work": "module/adapted/framework/libs/hwui/platform/android"
+    },
+    {
+      "work": "module/adapted/framework/libs/hwui/jni"
+    },
+    {
+      "work": "module/adapted/framework/libs/hwui/apex/include"
+    },
+    {
+      "work": "module/source/skia/android"
+    },
+    {
+      "work": "module/source/skia"
+    },
+    {
+      "work": "module/source/skia/client_utils/android"
+    },
+    {
+      "work": "module/source/skia/include/android"
+    },
+    {
+      "work": "module/source/skia/include/codec"
+    },
+    {
+      "work": "module/source/skia/include/config"
+    },
+    {
+      "work": "module/source/skia/include/core"
+    },
+    {
+      "work": "module/source/skia/include/docs"
+    },
+    {
+      "work": "module/source/skia/include/effects"
+    },
+    {
+      "work": "module/source/skia/include/encode"
+    },
+    {
+      "work": "module/source/skia/include/gpu"
+    },
+    {
+      "work": "module/source/skia/include/pathops"
+    },
+    {
+      "work": "module/source/skia/include/ports"
+    },
+    {
+      "work": "module/source/skia/include/svg"
+    },
+    {
+      "work": "module/source/skia/include/utils"
+    },
+    {
+      "work": "module/source/skia/include/utils/mac"
+    },
+    {
+      "work": "module/source/skia/modules/skottie/include"
+    },
+    {
+      "work": "module/source/skia/modules/skparagraph/include"
+    },
+    {
+      "work": "module/source/skia/modules/skshaper/include"
+    },
+    {
+      "work": "module/source/skia/modules/svg/include"
+    },
+    {
+      "work": "module/source/skia"
+    },
+    {
+      "work": "module/source/skia/android"
+    },
+    {
+      "work": "module/source/skia/include/private"
+    },
+    {
+      "work": "module/source/skia/src/core"
+    },
+    {
+      "work": "module/source/skia/src/utils"
+    },
+    {
+      "work": "module/source/skia/src/image"
+    },
+    {
+      "work": "module/source/skia/src/gpu"
+    },
+    {
+      "work": "module/source/skia/src/shaders"
+    },
+    {
+      "work": "module/source/skia/src/codec"
+    },
+    {
+      "work": "module/source/native/include"
+    },
+    {
+      "work": "module/source/native/include/private"
+    },
+    {
+      "work": "module/source/native/libs/ui/include"
+    },
+    {
+      "work": "module/source/native/libs/gui/include"
+    },
+    {
+      "work": "module/source/native/libs/ftl/include"
+    },
+    {
+      "work": "module/source/native/libs/math/include"
+    },
+    {
+      "work": "module/source/native/libs/arect/include"
+    },
+    {
+      "work": "module/source/native/libs/nativewindow/include"
+    },
+    {
+      "work": "module/source/native/libs/nativedisplay/include"
+    },
+    {
+      "work": "module/source/native/libs/binder/include"
+    },
+    {
+      "work": "module/source/native/libs/binder/ndk/include_ndk"
+    },
+    {
+      "work": "module/source/native/libs/binder/ndk/include_platform"
+    },
+    {
+      "work": "module/source/native/opengl/include"
+    },
+    {
+      "work": "module/source/core/libutils/include"
+    },
+    {
+      "work": "module/source/core/libcutils/include"
+    },
+    {
+      "work": "module/source/core/libsystem/include"
+    },
+    {
+      "work": "module/source/core/libsync/include"
+    },
+    {
+      "work": "module/source/core/libprocessgroup/include"
+    },
+    {
+      "work": "module/source/base/include"
+    },
+    {
+      "work": "module/source/logging/liblog/include"
+    },
+    {
+      "work": "module/source/minikin/include"
+    },
+    {
+      "work": "module/source/harfbuzz/src"
+    },
+    {
+      "work": "module/source/pdfium/public"
+    },
+    {
+      "work": "module/source/freetype/include"
+    },
+    {
+      "work": "module/source/jpeg"
+    },
+    {
+      "work": "module/source/png"
+    },
+    {
+      "work": "module/source/ultrahdr/lib/include"
+    },
+    {
+      "work": "module/source/dng/source"
+    },
+    {
+      "work": "module/source/piex"
+    },
+    {
+      "work": "module/source/webp/src"
+    },
+    {
+      "work": "module/source/giflib"
+    },
+    {
+      "work": "module/source/crabbyavif/include"
+    },
+    {
+      "work": "module/source/av/media/libheif/include"
+    },
+    {
+      "work": "module/source/av/media/ndk/include"
+    },
+    {
+      "source": "frameworkLegacy",
+      "path": "core/jni/include"
+    },
+    {
+      "source": "frameworkLegacy",
+      "path": "libs/androidfw/include"
+    },
+    {
+      "source": "frameworkLegacy",
+      "path": "native/graphics/jni"
+    },
+    {
+      "source": "nativehelper",
+      "path": "include_jni"
+    },
+    {
+      "source": "bionic",
+      "path": "libc/platform"
+    },
+    {
+      "work": "module/gen/src"
+    },
+    {
+      "work": "module/gen/aconfig/hwui/include"
+    },
+    {
+      "work": "module/gen/aconfig/surfaceflinger/include"
+    },
+    {
+      "work": "module/gen/aconfig/accessibility/include"
+    },
+    {
+      "work": "module/gen/aconfig/text/include"
+    },
+    {
+      "work": "module/gen/aconfig/egl/include"
+    },
+    {
+      "work": "module/gen/aconfig/gui/include"
+    },
+    {
+      "work": "module/source/wuffs/release/c"
+    },
+    {
+      "work": "module/source/statsd/lib/libstatspull/include"
+    },
+    {
+      "work": "module/source/statsd/lib/libstatssocket/include"
+    },
+    {
+      "work": "module/source/protobuf/src"
+    },
+    {
+      "work": "module/source/perfetto/include"
+    },
+    {
+      "work": "module/source/perfetto/include/perfetto/base/build_configs/android_tree"
+    },
+    {
+      "source": "incfs",
+      "path": "incfs/util/include"
+    },
+    {
+      "source": "incfs",
+      "path": "incfs/include"
+    },
+    {
+      "source": "ziparchive",
+      "path": "include"
+    },
+    {
+      "source": "fmt",
+      "path": "include"
+    },
+    {
+      "work": "module/source/native/libs/nativebase/include"
+    },
+    {
+      "source": "googletest",
+      "path": "googletest/include"
+    },
+    {
+      "work": "module/source/native/libs/binder/ndk/include_cpp"
+    },
+    {
+      "work": "module/source/native/libs/ui/include_types"
+    },
+    {
+      "work": "module/source/core/libstats/socket_lazy/include"
+    },
+    {
+      "source": "libhardware",
+      "path": "include"
+    },
+    {
+      "work": "module/source/native/libs/nativewindow/include-private"
+    },
+    {
+      "work": "module/source/hidl/base/include"
+    },
+    {
+      "work": "module/source/hidl/transport/include"
+    },
+    {
+      "work": "module/source/framework/libs/protoutil/include"
+    },
+    {
+      "work": "module/source/fmq/include"
+    },
+    {
+      "work": "module/gen/perfetto/external/perfetto"
+    },
+    {
+      "work": "module/source/native/libs/shaders/include"
+    },
+    {
+      "work": "module/source/native/libs/tonemap/include"
+    },
+    {
+      "work": "module/source/native/opengl/libs/EGL"
+    },
+    {
+      "work": "module/source/native/libs/graphicsenv/include"
+    },
+    {
+      "source": "frameworkLegacy",
+      "path": "native/android/include"
+    },
+    {
+      "work": "module/source/fmq/base"
+    },
+    {
+      "work": "module/source/native/libs/nativedisplay/include-private"
+    },
+    {
+      "source": "boringssl",
+      "path": "src/include"
+    },
+    {
+      "source": "nativehelper",
+      "path": "include"
+    },
+    {
+      "source": "nativehelper",
+      "path": "include_platform"
+    },
+    {
+      "source": "nativehelper",
+      "path": "include_platform_header_only"
+    },
+    {
+      "source": "nativehelper",
+      "path": "header_only_include"
+    },
+    {
+      "source": "nativehelper",
+      "path": "include_jni"
+    },
+    {
+      "work": "module/source/hidl/transport/token/1.0/utils/include"
+    },
+    {
+      "work": "module/source/native/opengl/libs/EGL/include"
+    },
+    {
+      "work": "module/source/ultrahdr"
+    }
+  ],
+  "optionSources": {
+    "framework-source": "frameworkLegacy",
+    "nativehelper-source": "nativehelper",
+    "bionic-source": "bionic",
+    "incfs-source": "incfs",
+    "ziparchive-source": "ziparchive",
+    "fmt-source": "fmt",
+    "libhardware-source": "libhardware",
+    "boringssl-source": "boringssl",
+    "rustutils-source": "rustutils",
+    "native-source": "native",
+    "system-core-source": "core",
+    "hardware-interfaces-source": "hardware-interfaces",
+    "release-source": "release",
+    "skia-source": "skia",
+    "java-framework-source": "framework"
+  },
+  "imageFiles": [
+    {
+      "path": "system/lib64/libimage_io.so",
+      "size": 235000,
+      "sha256": "a9784460cd010f5690e89427901cadc9baf17ea0c255410779b6fde79ea27fae"
+    },
+    {
+      "path": "system/lib64/libultrahdr.so",
+      "size": 332728,
+      "sha256": "ad528313c2699624ef23c162e2fd41af6bbd014767a84ffb14387ffd5f37a8f9"
+    },
+    {
+      "path": "system/lib64/libpng.so",
+      "size": 251232,
+      "sha256": "409f8b1606e2b628c682173997ba94ff3e118fbb3597565b23a29236576d9381"
+    },
+    {
+      "path": "system/lib64/libz.so",
+      "size": 118008,
+      "sha256": "45f9234190e46eac2484944def75893cadbed4f751deaed674ed0341c7a229b1"
+    },
+    {
+      "path": "system/lib64/libdng_sdk.so",
+      "size": 808984,
+      "sha256": "2644985b91290fa64eccfd936e41a3a3f84fa9722a7c3dd9114f860344df1c26"
+    },
+    {
+      "path": "system/lib64/libjpeg.so",
+      "size": 354360,
+      "sha256": "dcf8f255c14f80ec98fb0e2b58e40e4f26176922a7df383ababa86499f9c041a"
+    },
+    {
+      "path": "system/lib64/libpiex.so",
+      "size": 119304,
+      "sha256": "36f1292816ee29a336b5f380dce9d035d57052d9bd7b492c57ada4469e96f123"
+    },
+    {
+      "path": "system/lib64/libexpat.so",
+      "size": 184848,
+      "sha256": "f45dba88c4601012555ec2698e3bbc46206eaf95b3275744fe11da10e4e606c6"
+    },
+    {
+      "path": "system/lib64/libharfbuzz_subset.so",
+      "size": 1003840,
+      "sha256": "5ee3e0dfa2894c3bf37031605fd56fddc6fe6f0f3c7c26ec0288b0d2bbb8f184"
+    },
+    {
+      "path": "system/lib64/libbase.so",
+      "size": 218592,
+      "sha256": "025a1c793543c73887e386d888aa3de247af4492ec53ca750a8c985b6ab8c865"
+    },
+    {
+      "path": "system/lib64/libharfbuzz_ng.so",
+      "size": 1054624,
+      "sha256": "abf99703e79847464b1132c6b040401d1a43c626fc4aa93b426ca174b26b7297"
+    },
+    {
+      "path": "system/lib64/libminikin.so",
+      "size": 1416648,
+      "sha256": "acb4766ce9d5b91d1d1830ad79790917fe9d31442610cc81d1228d14c08c3080"
+    },
+    {
+      "path": "system/lib64/android.hardware.drm.common-V1-ndk.so",
+      "size": 51240,
+      "sha256": "f44a1bf5edddbd373c022994b51da2cb4d3bc60734c84757899c72039bcd536e"
+    },
+    {
+      "path": "system/lib64/android.hardware.graphics.composer3-V4-ndk.so",
+      "size": 252448,
+      "sha256": "8e553fe2c8414f8d422727be4f490ec3d4f89dfee83e4e01544c30962e1f15f4"
+    },
+    {
+      "path": "system/lib64/android.hardware.graphics.common-V6-ndk.so",
+      "size": 52000,
+      "sha256": "e4fd8b6fd77665c485e7cd1be3319662eb619ac162be3d91d2776aac1ea8a552"
+    },
+    {
+      "path": "system/lib64/libbinder.so",
+      "size": 851920,
+      "sha256": "2981b880836d34d09299c577029284c0038da6ecb95ee474ca1f21419652cf9a"
+    },
+    {
+      "path": "system/lib64/libbinder_ndk.so",
+      "size": 187728,
+      "sha256": "3eed4eb5a9adba460f510abd749559fb499f8d95aed84cdbe50c55cb722d79c6"
+    },
+    {
+      "path": "system/lib64/libpdfium.so",
+      "size": 4981104,
+      "sha256": "6efec1f9a40b0646b4d55ab0412e48f2dc37277e67c3941ec77c3a60f1eb76bb"
+    },
+    {
+      "path": "system/lib64/libheif.so",
+      "size": 72192,
+      "sha256": "6bb4f49260e30075dcf7cec7b3f2b1f04573769b137fa0ccf1d351716f62566a"
+    },
+    {
+      "path": "system/lib64/libmediandk.so",
+      "size": 289944,
+      "sha256": "843028c7cc61e933a72b6da5fbe815318285ec03a158400afe17dd79bcf72de6"
+    },
+    {
+      "path": "system/lib64/android.hardware.graphics.common@1.2.so",
+      "size": 35272,
+      "sha256": "056b36e8997bc254b9efc5f0a47b788974f67a6019182ac970b072c63d9e6f29"
+    },
+    {
+      "path": "system/lib64/liblog.so",
+      "size": 102536,
+      "sha256": "c49e9b479119d999fd339ccd404edd519e0295629a9b41ca97bd06d50602bea5"
+    },
+    {
+      "path": "system/lib64/libcutils.so",
+      "size": 118232,
+      "sha256": "64469e5439f24119bec0de038a756f4c40232f10e23082d7aa2fbba755328e6c"
+    },
+    {
+      "path": "system/lib64/libutils.so",
+      "size": 168336,
+      "sha256": "9326154900b3746e2cdd174e32a0e8277655b9367d311c1f77f0f312ef395d0d"
+    },
+    {
+      "path": "system/lib64/libEGL.so",
+      "size": 270608,
+      "sha256": "c967542bdb196f84deecc6a65d754a6fd6e18aa18b5039fed1b6d5dbf9016de7"
+    },
+    {
+      "path": "system/lib64/libGLESv1_CM.so",
+      "size": 51768,
+      "sha256": "f5a15b316ab37ea9e8aa8192658ad48da19c7d49f34add1b1e93117b137caf6f"
+    },
+    {
+      "path": "system/lib64/libGLESv2.so",
+      "size": 117136,
+      "sha256": "b81e8b3c754ad96e7495217e55dcd7c67d3e7ba6da99d503ea4e9e1a254e2200"
+    },
+    {
+      "path": "system/lib64/libGLESv3.so",
+      "size": 117136,
+      "sha256": "36de13cedc528931144a503f94b56d216b935cfcf05eebd87a29d6ee9a08c846"
+    },
+    {
+      "path": "system/lib64/libvulkan.so",
+      "size": 223672,
+      "sha256": "5323896cca9492b1e426340aa1c7d848ca473898d2a094bd9a39b6dd59e30d16"
+    },
+    {
+      "path": "system/lib64/libnativedisplay.so",
+      "size": 101648,
+      "sha256": "39982f56b360cd6d7f16a5124550156f95737e3cd8cc2ea55022569b49e570fa"
+    },
+    {
+      "path": "system/lib64/libnativewindow.so",
+      "size": 68248,
+      "sha256": "d3491ea7e9b6803797fcc0c78661aef4afab45e54d9cbbbd0b9f2bb4ed91e65e"
+    },
+    {
+      "path": "system/lib64/libprotobuf-cpp-lite.so",
+      "size": 595512,
+      "sha256": "056a1288e5fc362c5ac62905671bf03e103a658d5e527dd3765775e6c1aaa7a9"
+    },
+    {
+      "path": "system/lib64/libft2.so",
+      "size": 621360,
+      "sha256": "26718fa4ffa0f75cebc46841ce63f148185baaf42f827d76e702b049e4f5c4da"
+    },
+    {
+      "path": "system/lib64/libandroidfw.so",
+      "size": 1191048,
+      "sha256": "26c60b37871c51c4a71ba95b74a641e8e5fe5bbac5ca31ccecf10247db84070d"
+    },
+    {
+      "path": "system/lib64/libcrypto.so",
+      "size": 1592832,
+      "sha256": "6847fe73621441cc1b18113f41fe84f26f83a610d38f7f2531d7757200eb7602"
+    },
+    {
+      "path": "system/lib64/libsync.so",
+      "size": 51232,
+      "sha256": "95ca88b3d659b681c00ebe5bcb8dd529b851d7dd3c5eaff2969172f4fed4fd54"
+    },
+    {
+      "path": "system/lib64/libgui.so",
+      "size": 1644624,
+      "sha256": "3cccdaf945764512a7f896cc8407b8c4a500713a254cb71bfcac8915c393a445"
+    },
+    {
+      "path": "system/lib64/libui.so",
+      "size": 461624,
+      "sha256": "c97cec2cce586bfe42c82a7a265533fe0d7e572e04e9f1074bcde38e723092c8"
+    },
+    {
+      "path": "system/lib64/aconfig_text_flags_c_lib.so",
+      "size": 51568,
+      "sha256": "66f628b7ed8d94ece594933e7f476332fe6190caa51c3df8ae673d0e96ebe037"
+    },
+    {
+      "path": "system/lib64/aconfig_view_accessibility_flags_c_lib.so",
+      "size": 51576,
+      "sha256": "57ac08df9cee8a42503a7725e755b37f9a3e91a33fd0ac14b50debfdf3861042"
+    },
+    {
+      "path": "system/lib64/server_configurable_flags.so",
+      "size": 36224,
+      "sha256": "2be31356e9b881804f1a88fea552c68188f72e27d754fc4e4c59629e9bef2f13"
+    },
+    {
+      "path": "system/lib64/libaconfig_storage_read_api_cc.so",
+      "size": 122072,
+      "sha256": "fdc36ea21e599b01a46cd2a1b9dcb2a45462f55f920fdee9327ec2cd8ba3b7bd"
+    },
+    {
+      "path": "system/lib64/libgraphicsenv.so",
+      "size": 85688,
+      "sha256": "13f11aa852b7062e077492d04678714eb8eb1db94d1181b8fb923629ce710adb"
+    },
+    {
+      "path": "system/lib64/libc++.so",
+      "size": 1049704,
+      "sha256": "2267f93b8b3c9d1967f1833d5f71c7312213c43bb291250cf772800763037fb9"
+    },
+    {
+      "path": "system/lib64/libc.so",
+      "size": 1209552,
+      "sha256": "bc007195546c16b561d4107e44a7f8ff7a32d4b1c54b6d9f4b66a56362f8b6d6"
+    },
+    {
+      "path": "system/lib64/libm.so",
+      "size": 248968,
+      "sha256": "44433149f62eeb8f09f38ecd3566683fac01a0f89de6ea6d15f6e4deca1ba4bc"
+    },
+    {
+      "path": "system/lib64/libdl.so",
+      "size": 50760,
+      "sha256": "9f6447d910742a57b398a6a3f31746e02302ee9547da6d02757f001058a69df3"
+    }
+  ]
+}

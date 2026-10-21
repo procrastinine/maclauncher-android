@@ -84,25 +84,26 @@ export function assembleArtSupplier({output,inputs,bootClasspath,sourceVersion,b
  }finally{fs.rmSync(temporary,{recursive:true,force:true});}
 }
 
-/** The producer may reuse original AIM build outputs. It never boots AIM or
- * invokes an Android product graph to build these two owned boundary units. */
-export async function buildArt({output,host,java,guest,sensors,composer,graphics,nativeBridge,inputs,bootClasspath,baseSupplier}){
+/** The producer may reuse original AIM build outputs. Optional complete HWUI
+ * compilation is requested explicitly and preserves the original image ABI. */
+export async function buildArt({output,host,java,guest,sensors,composer,graphics,nativeBridge,hwui,inputs,bootClasspath,baseSupplier}){
  if(nativeBridge)host={...host,arm32:nativeBridge.arm32.cpu};
  const guestProducts=guest?buildArtGuest({...guest,output:path.join(output,'build/guest')}):{};
  const sensorProducts=sensors?buildArtSensors({...sensors,output:path.join(output,'build/sensors')}):{};
  const composerProducts=composer?buildArtComposer({...composer,output:path.join(output,'build/composer')}):{};
  const graphicsProducts=graphics?buildArtGraphics({...graphics,output:path.join(output,'build/graphics')}):{};
  const bridgeProducts=nativeBridge?await buildArtNativeBridge({...nativeBridge,output:path.join(output,'build/native-bridge')}):{};
+ const hwuiProducts=hwui?await (await import('../native/hwui/supplier.mjs')).buildHwuiSupplier({hwui,output}):{};
  const native=buildArtHost({...host,output:path.join(output,'build/host')});
  const bootstrap=await buildArtJava({...java,output:path.join(output,'build/java')});
- const products={...inputs,...guestProducts,...sensorProducts,...composerProducts,...graphicsProducts,...bridgeProducts,...native,...bootstrap};
+ const products={...inputs,...guestProducts,...sensorProducts,...composerProducts,...graphicsProducts,...bridgeProducts,...hwuiProducts,...native,...bootstrap};
  const platformPackages=path.join(output,'build/platform-packages.json');
  buildPlatformPackageCatalog({image:products.image,output:platformPackages});
  products.platformPackages=platformPackages;
  const boot=await buildBootImage({output:path.join(output,'boot-image-cache'),aim:host.aim,components:products,bootClasspath});
  const identity=crypto.createHash('sha256');
  identity.update(boot.identity);
- for(const input of [...originalTreeFiles(import.meta.dirname),native.hostLibrary,bootstrap.bootstrapDex,...Object.values(guestProducts),...Object.values(sensorProducts),...Object.values(composerProducts),...Object.values(graphicsProducts),...Object.values(bridgeProducts)])
+ for(const input of [...originalTreeFiles(import.meta.dirname),native.hostLibrary,bootstrap.bootstrapDex,...Object.values(guestProducts),...Object.values(sensorProducts),...Object.values(composerProducts),...Object.values(graphicsProducts),...Object.values(bridgeProducts),...Object.values(hwuiProducts)])
   for(const file of fs.statSync(input).isDirectory()?originalTreeFiles(input):[input])identity.update(fs.readFileSync(file));
  return assembleArtSupplier({output:path.join(output,'runtime'),inputs:{...products,bootImage:boot.root},bootClasspath,baseSupplier,sourceVersion:'0.1.0-'+identity.digest('hex').slice(0,16)});
 }
