@@ -17,5 +17,8 @@ fn main(){
         assert_eq!(unsafe{libc::munmap(memory,size)},0);
         assert!(snapshot(total).available>=before.available.saturating_sub(4*1024*1024));
     }
+    let child=unsafe{libc::fork()};assert!(child>=0);
+    if child==0{let value=snapshot(configured_total(physical));unsafe{libc::_exit(if value.total==total&&value.available<=total{0}else{1})};}
+    let mut status=0;assert_eq!(unsafe{libc::waitpid(child,&mut status,0)},child);assert_eq!(status,0,"fork child retains policy and independently measures headroom");
     println!("PASS actual native memory owner total={total} available={} physical-cap={physical}",before.available);
 }

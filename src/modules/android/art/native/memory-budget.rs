@@ -1,7 +1,7 @@
 //! Accounting policy for the existing AIM memory owner. The configured MiB
 //! budget and Darwin process footprint follow Klepton's native memory policy;
 //! this module does not load another VM or libc into the ART process.
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64,AtomicUsize,Ordering};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Snapshot {
@@ -12,15 +12,19 @@ pub struct Snapshot {
 /// Match kl_env_int's strtol(base 0) -> C int and unsigned MiB conversion.
 /// Configuration is fixed before process entry; fork retains the same budget.
 pub fn configured_total(physical: u64) -> u64 {
-    static TOTAL: OnceLock<u64> = OnceLock::new();
-    *TOTAL.get_or_init(|| {
+    // Lock-free publication remains usable if first read races with fork.
+    static TOTAL: AtomicU64 = AtomicU64::new(u64::MAX);
+    let cached=TOTAL.load(Ordering::Acquire);
+    if cached!=u64::MAX{return cached;}
+    let value={
         let value = unsafe { libc::getenv(c"KL_MEM_TOTAL_MB".as_ptr()) };
         let mib = if value.is_null() { 6144 } else {
             unsafe { libc::strtol(value, std::ptr::null_mut(), 0) as libc::c_int }
         };
         let requested = (mib as u64).wrapping_shl(20);
         if physical != 0 { requested.min(physical) } else { requested }
-    })
+    };
+    TOTAL.compare_exchange(u64::MAX,value,Ordering::AcqRel,Ordering::Acquire).map(|_|value).unwrap_or_else(|current|current)
 }
 
 fn footprint() -> Option<u64> {
@@ -32,12 +36,15 @@ fn footprint() -> Option<u64> {
 
 fn native_headroom() -> Option<u64> {
     type Available = unsafe extern "C" fn() -> usize;
-    static FUNCTION: OnceLock<Option<Available>> = OnceLock::new();
-    let function = FUNCTION.get_or_init(|| {
-        let address = unsafe { libc::dlsym(libc::RTLD_DEFAULT, c"os_proc_available_memory".as_ptr()) };
-        if address.is_null() { None } else { Some(unsafe { std::mem::transmute::<*mut libc::c_void, Available>(address) }) }
-    });
-    let value = unsafe { function.as_ref()?() } as u64;
+    static FUNCTION: AtomicUsize = AtomicUsize::new(usize::MAX);
+    let mut address=FUNCTION.load(Ordering::Acquire);
+    if address==usize::MAX {
+        let resolved=unsafe { libc::dlsym(libc::RTLD_DEFAULT,c"os_proc_available_memory".as_ptr()) } as usize;
+        address=FUNCTION.compare_exchange(usize::MAX,resolved,Ordering::AcqRel,Ordering::Acquire).map(|_|resolved).unwrap_or_else(|current|current);
+    }
+    if address==0{return None;}
+    let function=unsafe{std::mem::transmute::<usize,Available>(address)};
+    let value=unsafe{function()} as u64;
     (value != 0).then_some(value)
 }
 
