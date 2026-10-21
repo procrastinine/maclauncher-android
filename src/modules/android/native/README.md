@@ -23,6 +23,12 @@ platform services as ARM64.
 | `fonts`, `system-config.mjs` | Pinned Android fonts and platform configuration |
 | `upstream` | Source export, original Blueprint parsing, compiler inputs and incremental reuse utilities |
 
+The `native-regex` component supplies `regcomp`, `regexec`, `regerror` and
+`regfree` from Bionic's complete NetBSD regex implementation. It preserves
+Android's public records, basic and extended expressions, capture offsets,
+backreferences and `REG_GNU` syntax. Character classification and locale values
+use the existing native libc owners; allocation retains the physical heap.
+
 Each source catalog records original repository and revision identities. Original
 checkouts remain unchanged; owned adaptations are applied to exported compiler
 inputs. The complete supplied framework retains its class and method surface.

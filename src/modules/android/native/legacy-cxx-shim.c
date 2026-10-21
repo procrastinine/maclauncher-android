@@ -104,6 +104,7 @@ extern void *klj_wide_stdio_lookup(const char *name);
 extern void *klj_allocator_lookup(const char *name);
 extern void *klj_nonlocal_jump_lookup(const char *name);
 extern void *klj_search_lookup(const char *name);
+extern void *klj_regex_lookup(const char *name);
 _Noreturn void klj_android_log_assert_message(const char *condition,const char *tag,const char *format,void *arguments) {
     if(format)((int (*)(int,const char *,const char *,void *))klh_android_log_print)(7,tag,format,arguments);
     else fprintf(stderr,"F/%s: Assertion failed: %s\n",tag?tag:"",condition?condition:"unspecified");
@@ -172,6 +173,8 @@ static void *klj_resolve_native_import(const char *name) {
     answer=klj_nonlocal_jump_lookup(name);
     if(answer)return answer;
     answer=klj_search_lookup(name);
+    if(answer)return answer;
+    answer=klj_regex_lookup(name);
     if(answer)return answer;
     if(!strcmp(name,"mmap")||!strcmp(name,"mmap64"))return (void *)klj_guest_mmap;
     if(!strcmp(name,"munmap"))return (void *)klj_guest_munmap;
