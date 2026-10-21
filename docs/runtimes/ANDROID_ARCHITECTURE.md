@@ -747,6 +747,10 @@ calls that owner through a native ABI from its existing mapping and signal
 dispatchers; ART retains the original AIM entry points. The JVM mapping owner
 retains guest extents across replacement, partial unmap, remapping and fork.
 Those extents and original loaded ELF mappings use executable-memory migration.
+ELF publication and retirement track the covering host pages when an image's
+logical base is shifted inside its allocation to separate finer-aligned code
+and data segments. This image bookkeeping preserves the original alignment
+requirements of guest memory syscalls and does not claim adjacent mappings.
 Native stacks, host libraries and other VM code caches retain Darwin's original
 protection behavior and mapping identity. Per-thread resume
 state remains with the executor's physical thread lifetime, including native

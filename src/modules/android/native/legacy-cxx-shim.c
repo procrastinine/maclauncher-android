@@ -80,8 +80,14 @@ void klj_guest_mapping_retire_locked(void *address,size_t length){
 /* Original image publication/retirement shares the same mapping extent owner.
  * These calls occur outside the loader registry lock. */
 int klj_guest_mapping_claim(void *address,size_t length,int owned){
-    if(!length)return 0;uintptr_t first,last;
-    if(!klj_vm_bounds(address,length,&first,&last)){errno=EINVAL;return -1;}
+    if(!length)return 0;
+    /* ELF placement can shift its logical base inside an owned host-page
+     * allocation to keep finer-aligned RX and RW segments separate. The image
+     * owner claims/retires those covering pages, not a Linux syscall address.
+     * Actual mmap/mprotect/munmap still use strict klj_vm_bounds alignment. */
+    uintptr_t start=(uintptr_t)address,mask=vm_page_size-1;
+    if(length>UINTPTR_MAX-start||start+length>UINTPTR_MAX-mask){errno=EINVAL;return -1;}
+    uintptr_t first=start&~mask,last=(start+length+mask)&~mask;
     KljSignalCritical previous=klj_vm_enter();int result=-1;
     if(klj_vm_reserve(2)){klj_vm_record(first,last,owned);result=0;}
     int error=errno;klj_vm_leave(&previous);errno=error;return result;
