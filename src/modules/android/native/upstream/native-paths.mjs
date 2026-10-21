@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {copyChanged} from './source-files.mjs';
 
 /** Compiler diagnostics retain useful source identities without recording the
  * developer's checkout, temporary directory or build workspace in binaries. */
@@ -39,6 +38,7 @@ export function publishNativeBinary(source,destination,{rpaths,installName}={}){
   const file=path.join(temporary,path.basename(destination));
   try{
     fs.copyFileSync(source,file,fs.constants.COPYFILE_FICLONE);
+    fs.chmodSync(file,fs.statSync(file).mode&0o777);
     const edits=installName?['-id',installName]:[];
     if(rpaths){
       const commands=execFileSync('otool',['-l',file],{encoding:'utf8'});
@@ -49,6 +49,13 @@ export function publishNativeBinary(source,destination,{rpaths,installName}={}){
     if(edits.length)execFileSync('install_name_tool',[...edits,file],{stdio:'inherit'});
     execFileSync('strip',['-S',file],{stdio:'inherit'});
     execFileSync('codesign',['--force','--sign','-',file],{stdio:['ignore','ignore','pipe']});
-    copyChanged(file,destination);
+    const prepared=fs.lstatSync(file),previous=fs.lstatSync(destination,{throwIfNoEntry:false});
+    // Executed Mach-O inodes retain kernel signature state. Publish changed
+    // signed bytes with a fresh inode, leaving active mappings/readers intact.
+    // Identical publications retain their inode, mode and modification time.
+    if(previous?.isFile()&&previous.size===prepared.size&&
+       (previous.mode&0o7777)===(prepared.mode&0o7777)&&
+       fs.readFileSync(destination).equals(fs.readFileSync(file)))return;
+    fs.renameSync(file,destination);
   }finally{fs.rmSync(temporary,{recursive:true,force:true});}
 }

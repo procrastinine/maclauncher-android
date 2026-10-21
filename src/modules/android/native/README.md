@@ -200,6 +200,10 @@ runtime provider does not invalidate native objects. Clang dependency files reta
 ownership of header dependencies.
 Native delivery copies retain relocatable install names, strip compiler debug
 records and receive signatures independently from cached development products.
+Changed signed binaries replace the destination atomically with a new file,
+so running mappings and open readers retain the previous binary. Identical bytes
+and executable permissions preserve the destination and its modification time.
+Published permissions exclude set-user-ID, set-group-ID and sticky bits.
 Staging applies the same debug-record removal and signing to verified ANGLE
 copies while preserving the supplied Android framework library byte for byte.
 Source notices preserve licenses and pinned identities. A build emits its complete
