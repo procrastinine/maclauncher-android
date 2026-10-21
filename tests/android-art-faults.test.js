@@ -63,6 +63,12 @@ test('Original AIM diagnostic APIs retain interrupted registers and safely read 
  assert.match(request.stderr,/pc=0x0000000011223344 stub=0x0000000055667788 lr=0x00000000aabbccdd/);
  assert.equal((request.stderr.match(/return0=0x0000000012345678/g)||[]).length,16,request.stderr);
  assert.doesNotMatch(request.stderr,/fatal|return1=/);
+ const queued=run(binary,['abort-queued-request']);
+ assert.match(queued.stdout,/PASS original queued abort syscall preserves siginfo, errors, errno and other-thread delivery with one opt-in self request/);
+ assert.equal((queued.stderr.match(/software SIGABRT request/g)||[]).length,1,queued.stderr);
+ assert.match(queued.stderr,/syscall=0x00000000000000f0/);
+ assert.match(queued.stderr,/pc=0x0000000011223344 stub=0x0000000055667788 lr=0x00000000aabbccdd/);
+ assert.doesNotMatch(queued.stderr,/fatal/);
  const host=run(binary,['host-syscall']);
  assert.match(host.stderr,/live guest syscall 135 tid 719/);
  assert.match(host.stderr,/guest arguments: x0 0x2 x1 0x6359c40 x2 0x0 x3 0x8/);

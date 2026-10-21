@@ -52,6 +52,8 @@ fn frames(mut fp: u64) {`],
  edit('sys/signal.rs',[
   ['        Ok(th) => send_thread(&th, sender(sig, sigframe::SI_TKILL)),',
    '        Ok(th) => {\n            crate::diag::report_abort_request(sig, th.tid);\n            send_thread(&th, sender(sig, sigframe::SI_TKILL))\n        },'],
+  ['    send_thread(&th, queued_info(sig, a[3]))',
+   '    let info = queued_info(sig, a[3]);\n    crate::diag::report_abort_request(sig, th.tid);\n    send_thread(&th, info)'],
   ['    crate::diag::note_fault(crate::diag::Fault {','    let snapshot = crate::diag::Fault {'],
   ['        esr: f.esr as u32,\n','        esr: f.esr as u32,\n        x: { let mut x=m.x; x[18]=crate::context::guest_scs(); x },\n        instruction: crate::diag::interrupted_instruction(sig, m.pc),\n'],
   ['    });\n    let cpu = Cpu::from_mc(m);','    };\n    crate::diag::note_fault(snapshot);\n    crate::diag::report_handled_fault(&snapshot, f.info.code, th.tid);\n    let cpu = Cpu::from_mc(m);'],

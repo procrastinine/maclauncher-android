@@ -251,6 +251,67 @@ fn abort_request() {
     }
 }
 
+// Drive the original syscall dispatcher, target lookup, pending queue and
+// sigtimedwait owner. Blocking SIGABRT preserves original delivery while the
+// fixture verifies every queued siginfo byte without terminating the process.
+fn queued_abort_request() {
+    use aim_linux_abi::{context::GuestContext, sys};
+    unsafe fn call(context: &mut GuestContext, nr: u64, args: [u64; 6]) -> i64 {
+        context.x[..6].copy_from_slice(&args); context.x[8] = nr;
+        unsafe { set_errno(ERRNO); }
+        sys::dispatch(context);
+        assert_eq!(unsafe { errno() }, ERRNO);
+        context.x[0] as i64
+    }
+    fn info(pid: u64) -> [u64; 16] {
+        let mut info = [0x5a5a5a5a5a5a5a5a; 16];
+        info[0] = 6 | (17u64 << 32); // signo and si_errno
+        info[1] = (-1i32 as u32) as u64; // SI_QUEUE, zero padding
+        info[2] = pid | (501u64 << 32); // sender PID and UID
+        info[3] = 0x1122334455667788; // original sigval
+        info
+    }
+    unsafe fn block(context: &mut GuestContext) {
+        let mask = 1u64 << (6 - 1);
+        assert_eq!(unsafe { call(context, 135, [0, &mask as *const _ as u64, 0, 8, 0, 0]) }, 0);
+    }
+    unsafe fn receive(context: &mut GuestContext, expected: &[u64; 16]) {
+        let mask = 1u64 << (6 - 1); let timeout = [0u64; 2]; let mut received = [0u64; 16];
+        assert_eq!(unsafe { call(context, 137, [&mask as *const _ as u64,
+            received.as_mut_ptr() as u64, timeout.as_ptr() as u64, 8, 0, 0]) }, 6);
+        assert_eq!(&received, expected);
+    }
+    unsafe {
+        let context = &mut *aim_linux_abi::context::init_thread();
+        let pid = call(context, 172, [0; 6]) as u64;
+        let tid = context.tid;
+        context.pc = 0x11223344; context.stub_ret = 0x55667788;
+        context.x[29] = 0; context.x[30] = 0xaabbccdd;
+        block(context); let queued = info(pid);
+        let args = [pid, tid, 6, queued.as_ptr() as u64, 0, 0];
+        diag::configure_abort_request_capture(false);
+        assert_eq!(call(context, 240, args), 0); receive(context, &queued);
+        diag::configure_abort_request_capture(true);
+        // The original target validation fails before any observation.
+        assert_eq!(call(context, 240, [pid, 0, 6, queued.as_ptr() as u64, 0, 0]), -22);
+        assert_eq!(call(context, 240, [pid, tid, 65, queued.as_ptr() as u64, 0, 0]), -22);
+        assert_eq!(call(context, 240, args), 0); receive(context, &queued);
+        // A valid queued abort to a different guest thread still retains its
+        // siginfo and delivery, but must not attribute that target to us.
+        let (send_tid, get_tid) = std::sync::mpsc::channel();
+        let (send_go, get_go) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let other = &mut *aim_linux_abi::context::init_thread();
+            block(other); send_tid.send(other.tid).unwrap(); get_go.recv().unwrap();
+            receive(other, &info(pid));
+        });
+        let other_tid = get_tid.recv().unwrap(); assert_ne!(other_tid, tid);
+        assert_eq!(call(context, 240, [pid, other_tid, 6, queued.as_ptr() as u64, 0, 0]), 0);
+        send_go.send(()).unwrap(); worker.join().unwrap();
+        line(b"PASS original queued abort syscall preserves siginfo, errors, errno and other-thread delivery with one opt-in self request\n");
+    }
+}
+
 fn main() {
     match std::env::args().nth(1).as_deref() {
         Some("direct") => { install(); unsafe { hardware_fault(); } panic!("hardware fault unexpectedly returned"); }
@@ -268,6 +329,7 @@ fn main() {
         Some("records") => records(),
         Some("abort") => software_abort(),
         Some("abort-request") => abort_request(),
+        Some("abort-queued-request") => queued_abort_request(),
         Some("host-syscall") => {
             let context = unsafe { &mut *aim_linux_abi::context::init_thread() };
             context.in_host=1; context.tid=719; context.x[8]=135;

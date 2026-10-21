@@ -128,7 +128,7 @@ pub fn report_abort_request(sig: i32, target_tid: i32) {
     if context.is_null() { return; }
     let context = unsafe { &*context };
     if context.in_host == 0 || context.tid != target_tid as u64 ||
-        !matches!(context.x[8], 130 | 131) { return; }
+        !matches!(context.x[8], 130 | 131 | 240) { return; }
     if ABORT_REQUESTS.fetch_update(std::sync::atomic::Ordering::Relaxed,
         std::sync::atomic::Ordering::Relaxed, |value| value.checked_sub(1)).is_err() { return; }
     let _errno = FaultReportErrno::save();
@@ -137,6 +137,7 @@ pub fn report_abort_request(sig: i32, target_tid: i32) {
     line.field(b" guest_tid=", context.tid);
     line.field(b" host_pid=", unsafe { libc::getpid() } as u64);
     line.field(b" host_pthread=", unsafe { libc::pthread_self() } as u64);
+    line.field(b" syscall=", context.x[8]);
     line.field(b" pc=", context.pc);
     line.field(b" stub=", context.stub_ret);
     line.field(b" lr=", context.x[30]);
