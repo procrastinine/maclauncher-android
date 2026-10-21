@@ -1,6 +1,8 @@
 import {includeDependencies} from './upstream/source-includes.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
+import {farEmitterSource} from '../art/x18-far-emitter-source.mjs';
+import {farStackResumeSource} from '../art/x18-far-stack-source.mjs';
 
 // Extend the existing Klepton thread-slot veneer; preserve its decoder, scratch
 // register ownership, pool bounds, code/data filtering and branch checks.
@@ -523,7 +525,7 @@ int klx_core_emit(uint32_t word,uint64_t site,uint64_t pool,unsigned slot,uint64
   const types=image.indexOf('typedef struct { uint8_t e_ident[16];'),end=image.indexOf('struct kl_image {',types);
   if(types<0||end<0)throw Error('Klepton ELF declarations changed');
   fs.writeFileSync(path.join(build,'image-elf-types.h'),image.slice(types,end));
-  fs.writeFileSync(output,'#include <string.h>\n#include <stdlib.h>\n#include "kl_x18.h"\n#define VEN_MAX_INSN KLX_VEN_MAX_INSN\n'+decoder+survey+stack+emit+api+'\n#include "instruction-evidence.h"\n#include "image-elf-types.h"\n#include "image-instruction-evidence.h"\n#include "x18-stack-resume.h"\n');
+  fs.writeFileSync(output,'#include <string.h>\n#include <stdlib.h>\n#include "kl_x18.h"\n#define VEN_MAX_INSN KLX_VEN_MAX_INSN\n'+decoder+survey+stack+emit+api+farEmitterSource(emit)+'\n#include "instruction-evidence.h"\n#include "image-elf-types.h"\n#include "image-instruction-evidence.h"\n#include "x18-stack-resume.h"\n'+farStackResumeSource(fs.readFileSync(path.join(import.meta.dirname,'x18-stack-resume.h'),'utf8')));
   return output;
 }
 

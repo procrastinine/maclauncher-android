@@ -7,6 +7,12 @@ The source tree contains the JVM host, ART adaptations, native implementations,
 owned upstream patches, source pins and notices. Launcher UI, game import and
 launcher account/storage orchestration remain in MacLauncher.
 
+MacLauncher consumes this project as a pinned source submodule. Its existing
+producer paths are source-only aliases into this repository; implementation
+changes belong here. Application packages contain only the small metadata
+library needed by the launcher and the selected runtime binaries. Running games
+does not require Git, source checkouts or compilation.
+
 Build inputs are explicit paths supplied to the existing native producer:
 
 ```sh
@@ -18,6 +24,8 @@ It supplies the pinned source checkouts, JDK, platform tools, portable dependenc
 artifacts and output/cache directories. Build-time Maven tools are acquired by
 the explicit build command and verified against their recorded checksums.
 Generated libraries, archives, Android images and caches are excluded from Git.
+Verified Maven tools are cached under the selected build workspace and copied
+into its fixed source snapshot; source files remain unchanged during a build.
 
 `npm run check` validates source import paths and exact upstream Git pins.
 `upstreams.json` records source URLs, commits and license notice paths. Upstream checkouts
@@ -52,3 +60,10 @@ producer stages this Apache-licensed component and its notice under `platform/`;
 no complete image or Google package is included in the platform component
 collection. The APK is a binary build input and is not committed to this source
 repository.
+
+The ART package producer is `src/modules/android/art/package.mjs`. Its inputs
+include the completed supplier, common runtime, verified original image identity,
+extractor and corresponding source archive. `commonDeclaration` supplies the
+common runtime notice records and must match that producer manifest SHA-256.
+The caller supplies shared package inventory, Mach-O inspection and verification
+services; the producer does not read a launcher catalog or selected version.

@@ -3,7 +3,7 @@ import path from 'node:path';
 
 export const requiredInputs=['klepton','converter','jdk','sdl','vulkan-headers','sndfile-headers','codecs','codec-notices','angle','gles-headers','framework','output'];
 export const platformTools=['aidl','aconfig','rust-toolchain','python'];
-export const optionalInputs=['ndk-headers','blueprint-parser','blueprint-parser-sources','ninja','build-work'];
+export const optionalInputs=['ndk-headers','blueprint-parser','blueprint-parser-sources','ninja','build-work','tool-inputs'];
 
 /** The snapshot builder and compiler consume the same pinned supplier catalog. */
 export function sourceOptions(root){

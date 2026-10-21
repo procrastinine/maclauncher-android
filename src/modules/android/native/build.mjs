@@ -18,7 +18,9 @@ if(options.output===root||options.output.startsWith(root+path.sep))throw Error('
 options['build-work']??=path.join(path.dirname(options.output),'.android-build-cache');
 if(!enterBuildWorkspace({directory:options['build-work'],output:options.output,python:options.python,entry:process.argv[1],args:process.argv.slice(2),fd:workspaceFd,outputFd,manageOutput:true}))process.exit(0);
 const source=path.join(options.output,'source');
-snapshotSources(root,source);
+const legacyTools=path.join(path.dirname(path.resolve(process.argv[1])),'tools');
+snapshotSources(root,source,{toolInputs:options['tool-inputs']||(fs.existsSync(legacyTools)?legacyTools:undefined)});
+delete options['tool-inputs'];
 const toolSnapshot=snapshotBuildCompanions({repository:path.resolve(root,'../../../..'),destination:path.join(source,'build-tools')});
 const workingSource=path.join(options['build-work'],'source');synchronizeSourceTree(source,workingSource);
 const identity=sourceIdentity(sourceInventory(path.join(source,'native')),fs.readFileSync(path.join(source,'profile.js')),

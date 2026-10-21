@@ -5,6 +5,9 @@ unsafe extern "C" {
     fn klx_stack_resume(context: *mut libc::c_void) -> i32;
     fn klx_core_emit(word: u32, site: u64, pool: u64, slot: u32, ctr: u64,
                      words: *mut u32, capacity: usize) -> i32;
+    fn klx_core_emit_far(word:u32,site:u64,pool:u64,slot:u32,ctr:u64,entry:u16,
+        words:*mut u32,capacity:usize,branches:*mut u64,branch_capacity:usize,branch_count:*mut usize)->i32;
+    fn klx_stack_resume_far(context:*mut libc::c_void,target:u64)->i32;
     fn klx_elf_instruction_evidence(file: *const u8, size: usize, state: *mut u8, count: usize) -> i32;
     fn klx_instruction_evidence(words: *const u32, count: usize, base: u64,
                                roots: *const u64, root_count: usize, state: *mut u8) -> i32;
@@ -27,6 +30,15 @@ pub(crate) fn elf_evidence(bytes: &[u8]) -> Vec<u8> {
 }
 
 pub const MAX_WORDS: usize = 12;
+pub(crate) fn far_capacity()->usize{MAX_WORDS}
+pub(crate) fn emit_far(word:u32,site:u64,pool:u64,ctr:u32,entry:u16)->Option<(Vec<u32>,Vec<(u64,u64)>)>{
+    let mut words=[0;MAX_WORDS];let mut branches=[0u64;16];let mut count=0usize;
+    let length=unsafe{klx_core_emit_far(word,site,pool,super::slot::SCS_KEY as u32,ctr as u64,entry,
+        words.as_mut_ptr(),words.len(),branches.as_mut_ptr(),branches.len()/2,&mut count)};
+    (length>0&&length as usize<=words.len()&&count<=branches.len()/2)
+        .then(||(words[..length as usize].to_vec(),branches[..count*2].chunks_exact(2).map(|branch|(branch[0],branch[1])).collect()))
+}
+pub(crate) unsafe fn resume_stack_far(context:*mut libc::c_void,target:u64)->bool{unsafe{klx_stack_resume_far(context,target)!=0}}
 
 /// The shared hardware veneer completes an arbitrary SP update through the
 /// existing interrupted context, after validating its complete instruction body.

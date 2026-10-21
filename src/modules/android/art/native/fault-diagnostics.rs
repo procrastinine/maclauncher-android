@@ -88,6 +88,10 @@ pub fn report_handled_fault(fault: &Fault, linux_code: i32, guest_tid: i32) {
         line.add(&[b'0' + (index % 10) as u8]); line.add(b"="); line.hex(*value);
     }
     line.add(b"\n");
+    write_raw_fault_line(&line);
+}
+
+fn write_raw_fault_line(line: &RawFaultLine) {
     // The existing diagnostics descriptor owns output and retirement. Node's
     // captured streams are sockets: do not wait for capacity or generate
     // SIGPIPE when their reader has retired. A regular log file also permits
@@ -102,6 +106,54 @@ pub fn report_handled_fault(fault: &Fault, linux_code: i32, guest_tid: i32) {
             }
         }
     }
+}
+
+static ABORT_REQUESTS: std::sync::atomic::AtomicU32 =
+    std::sync::atomic::AtomicU32::new(0);
+
+pub fn configure_abort_request_capture(enabled: bool) {
+    ABORT_REQUESTS.store(if enabled { 16 } else { 0 },
+        std::sync::atomic::Ordering::Relaxed);
+}
+
+// Observe only an explicitly requested, validated self-directed abort before
+// original signal delivery. Another thread can exit_group before the default
+// signal handler reports death. This is a request, not proof of fatal delivery:
+// the guest may handle it normally. It never changes signal disposition.
+pub fn report_abort_request(sig: i32, target_tid: i32) {
+    if sig != libc::SIGABRT || ABORT_REQUESTS.load(std::sync::atomic::Ordering::Relaxed) == 0 {
+        return;
+    }
+    let context = crate::context::current_ctx();
+    if context.is_null() { return; }
+    let context = unsafe { &*context };
+    if context.in_host == 0 || context.tid != target_tid as u64 ||
+        !matches!(context.x[8], 130 | 131) { return; }
+    if ABORT_REQUESTS.fetch_update(std::sync::atomic::Ordering::Relaxed,
+        std::sync::atomic::Ordering::Relaxed, |value| value.checked_sub(1)).is_err() { return; }
+    let _errno = FaultReportErrno::save();
+    let mut line = RawFaultLine { bytes: [0; 2048], len: 0 };
+    line.add(b"[linux-abi] software SIGABRT request");
+    line.field(b" guest_tid=", context.tid);
+    line.field(b" host_pid=", unsafe { libc::getpid() } as u64);
+    line.field(b" host_pthread=", unsafe { libc::pthread_self() } as u64);
+    line.field(b" pc=", context.pc);
+    line.field(b" stub=", context.stub_ret);
+    line.field(b" lr=", context.x[30]);
+    line.field(b" fp=", context.x[29]);
+    line.field(b" sp=", context.sp);
+    let mut fp = context.x[29];
+    for index in 0..8 {
+        let Some(frame) = frame_record(fp) else { break; };
+        line.add(b" return"); line.add(&[b'0' + index]);
+        line.add(b"="); line.hex(frame[1] & 0x00ff_ffff_ffff_ffff);
+        if frame[0] <= fp { break; }
+        fp = frame[0];
+    }
+    line.add(b"\n");
+    // Raw bounded output avoids allocator, symbol/map locks and a stalled or
+    // retired diagnostics reader while the original signal is still pending.
+    write_raw_fault_line(&line);
 }
 
 static CAPTURE_FAULT_INSTRUCTION: std::sync::atomic::AtomicBool =

@@ -29,6 +29,7 @@ import {prepareResourceLimits} from './resource-limits-source.mjs';
 import {prepareJitUserCopy} from './jit-user-copy-source.mjs';
 import {prepareUserOutput} from './user-output-source.mjs';
 import {prepareDatagramReceive} from './datagram-receive-source.mjs';
+import {prepareFarVeneers} from './far-veneer-source.mjs';
 const root=import.meta.dirname;
 export const supplier=JSON.parse(fs.readFileSync(path.join(root,'supplier.json'),'utf8'));
 
@@ -68,6 +69,7 @@ export function prepareAimSource({source,output,klepton}){
   prepareImportedStorage(temporary);
   preparePackagePaths(temporary);
   prepareA64Execution(temporary);
+  prepareFarVeneers(temporary);
  });
  return output;
 }

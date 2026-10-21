@@ -85,6 +85,11 @@ continuation; that continuation receives no evidence from the prefix.
 Opaque prefixes and mismatched canary slots supply no such evidence. Native
 load diagnostics retain the registry's rejection reason while guest `dlerror`
 strings keep their bounded Android form.
+ART's optional `MACLAUNCHER_ART_ABORT_CONTEXT=1` diagnostic records up to 16
+self-directed abort requests at their original syscall boundary, including a
+bounded frame-pointer walk. It preserves signal delivery and distinguishes an
+abort request from a fatal signal. Output uses the existing diagnostics owner
+without allocating, resolving symbols or waiting for a stream reader.
 ARM64 ELF TLS supports `PT_TLS`, `DTPMOD64`, `DTPREL64`, `TPREL64` and `TLSDESC`
 while preserving the real Android thread pointer and original Bionic slots.
 Initial-exec and dynamic references share the same per-thread address. A private

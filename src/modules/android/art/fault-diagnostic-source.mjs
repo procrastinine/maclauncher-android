@@ -50,10 +50,12 @@ fn frames(mut fp: u64) {`],
         }`,'        let Some(rec)=frame_record(fp)else{return;};'],
  ]);
  edit('sys/signal.rs',[
+  ['        Ok(th) => send_thread(&th, sender(sig, sigframe::SI_TKILL)),',
+   '        Ok(th) => {\n            crate::diag::report_abort_request(sig, th.tid);\n            send_thread(&th, sender(sig, sigframe::SI_TKILL))\n        },'],
   ['    crate::diag::note_fault(crate::diag::Fault {','    let snapshot = crate::diag::Fault {'],
   ['        esr: f.esr as u32,\n','        esr: f.esr as u32,\n        x: { let mut x=m.x; x[18]=crate::context::guest_scs(); x },\n        instruction: crate::diag::interrupted_instruction(sig, m.pc),\n'],
   ['    });\n    let cpu = Cpu::from_mc(m);','    };\n    crate::diag::note_fault(snapshot);\n    crate::diag::report_handled_fault(&snapshot, f.info.code, th.tid);\n    let cpu = Cpu::from_mc(m);'],
-  ['pub fn install_host_handlers() {','pub fn install_host_handlers() {\n    crate::diag::configure_fault_instruction_capture(std::env::var_os("MACLAUNCHER_ART_FAULT_INSTRUCTION").is_some_and(|value| value == "1"));'],
+  ['pub fn install_host_handlers() {','pub fn install_host_handlers() {\n    crate::diag::configure_fault_instruction_capture(std::env::var_os("MACLAUNCHER_ART_FAULT_INSTRUCTION").is_some_and(|value| value == "1"));\n    crate::diag::configure_abort_request_capture(std::env::var_os("MACLAUNCHER_ART_ABORT_CONTEXT").is_some_and(|value| value == "1"));'],
   ['    ONCE.call_once(|| {\n        forward(CARRIER, 0);','    ONCE.call_once(|| {\n        crate::diag::configure_handled_fault_capture(std::env::var_os("MACLAUNCHER_ART_HANDLED_FAULT_CONTEXT").is_some_and(|value| value == "1"));\n        forward(CARRIER, 0);'],
  ]);
 }

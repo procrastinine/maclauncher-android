@@ -4,9 +4,17 @@ import crypto from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 
 const digest=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
+// Legacy producer paths may be aliases into this pinned source owner. Cache
+// directories remain with the caller; inventories contain the owner only.
+function sourceRoot(root){
+  root=fs.realpathSync(root);
+  const entry=path.join(root,'build.mjs');
+  return fs.existsSync(entry)&&fs.lstatSync(entry).isSymbolicLink()?path.dirname(fs.realpathSync(entry)):root;
+}
 // One complete inventory serves compilation and staging. New source files are
 // included automatically; generated products never enter the source tree.
 export function sourceInventory(root,destination,{links=false,exclude=[]}={}){
+  root=sourceRoot(root);
   const files=[];
   function visit(relative){
     for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){
@@ -49,8 +57,18 @@ export function sourceIdentity(ownedSources,profileBytes,buildToolsSources=[],ar
   const identity={ownedSources,profileSha256,...(buildToolsSources.length?{buildToolsSources}:{}),...(artSources.length?{artSources}:{})};
   return {...identity,sourceHash:digest(JSON.stringify(identity))};
 }
-export function snapshotSources(root,destination){
-  const ownedSources=sourceInventory(root,path.join(destination,'native'));
+export function snapshotSources(root,destination,{toolInputs}={}){
+  root=sourceRoot(root);
+  sourceInventory(root,path.join(destination,'native'));
+  if(toolInputs){
+    const tools=path.join(destination,'native/tools');fs.mkdirSync(tools,{recursive:true});
+    for(const name of ['asm-binary.json','apksig-binary.json'])
+      for(const file of JSON.parse(fs.readFileSync(path.join(root,name))).files){
+        if(path.basename(file.path)!==file.path)throw Error('Invalid Android tool input path');
+        fs.copyFileSync(path.join(toolInputs,file.path),path.join(tools,file.path));
+      }
+  }
+  const ownedSources=sourceInventory(path.join(destination,'native'));
   const profile=fs.readFileSync(path.join(root,'../profile.js'));
   fs.writeFileSync(path.join(destination,'profile.js'),profile);
   const art=path.join(root,'../art');
