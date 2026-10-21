@@ -11,7 +11,6 @@
 #include <stdatomic.h>
 #include <stdio.h>
 #include <sys/resource.h>
-#include <sys/sysctl.h>
 #include <mach/mach.h>
 #include <fcntl.h>
 #include "native-clock/clock-domain.h"
@@ -202,6 +201,11 @@ JNIEXPORT void JNICALL Java_android_os_Process_setArgV0Native(JNIEnv* e,jclass c
 JNIEXPORT void JNICALL Java_dalvik_system_VMDebug_setCurrentProcessName(JNIEnv* e,jclass c,jstring name){(void)c;process_name(e,name);}
 JNIEXPORT jint JNICALL Java_android_os_Process_setUid(JNIEnv* e,jclass c,jint uid){(void)e;(void)c;return klj_process_setuid(uid);}
 JNIEXPORT jint JNICALL Java_android_os_Process_setGid(JNIEnv* e,jclass c,jint gid){(void)e;(void)c;return klj_process_setgid(gid);}
-JNIEXPORT jlong JNICALL Java_android_os_Process_getTotalMemory(JNIEnv* e,jclass c){(void)c;uint64_t value=0;size_t size=sizeof(value);if(sysctlbyname("hw.memsize",&value,&size,NULL,0)){error(e,"java/lang/IllegalStateException","Physical memory query failed");return -1;}return value;}
-JNIEXPORT jlong JNICALL Java_android_os_Process_getFreeMemory(JNIEnv* e,jclass c){(void)c;vm_statistics64_data_t v;mach_msg_type_number_t n=HOST_VM_INFO64_COUNT;mach_port_t h=mach_host_self();kern_return_t code=host_statistics64(h,HOST_VM_INFO64,(host_info64_t)&v,&n);mach_port_deallocate(mach_task_self(),h);if(code!=KERN_SUCCESS){error(e,"java/lang/IllegalStateException","Available memory query failed");return -1;}return ((uint64_t)v.free_count+v.inactive_count+v.speculative_count)*(uint64_t)getpagesize();}
+/* Process and ActivityManager share Klepton's configured guest budget and live
+ * process headroom. Physical host RAM and host-wide free pages are not a second
+ * Android memory model. The existing native owner retains its failure policy. */
+extern uint64_t kl_mem_budget_bytes(void);
+extern uint64_t kl_mem_available_bytes(void);
+JNIEXPORT jlong JNICALL Java_android_os_Process_getTotalMemory(JNIEnv* e,jclass c){(void)e;(void)c;return (jlong)kl_mem_budget_bytes();}
+JNIEXPORT jlong JNICALL Java_android_os_Process_getFreeMemory(JNIEnv* e,jclass c){(void)e;(void)c;return (jlong)kl_mem_available_bytes();}
 JNIEXPORT jint JNICALL Java_android_os_Process_nativePidFdOpen(JNIEnv* e,jclass c,jint p,jint flags){(void)c;(void)p;(void)flags;jclass type=(*e)->FindClass(e,"android/system/ErrnoException");jmethodID init=type?(*e)->GetMethodID(e,type,"<init>","(Ljava/lang/String;I)V"):NULL;jstring op=init?(*e)->NewStringUTF(e,"pidfd_open"):NULL;if(op){jthrowable ex=(*e)->NewObject(e,type,init,op,38);if(ex){(*e)->Throw(e,ex);(*e)->DeleteLocalRef(e,ex);}(*e)->DeleteLocalRef(e,op);}if(type)(*e)->DeleteLocalRef(e,type);return -1;}

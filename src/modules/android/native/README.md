@@ -56,6 +56,13 @@ waiters from that same queue. The snapshot retains the original address,
 operation, expected value, timeout and pthread owner, including address changes
 from requeue. It never reads the guest futex word or waits for the metadata lock.
 Native library state and class references retain their library's load lifetime.
+JVM `Process.getTotalMemory` and `getFreeMemory` share the existing native
+memory owner with `ActivityManager` and `Bridge.memoryInfo`: the configured
+`KL_MEM_TOTAL_MB` guest budget is capped by physical memory, and available bytes
+follow the owner's live process headroom. `/proc/meminfo` reports that budget in
+kB and its existing process-footprint accounting; these APIs do not expose a
+separate host-wide RAM or free-page estimate. ART retains original Bionic memory
+queries through its own execution backend.
 Native ABI metadata lookup retains the calling library's class-loader namespace.
 The configured application ABI selects ELF dependencies and system library paths
 before native constructors run. ARM32 and ARM64 imports retain the same platform
