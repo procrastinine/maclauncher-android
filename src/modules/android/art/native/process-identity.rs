@@ -44,6 +44,7 @@ struct Api {
  directory:CString,process:Current,thread:Current,reserve:Current,adopt:Adopt,
  release:Release,owner:Owner,from_host:Adopt,child:Adopt,child_host:Adopt,retain_child:Adopt,reap_child:Adopt,
  getpgid:Adopt,getsid:Adopt,setpgid:Pair,setsid:Current,
+ get_dumpable:Current,set_dumpable:Adopt,dumpable_of:Adopt,
 }
 static API:OnceLock<Api>=OnceLock::new();
 
@@ -80,6 +81,9 @@ pub unsafe fn install(handle:*mut c_void)->Result<(),String>{
   getsid:unsafe{std::mem::transmute(address(handle,c"klj_process_getsid")?)},
   setpgid:unsafe{std::mem::transmute(address(handle,c"klj_process_setpgid")?)},
   setsid:unsafe{std::mem::transmute(address(handle,c"klj_process_setsid")?)},
+  get_dumpable:unsafe{std::mem::transmute(address(handle,c"klj_process_get_dumpable")?)},
+  set_dumpable:unsafe{std::mem::transmute(address(handle,c"klj_process_set_dumpable")?)},
+  dumpable_of:unsafe{std::mem::transmute(address(handle,c"klj_process_dumpable_of")?)},
  };
  if unsafe{configure(api.directory.as_ptr())}<0{return Err(std::io::Error::last_os_error().to_string());}
  aim_storage::posix_broker::set_pid_resolver(api.from_host)?;
@@ -121,3 +125,10 @@ pub fn owner(id:i32)->Option<Result<Identity,i64>>{
   if status==0{Ok(result)}else{Err(-(crate::errno::last() as i64))}
  })
 }
+
+/// Shared policy only; obtaining a host task port remains a separate check.
+pub fn get_dumpable()->Option<i64>{API.get().map(|api|native_result(unsafe{(api.get_dumpable)()}))}
+pub fn set_dumpable(value:i32)->Option<i64>{API.get().map(|api|native_result(unsafe{(api.set_dumpable)(value)}))}
+pub fn dumpable_of_host(host:i32)->Option<bool>{API.get().map(|api|{
+ let id=unsafe{(api.from_host)(host)};id>0&&unsafe{(api.dumpable_of)(id)}==1
+})}

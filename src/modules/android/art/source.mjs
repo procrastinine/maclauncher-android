@@ -30,6 +30,7 @@ import {prepareJitUserCopy} from './jit-user-copy-source.mjs';
 import {prepareUserOutput} from './user-output-source.mjs';
 import {prepareDatagramReceive} from './datagram-receive-source.mjs';
 import {prepareFarVeneers} from './far-veneer-source.mjs';
+import {prepareProcessPolicy} from './process-policy-source.mjs';
 const root=import.meta.dirname;
 export const supplier=JSON.parse(fs.readFileSync(path.join(root,'supplier.json'),'utf8'));
 
@@ -70,6 +71,7 @@ export function prepareAimSource({source,output,klepton,glesHeaders}){
   preparePackagePaths(temporary);
   prepareA64Execution(temporary);
   prepareFarVeneers(temporary);
+  prepareProcessPolicy(temporary);
  });
  return output;
 }
