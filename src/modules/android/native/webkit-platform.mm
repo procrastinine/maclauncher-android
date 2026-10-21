@@ -4,6 +4,7 @@
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <CommonCrypto/CommonDigest.h>
 #include "webkit-platform.h"
+#include "webkit-navigation.h"
 #include <stdexcept>
 #include <memory>
 #include <unordered_map>
@@ -78,7 +79,7 @@ NSString* json(id value){if(!value||value==[NSNull null])return @"null";NSData* 
 Ref owner(int64_t handle){if(!pthread_main_np())fail("WebKit requires the native window thread");auto found=browsers.find(handle);if(found==browsers.end())fail("WebKit view has been destroyed");return found->second;}
 bool localURL(const std::shared_ptr<KljWebContext>&context,NSURL*url){if(!url.isFileURL)return true;NSString*path=url.URLByResolvingSymlinksInPath.path;return [path hasPrefix:[context->appDataRoot stringByAppendingString:@"/"]]||[path isEqualToString:context->appDataRoot];}
 bool advertisingURL(NSURL*url){return url.host&&!klj_network_host_allowed(url.host.UTF8String);}
-NSString* androidURL(NSURL*url){NSString*scheme=url.scheme.lowercaseString;NSString*root=[scheme isEqualToString:@"android-asset"]?@"file:///android_asset":[scheme isEqualToString:@"android-resource"]?@"file:///android_res":nil;if(!root)return url.absoluteString;NSURLComponents*parts=[NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];return [NSString stringWithFormat:@"%@%@%@%@",root,parts.percentEncodedPath?:@"/",parts.percentEncodedQuery?[@"?" stringByAppendingString:parts.percentEncodedQuery]:@"",parts.percentEncodedFragment?[@"#" stringByAppendingString:parts.percentEncodedFragment]:@""];}
+NSString* androidURL(NSURL*url){return klj_webkit_android_url(url);}
 NSURL* resourceURL(NSString*text){if([text hasPrefix:@"file:///android_asset/"])text=[@"android-asset:///" stringByAppendingString:[text substringFromIndex:22]];else if([text hasPrefix:@"file:///android_res/"])text=[@"android-resource:///" stringByAppendingString:[text substringFromIndex:20]];return [NSURL URLWithString:text];}
 }
 
@@ -103,6 +104,7 @@ struct Browser {
     NSArray<WKUserScript*>* baseScripts=nil;
     NSArray<NSString*>* interfaceNames=@[];
     NSHashTable<WKNavigation*>* applicationNavigations=[NSHashTable weakObjectsHashTable];
+    NSMapTable<WKNavigation*,NSURLRequest*>* navigationRequests=[NSMapTable weakToStrongObjectsMapTable];
     int64_t nextDialog=1;
     std::shared_ptr<KljWebClient> client;std::shared_ptr<KljWebContext> context;
     bool closed=false,snapshot=false,editorPending=false;
@@ -110,12 +112,14 @@ struct Browser {
     SnapshotPixels pixels;
     int pixelWidth=1,pixelHeight=1,contentWidth=0,contentHeight=0;CGFloat density=1;
     Browser(std::shared_ptr<KljWebContext>c,std::shared_ptr<KljWebClient> callback):client(std::move(callback)),context(std::move(c)){}
-    void applicationLoad(WKNavigation* navigation){if(navigation)[applicationNavigations addObject:navigation];}
+    void applicationLoad(WKNavigation* navigation,NSURLRequest* request){if(navigation){[applicationNavigations addObject:navigation];if(request)[navigationRequests setObject:request forKey:navigation];}}
+    NSURL* failureURL(WKNavigation* navigation,NSError* error){return klj_webkit_failure_url(error,navigation?[navigationRequests objectForKey:navigation]:nil);}
     bool startsApplicationLoad(WKNavigationAction* action){
         if(!action.targetFrame.mainFrame)return false;
         WKNavigation* navigation;
         if(@available(macOS 27.0,*))navigation=action.mainFrameNavigation;
         else navigation=[action _mainFrameNavigation];
+        if(navigation&&action.request)[navigationRequests setObject:action.request forKey:navigation];
         if(!navigation||![applicationNavigations containsObject:navigation])return false;
         [applicationNavigations removeObject:navigation];
         return ![action _isRedirect];
@@ -135,7 +139,7 @@ struct Browser {
         contentWidth=width;contentHeight=height;
         client->dimensions(width,height);
     }
-    void navigation(NSString*state,NSString*error=nil){if(closed)return;client->navigation(state,androidURL(view.URL),error?:view.title,(int)lround(view.estimatedProgress*100));if(closed)return;auto list=view.backForwardList;NSArray<WKBackForwardListItem*>*items=list.currentItem?[[list.backList arrayByAddingObject:list.currentItem]arrayByAddingObjectsFromArray:list.forwardList]:@[];NSMutableArray*urls=[NSMutableArray new],*titles=[NSMutableArray new];for(WKBackForwardListItem*item in items){[urls addObject:androidURL(item.URL)?:@""];[titles addObject:item.title?:@""];}client->history(urls,titles,list.currentItem?(int)list.backList.count:-1);}
+    void navigation(NSString*state,NSString*error=nil,NSURL*eventURL=nil){if(closed)return;client->navigation(state,androidURL(eventURL?:view.URL),error?:view.title,(int)lround(view.estimatedProgress*100));if(closed)return;auto list=view.backForwardList;NSArray<WKBackForwardListItem*>*items=list.currentItem?[[list.backList arrayByAddingObject:list.currentItem]arrayByAddingObjectsFromArray:list.forwardList]:@[];NSMutableArray*urls=[NSMutableArray new],*titles=[NSMutableArray new];for(WKBackForwardListItem*item in items){[urls addObject:androidURL(item.URL)?:@""];[titles addObject:item.title?:@""];}client->history(urls,titles,list.currentItem?(int)list.backList.count:-1);}
     void dialog(NSString*kind,NSString*message,NSString*value,void(^completion)(BOOL,NSString*)){if(closed){completion(NO,nil);return;}int64_t id=nextDialog++;dialogs[@(id)]=completion;client->dialog(id,kind,androidURL(view.URL),message,value);}
 };
 struct Completion {
@@ -183,8 +187,8 @@ NSString* observerScript=@"(()=>{const changed=()=>{const d=document.documentEle
         if(!s->closed){s->retainEditor();bool editable=[message.body[@"editable"]boolValue];s->editorFrame=editable?message.frameInfo:nil;s->editorIdentity=editable?identity:nil;s->client->editor(json(message.body));}s->retainEditor();s->dirty();}else if([message.name isEqualToString:@"maclauncherPorts"]&&[message.body isKindOfClass:NSDictionary.class]&&[message.body[@"id"] isKindOfClass:NSNumber.class]&&[message.body[@"data"] isKindOfClass:NSString.class]){if(!s->closed)s->client->port([message.body[@"id"]longLongValue],message.body[@"data"]);}else s->dirty();}}
 - (void)webView:(WKWebView*)view didStartProvisionalNavigation:(WKNavigation*)navigation {if(auto s=self.owner.lock()){s->editorIdentity=nil;s->editorFrame=nil;s->dimensions(@{});s->navigation(@"started");}}
 - (void)webView:(WKWebView*)view didFinishNavigation:(WKNavigation*)navigation {if(auto s=self.owner.lock()){s->navigation(@"finished");s->dirty();}}
-- (void)webView:(WKWebView*)view didFailNavigation:(WKNavigation*)navigation withError:(NSError*)error {if(auto s=self.owner.lock())s->navigation(@"error",error.localizedDescription);}
-- (void)webView:(WKWebView*)view didFailProvisionalNavigation:(WKNavigation*)navigation withError:(NSError*)error {if(auto s=self.owner.lock())s->navigation(@"error",error.localizedDescription);}
+- (void)webView:(WKWebView*)view didFailNavigation:(WKNavigation*)navigation withError:(NSError*)error {if(auto s=self.owner.lock())s->navigation(@"error",error.localizedDescription,s->failureURL(navigation,error));}
+- (void)webView:(WKWebView*)view didFailProvisionalNavigation:(WKNavigation*)navigation withError:(NSError*)error {if(auto s=self.owner.lock())s->navigation(@"error",error.localizedDescription,s->failureURL(navigation,error));}
 - (void)webView:(WKWebView*)view decidePolicyForNavigationAction:(WKNavigationAction*)action decisionHandler:(void (^)(WKNavigationActionPolicy))decide {
     auto s=self.owner.lock();if(!s||s->closed){decide(WKNavigationActionPolicyCancel);return;}BOOL cancel=NO;
     // WK content rules reject actual network requests, including navigation.
@@ -270,16 +274,16 @@ void klj_webkit_visibility(int64_t handle,bool visible){auto s=owner(handle);if(
 extern "C" void klj_webkit_window_detach(void*window){for(auto&entry:browsers){auto s=entry.second;if(s->window==(__bridge NSWindow*)window){[s->view removeFromSuperview];s->window=nil;}}}
 void klj_webkit_load(int64_t handle,NSString* address,NSArray<NSString*>*keys,NSArray<NSString*>*values,NSData*data){@autoreleasepool{
     auto s=owner(handle);if(!s)return;NSURL*url=resourceURL(address);if(!url){fail("WebView URL is invalid");return;}if(!localURL(s->context,url)){fail("WebView file is outside Android application storage");return;}
-    if(advertisingURL(url)){s->applicationLoad([s->view loadHTMLString:@"" baseURL:[NSURL URLWithString:@"about:blank"]]);return;}
+    if(advertisingURL(url)){s->applicationLoad([s->view loadHTMLString:@"" baseURL:[NSURL URLWithString:@"about:blank"]],[NSURLRequest requestWithURL:[NSURL URLWithString:@"about:blank"]]);return;}
     auto request=[NSMutableURLRequest requestWithURL:url];for(NSUInteger i=0;i<keys.count;i++)[request setValue:values[i] forHTTPHeaderField:keys[i]];
     if(data){request.HTTPMethod=@"POST";request.HTTPBody=data;}
-    s->applicationLoad(url.isFileURL?[s->view loadFileURL:url allowingReadAccessToURL:[NSURL fileURLWithPath:s->context->appDataRoot isDirectory:YES]]:[s->view loadRequest:request]);
+    s->applicationLoad(url.isFileURL?[s->view loadFileURL:url allowingReadAccessToURL:[NSURL fileURLWithPath:s->context->appDataRoot isDirectory:YES]]:[s->view loadRequest:request],request);
 }}
-void klj_webkit_html(int64_t handle,NSString* html,NSString*base){auto s=owner(handle);NSURL*url=resourceURL(base?:@"about:blank");if(!localURL(s->context,url)){fail("WebView base URL is outside Android application storage");return;}if(s)s->applicationLoad([s->view loadHTMLString:html baseURL:url]);}
+void klj_webkit_html(int64_t handle,NSString* html,NSString*base){auto s=owner(handle);NSURL*url=resourceURL(base?:@"about:blank");if(!localURL(s->context,url)){fail("WebView base URL is outside Android application storage");return;}if(s)s->applicationLoad([s->view loadHTMLString:html baseURL:url],[NSURLRequest requestWithURL:url]);}
 void klj_webkit_script(int64_t handle,NSString*script,int64_t request){auto s=owner(handle);if(!s)return;[s->view evaluateJavaScript:script completionHandler:^(id value,NSError*error){if(!s->closed)s->client->script(request,json(value),error.localizedDescription);}];}
 void klj_webkit_stop(int64_t handle){auto s=owner(handle);if(s)[s->view stopLoading];}
-void klj_webkit_reload(int64_t handle){auto s=owner(handle);if(s)s->applicationLoad([s->view reload]);}
-void klj_webkit_navigate(int64_t handle,int delta){auto s=owner(handle);if(!s)return;auto item=[s->view.backForwardList itemAtIndex:delta];if(item)s->applicationLoad([s->view goToBackForwardListItem:item]);}
+void klj_webkit_reload(int64_t handle){auto s=owner(handle);if(s)s->applicationLoad([s->view reload],s->view.URL?[NSURLRequest requestWithURL:s->view.URL]:nil);}
+void klj_webkit_navigate(int64_t handle,int delta){auto s=owner(handle);if(!s)return;auto item=[s->view.backForwardList itemAtIndex:delta];if(item)s->applicationLoad([s->view goToBackForwardListItem:item],[NSURLRequest requestWithURL:item.URL]);}
 void klj_webkit_interfaces(int64_t handle,NSString*encoded){auto s=owner(handle);if(!s)return;NSDictionary*spec=[NSJSONSerialization JSONObjectWithData:[encoded dataUsingEncoding:NSUTF8StringEncoding]options:0 error:nil];if(![spec isKindOfClass:NSDictionary.class]){fail("Invalid JavaScript interface description");return;}NSString*source=[NSString stringWithFormat:@"(()=>{for(const name of %@)delete window[name];const spec=%@;for(const [name,methods]of Object.entries(spec)){const target={};for(const method of methods)target[method]=(...args)=>{const response=JSON.parse(prompt('__MACLAUNCHER_JAVA__',JSON.stringify({name,method,args})));if(!response.ok)throw new Error(response.error);return response.value;};window[name]=target;}})();",json(s->interfaceNames),json(spec)];s->interfaceNames=spec.allKeys;auto controller=s->view.configuration.userContentController;[controller removeAllUserScripts];for(WKUserScript*script in s->baseScripts)[controller addUserScript:script];[controller addUserScript:[[WKUserScript alloc]initWithSource:source injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO]];[s->view evaluateJavaScript:source completionHandler:nil];}
 void klj_webkit_dialogResult(int64_t handle,int64_t request,bool accepted,NSString*value){auto s=owner(handle);if(!s)return;void(^done)(BOOL,NSString*)=s->dialogs[@(request)];if(done){[s->dialogs removeObjectForKey:@(request)];done(accepted,value);}}
 NSData* klj_webkit_state(int64_t handle){auto s=owner(handle);if(!s)return nullptr;NSError*error=nil;NSData*data=[NSKeyedArchiver archivedDataWithRootObject:s->view.interactionState requiringSecureCoding:YES error:&error];if(!data||data.length>INT_MAX){fprintf(stderr,"[android-webkit] Session state could not be archived: %s\n",error.localizedDescription.UTF8String?:"invalid size");return nullptr;}return data;}

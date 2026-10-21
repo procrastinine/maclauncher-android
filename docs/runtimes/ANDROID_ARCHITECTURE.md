@@ -1034,7 +1034,9 @@ Android `WebViewClient` request overload, retaining URL, frame, gesture, redirec
 method and header metadata. Android's original overload dispatch preserves older
 string-based clients. Application-initiated loads retain their separate identity;
 local scheme messages use the same callbacks while network isolation applies to
-actual network operations.
+actual network operations. Failed navigations retain the URL supplied by WebKit's
+error or the matching original request, including failures before a document
+commits. Error descriptions remain separate from the document title.
 
 The ART Linux socket layer retains multicast scalar and membership record layouts.
 UDP pending-byte queries use the native first-datagram payload count, excluding

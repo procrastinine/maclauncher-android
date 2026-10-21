@@ -220,7 +220,21 @@ public final class WebKitView implements InvocationHandler,AutoCloseable {
         // messages and retain the same original callback contract.
         return client.shouldOverrideUrlLoading(view,request);
     }
-    public void navigation(String state,String next,String text,int value){if(closed)return;url=next;title=text;progress=value;switch(state){case "started":client.onPageStarted(view,next,null);break;case "finished":client.onPageFinished(view,next);break;case "history":client.doUpdateVisitedHistory(view,next,false);break;case "error":client.onReceivedError(view,WebViewClient.ERROR_UNKNOWN,text,next);break;}if(chrome!=null){chrome.onProgressChanged(view,value);if(text!=null)chrome.onReceivedTitle(view,text);}dirty();}
+    public void navigation(String state,String next,String text,int value){
+        if(closed)return;
+        boolean failed="error".equals(state);
+        if(next!=null||!failed)url=next;
+        if(!failed)title=text;
+        progress=value;
+        switch(state){
+            case "started":client.onPageStarted(view,next,null);break;
+            case "finished":client.onPageFinished(view,next);break;
+            case "history":client.doUpdateVisitedHistory(view,next,false);break;
+            case "error":client.onReceivedError(view,WebViewClient.ERROR_UNKNOWN,text,next!=null?next:originalUrl);break;
+        }
+        if(chrome!=null){chrome.onProgressChanged(view,value);if(!failed&&text!=null)chrome.onReceivedTitle(view,text);}
+        dirty();
+    }
     public void history(String[] urls,String[] titles,int current){historyFloor=Math.min(historyFloor,Math.max(0,current));historyUrls=Arrays.copyOfRange(urls,historyFloor,urls.length);historyTitles=Arrays.copyOfRange(titles,historyFloor,titles.length);historyIndex=current-historyFloor;}
     private List<Long> transferred(WebMessage message){List<Long> result=new ArrayList<>();if(message.getPorts()!=null)for(WebMessagePort value:message.getPorts()){if(!(value instanceof Port port)||port.closed||port.transferred)throw new IllegalStateException("Web message port is unavailable");port.transferred=true;result.add(port.id);}return result;}
     public void portMessage(long id,String message){Port port=ports.get(id);if(port!=null&&!port.closed&&port.callback!=null)port.handler.post(()->{if(!port.closed)port.callback.onMessage(port,new WebMessage(message));});}
