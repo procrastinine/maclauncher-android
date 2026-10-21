@@ -40,7 +40,7 @@ export const supplier=JSON.parse(fs.readFileSync(path.join(root,'supplier.json')
 export function prepareAimSource({source,output,klepton,glesHeaders}){
  prepareSourceTree(output,temporary=>{
   exportSources(source,supplier.sources.aim.commit,['.'],temporary);
-  for(const name of ['aim-hostcall.patch','aim-platform.patch','aim-opened-path.patch','aim-display-modes.patch','aim-identities.patch','aim-process-liveness.patch','aim-create-mode.patch'])
+  for(const name of ['aim-hostcall.patch','aim-platform.patch','aim-opened-path.patch','aim-display-modes.patch','aim-identities.patch','aim-process-liveness.patch','aim-create-mode.patch','aim-stream-sockets.patch'])
    execFileSync('git',['apply','--unsafe-paths',path.join(root,'adapters',name)],{cwd:temporary,stdio:'inherit',env:{...process.env,GIT_CEILING_DIRECTORIES:path.dirname(temporary)}});
   copyChanged(path.join(root,'native/opened-path.rs'),path.join(temporary,'crates/aim-linux-abi/src/sys/opened-path.rs'));
   prepareOpenedOrigins(temporary);

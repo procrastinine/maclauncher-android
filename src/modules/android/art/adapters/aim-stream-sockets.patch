@@ -1,0 +1,122 @@
+From: AIM upstream (Apache-2.0)
+Subject: Retain Linux stream-connect state and pass inherited sockets directly
+
+Backports to 9b5068fa8185d3f51f1862fe7c54d88d51f09ec8:
+https://github.com/hahnlee/aim/commit/1a203861883b79edd91869a711fa96d857229df1
+https://github.com/hahnlee/aim/commit/7f447f1ea559678bc6e280a3a1f7ce2d6921ccc7
+
+The stream helpers are retained from upstream source at
+934009283f69c251f57ed95ef1dff296546bb6ad. The descriptor exporter keeps
+its original receipt path for recorded sockets and its existing plain
+descriptor path for sockets recognized without a sockfs allocation.
+Original APIs, inode allocation checks and socket adoption remain intact.
+
+--- a/crates/aim-linux-abi/src/sys/net.rs
++++ b/crates/aim-linux-abi/src/sys/net.rs
+@@ -118,6 +118,9 @@
+     port_zero: AtomicBool,
+     router: AtomicBool,
+     icmp4: AtomicBool,
++    /// Linux's `SS_CONNECTING`: a connect started (EINPROGRESS, or a
++    /// blocking one interrupted) whose result no connect has reported yet.
++    connecting: AtomicBool,
+ }
+ 
+ /// A socket's Linux state: an AF_UNIX socket's, or another family's.
+@@ -1084,6 +1087,12 @@
+     let mut r = with_target(&t, |sa, len| {
+         errno::check(unsafe { libc::connect(fd, sa, len) } as i64)
+     });
++    if let Some(s) = any_sock(&input)
++        && let Family::Inet(o) = &s.family
++        && matches!(s.ty, SockType::Stream)
++    {
++        r = reconnect(fd, o, r);
++    }
+     if r == -(libc::ENOENT as i64) && is_abstract(&name) {
+         // An abstract name nobody bound: refused, not missing.
+         r = -111;
+@@ -1106,6 +1115,72 @@
+     r
+ }
+ 
++/// `inet_stream_connect`'s answer to a stream connect whose Darwin result
++/// is `r`. Darwin answers a connect of a socket that is still connecting
++/// with EALREADY, and of one connected since with EISCONN. Linux reports
++/// the connection to the first connect after it (`SS_CONNECTING`): with 0
++/// once established, and a blocking socket waits for it. A blocking
++/// connect interrupted by a signal is such a repeat when it restarts, as
++/// is libcore's retry of it after EINTR.
++fn reconnect(fd: i32, o: &InetOpts, r: i64) -> i64 {
++    const EINTR: i64 = errno::EINTR as i64;
++    const EINPROGRESS: i64 = errno::from_darwin(libc::EINPROGRESS) as i64;
++    const EALREADY: i64 = errno::from_darwin(libc::EALREADY) as i64;
++    const EISCONN: i64 = errno::from_darwin(libc::EISCONN) as i64;
++    let connecting = o.connecting.load(Ordering::Relaxed);
++    let r = match -r {
++        EALREADY if connecting && !nonblocking(fd) => connected(fd),
++        EISCONN if connecting => 0,
++        _ => r,
++    };
++    o.connecting.store(
++        matches!(-r, EINTR | EINPROGRESS | EALREADY),
++        Ordering::Relaxed,
++    );
++    r
++}
++
++/// Whether the host descriptor is in non-blocking mode.
++fn nonblocking(fd: i32) -> bool {
++    // SAFETY: F_GETFL on a descriptor the caller holds.
++    let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
++    flags & libc::O_NONBLOCK != 0
++}
++
++/// `inet_wait_for_connect` on a blocking socket, then the connection's
++/// result (SO_ERROR); EINTR when a signal interrupts the wait, as the
++/// connect is then restarted or retried.
++fn connected(fd: i32) -> i64 {
++    let mut p = libc::pollfd {
++        fd,
++        events: libc::POLLOUT,
++        revents: 0,
++    };
++    // SAFETY: one pollfd on the stack, for a descriptor the caller holds.
++    if unsafe { libc::poll(&mut p, 1, -1) } < 0 {
++        return -(errno::last() as i64);
++    }
++    let mut e: libc::c_int = 0;
++    let mut l = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
++    // SAFETY: an int and its length on the stack.
++    let r = unsafe {
++        libc::getsockopt(
++            fd,
++            libc::SOL_SOCKET,
++            libc::SO_ERROR,
++            (&mut e as *mut libc::c_int).cast(),
++            &mut l,
++        )
++    };
++    if r < 0 {
++        -(errno::last() as i64)
++    } else if e != 0 {
++        -(errno::from_darwin(e) as i64)
++    } else {
++        0
++    }
++}
++
+ /// A datagram socket bound to a device other than the loopback that
+ /// connects to the DHCP server port (DhcpClient, once bound to its lease)
+ /// is connected to `eth0`'s virtual router, where its datagrams go
+--- a/crates/aim-linux-abi/src/sys/fdtab.rs
++++ b/crates/aim-linux-abi/src/sys/fdtab.rs
+@@ -98,7 +98,7 @@
+     // Regular files' and sockets' receipts travel through the binder host;
+     // without one (a run without guest-init) the host passes the fd itself.
+     if !super::binder::connected(){return export_pinned(pin).map(ScmExport::Other);}
+-    match pin.kind().cloned(){Some(Kind::Regular(description))=>super::regular_file::export(pin,description).map(ScmExport::Regular),Some(Kind::Sock(_))=>super::net::export_socket_pinned(pin).map(ScmExport::Socket),_=>export_pinned(pin).map(ScmExport::Other)}
++    match pin.kind().cloned(){Some(Kind::Regular(description))=>super::regular_file::export(pin,description).map(ScmExport::Regular),Some(Kind::Sock(socket)) if socket.inode_allocation.lock().unwrap().is_some()=>super::net::export_socket_pinned(pin).map(ScmExport::Socket),_=>export_pinned(pin).map(ScmExport::Other)}
+ }
+ 
+ pub(super) fn install_path(fd: i32) -> Result<(), crate::errno::Errno> {
