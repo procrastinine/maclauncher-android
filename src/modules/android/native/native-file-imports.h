@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/stat.h>
+#include <sys/mount.h>
 #include <sys/socket.h>
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
@@ -35,6 +36,37 @@ static void klj_allocation_initialize(void){
     for(size_t i=0;i<32;i++)pthread_mutex_init(&klj_allocation_locks[i],NULL);
     pthread_atfork(klj_allocation_before_fork,klj_allocation_after_fork,klj_allocation_after_fork);
 }
+static int klj_zero_file_range(int fd,off_t start,off_t end){
+    static const char zeros[65536]={0};
+    while(start<end){size_t bytes=(uint64_t)(end-start)>sizeof(zeros)?sizeof(zeros):(size_t)(end-start);
+        ssize_t written=pwrite(fd,zeros,bytes,start);
+        if(written<0){if(errno==EINTR)continue;return -1;}
+        if(!written){errno=EIO;return -1;}start+=written;
+    }
+    return 0;
+}
+/* Darwin punches whole filesystem blocks. Linux additionally zeroes partial
+ * edge blocks, without extending EOF. Discover native support before touching
+ * either edge so an unsupported punch cannot become a successful zero write. */
+static int klj_punch_file_range(int fd,off_t offset,off_t length,off_t size){
+    struct statfs filesystem;if(fstatfs(fd,&filesystem))return -1;
+    uint64_t block=(uint64_t)filesystem.f_bsize;
+    if(!block||block>LLONG_MAX){errno=EOPNOTSUPP;return -1;}
+    off_t end=offset+length;if(end>size)end=size;
+    off_t first=offset,last=offset;
+    if(end>offset){
+        off_t remainder=offset%(off_t)block;
+        off_t prefix=remainder?(off_t)block-remainder:0;
+        if(prefix<=end-offset){first=offset+prefix;last=end-end%(off_t)block;}
+    }
+    int whole=last>first;
+    fpunchhole_t punch={.fp_offset=whole?first:offset-offset%(off_t)block,
+        .fp_length=whole?last-first:0};
+    if(fcntl(fd,F_PUNCHHOLE,&punch))return -1;
+    if(!whole)return klj_zero_file_range(fd,offset,end);
+    if(klj_zero_file_range(fd,offset,first))return -1;
+    return klj_zero_file_range(fd,last,end);
+}
 static int klj_file_allocate_retained(int fd,int mode,off_t offset,off_t length){
     enum {KEEP=1,PUNCH=2,ZERO=16};
     struct stat info;if(fstat(fd,&info))return -1;
@@ -47,10 +79,7 @@ static int klj_file_allocate_retained(int fd,int mode,off_t offset,off_t length)
     pthread_mutex_lock(lock);
     int result=-1;
     if(fstat(fd,&info))goto done;
-    if(mode&PUNCH){
-        fpunchhole_t punch={.fp_offset=offset,.fp_length=length};
-        result=fcntl(fd,F_PUNCHHOLE,&punch);goto done;
-    }
+    if(mode&PUNCH){result=klj_punch_file_range(fd,offset,length,info.st_size);goto done;}
     off_t end=offset+length;
     off_t allocated=info.st_blocks>LLONG_MAX/512?LLONG_MAX:info.st_blocks*512;
     if(end>allocated){
@@ -63,12 +92,7 @@ static int klj_file_allocate_retained(int fd,int mode,off_t offset,off_t length)
         // Keep-size ranges may reserve capacity past EOF but must not extend
         // the visible file. pwrite preserves the caller's current offset.
         if((mode&KEEP)&&end>info.st_size)end=info.st_size;
-        static const char zeros[65536]={0};
-        while(offset<end){size_t bytes=(uint64_t)(end-offset)>sizeof(zeros)?sizeof(zeros):(size_t)(end-offset);
-            ssize_t written=pwrite(fd,zeros,bytes,offset);
-            if(written<0){if(errno==EINTR)continue;goto done;}
-            if(!written){errno=EIO;goto done;}offset+=written;
-        }
+        if(klj_zero_file_range(fd,offset,end))goto done;
     }
     result=0;
 done:;

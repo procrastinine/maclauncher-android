@@ -70,7 +70,9 @@ restrictions. These controls do not grant host debugger access.
 Native POSIX memory advice preserves errno and modified private bytes. The ARM64
 `sendfile` and `sendfile64` interfaces retain Linux argument order, explicit or
 current input offsets, partial-transfer counts and nonblocking errors for
-regular-file input with file, socket or pipe output.
+regular-file input with file, socket or pipe output. Linux hole punching deallocates whole
+filesystem blocks and zeroes partial edges while retaining file size and current
+offset; native filesystem errors remain errors.
 
 The ART package producer is `src/modules/android/art/package.mjs`. Its inputs
 include the completed supplier, common runtime, verified original image identity,

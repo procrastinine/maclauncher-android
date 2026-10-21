@@ -7,6 +7,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/mount.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <unistd.h>
 typedef ssize_t(*transfer)(int,int,off_t *,size_t);
@@ -17,6 +19,37 @@ static void nonblocking(int fd){int flags=fcntl(fd,F_GETFL);assert(flags>=0);ass
 static void pair(int fds[2]){assert(!socketpair(AF_UNIX,SOCK_STREAM,0,fds));int size=4096;assert(!setsockopt(fds[0],SOL_SOCKET,SO_SNDBUF,&size,sizeof size));nonblocking(fds[0]);}
 static void discard(int fd,size_t length){char buffer[4096];while(length){size_t want=length<sizeof buffer?length:sizeof buffer;ssize_t got=read(fd,buffer,want);assert(got>0);length-=(size_t)got;}}
 static void verify(int fd,off_t start,size_t length){char got[262144];assert(length<=sizeof got);size_t total=0;while(total<length){ssize_t n=read(fd,got+total,length-total);assert(n>0);total+=(size_t)n;}assert(!memcmp(got,bytes+start,length));}
+typedef int(*allocate)(int,int,off_t,off_t);
+static void allocation_unchanged(int fd,const unsigned char *expected,size_t length,const struct stat *before,int flags){
+ struct stat after;assert(!fstat(fd,&after));assert(after.st_ino==before->st_ino&&after.st_dev==before->st_dev&&after.st_size==before->st_size);
+ assert(lseek(fd,0,SEEK_CUR)==17&&fcntl(fd,F_GETFL)==flags);
+ unsigned char *got=malloc(length);assert(got);assert(pread(fd,got,length,0)==(ssize_t)length);assert(!memcmp(got,expected,length));free(got);
+}
+static void allocation_checks(allocate basic,allocate wide,int(*guest_errno)(void)){
+ int fd=temporary();struct statfs filesystem;assert(!fstatfs(fd,&filesystem));size_t block=filesystem.f_bsize;assert(block>0&&block<=1048576);
+ size_t length=block*4+13;unsigned char *original=malloc(length),*expected=malloc(length);assert(original&&expected);
+ for(size_t i=0;i<length;i++)original[i]=(unsigned char)(i%251+1);
+ struct{off_t offset,length;}cases[]={
+  {1,1},{(off_t)block-1,2},{1,(off_t)block*3+2},{(off_t)block,(off_t)block},
+  {(off_t)length-2,(off_t)block+5},{(off_t)length+(off_t)block,(off_t)block+9}};
+ for(int abi=0;abi<2;abi++)for(size_t c=0;c<sizeof cases/sizeof cases[0];c++){
+  assert(pwrite(fd,original,length,0)==(ssize_t)length);assert(lseek(fd,17,SEEK_SET)==17);
+  struct stat before;assert(!fstat(fd,&before));int flags=fcntl(fd,F_GETFL);assert(flags>=0);memcpy(expected,original,length);
+  off_t end=cases[c].offset+cases[c].length;if(end>(off_t)length)end=(off_t)length;
+  for(off_t i=cases[c].offset;i<end;i++)expected[i]=0;
+  assert(!(abi?wide:basic)(fd,3,cases[c].offset,cases[c].length));allocation_unchanged(fd,expected,length,&before,flags);
+  printf("PASS fallocate%s punch case=%zu block=%zu preserves exact bytes, inode, size, flags and offset\n",abi?"64":"",c,block);
+ }
+ assert(pwrite(fd,original,length,0)==(ssize_t)length);struct stat before;assert(!fstat(fd,&before));int flags=fcntl(fd,F_GETFL);
+ assert(basic(fd,3|128,1,(off_t)block*3+2)==-1&&guest_errno()==95);allocation_unchanged(fd,original,length,&before,flags);
+ assert(!fcntl(fd,F_SETFL,flags|O_APPEND));int append=fcntl(fd,F_GETFL);assert(wide(fd,3,1,(off_t)block*3+2)==-1&&guest_errno()==1);allocation_unchanged(fd,original,length,&before,append);
+ assert(!fcntl(fd,F_SETFL,flags));
+ close(fd);
+ char name[]="/tmp/android-native-allocation-XXXXXX";fd=mkstemp(name);assert(fd>=0);assert(write(fd,original,length)==(ssize_t)length);int readonly=open(name,O_RDONLY);assert(readonly>=0);assert(!unlink(name));close(fd);assert(lseek(readonly,17,SEEK_SET)==17);assert(!fstat(readonly,&before));flags=fcntl(readonly,F_GETFL);
+ assert(wide(readonly,3,1,(off_t)block*3+2)==-1&&guest_errno()==9);allocation_unchanged(readonly,original,length,&before,flags);close(readonly);
+ free(expected);free(original);puts("PASS unsupported mode, append and readonly return Linux errors without mutation");
+ puts("PASS original Android fallocate/fallocate64 unaligned and EOF-clipped hole punching");
+}
 int main(int argc,char **argv){
  assert(argc==5);for(size_t i=0;i<sizeof bytes;i++)bytes[i]=(char)(i*37+11);
  void *core=dlopen(argv[1],RTLD_NOW|RTLD_LOCAL);if(!core){puts(dlerror());return 2;}
@@ -33,6 +66,9 @@ int main(int argc,char **argv){
  void *(*load)(const char *)=dlsym(core,"kl_load");void *(*symbol)(void *,const char *)=dlsym(core,"kl_sym");const char *(*error)(void)=dlsym(core,"kl_error");assert(load&&symbol&&error);
  void *image=load(argv[2]);if(!image){puts(error());return 3;}
  int(*advice)(void *,size_t,int)=symbol(image,"guest_advice");int(*guest_errno)(void)=symbol(image,"guest_errno");transfer basic=symbol(image,"guest_sendfile"),wide=symbol(image,"guest_sendfile64");assert(advice&&guest_errno&&basic&&wide);
+ if(!strcmp(argv[4],"allocation")){
+  allocate basic_allocation=symbol(image,"guest_fallocate"),wide_allocation=symbol(image,"guest_fallocate64");assert(basic_allocation&&wide_allocation);allocation_checks(basic_allocation,wide_allocation,guest_errno);return 0;
+ }
  size_t page=(size_t)sysconf(_SC_PAGESIZE);void *memory=mmap(NULL,page,PROT_READ|PROT_WRITE,MAP_ANON|MAP_PRIVATE,-1,0);assert(memory!=MAP_FAILED);memset(memory,0xa5,page);
  errno=EDOM;assert(!advice(memory,page,4));assert(guest_errno()==33);for(size_t i=0;i<page;i++)assert(((unsigned char*)memory)[i]==0xa5);
  errno=EDOM;assert(advice((char*)memory+1,page,0)==22);assert(guest_errno()==33);
