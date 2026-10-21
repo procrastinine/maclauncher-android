@@ -67,3 +67,8 @@ extractor and corresponding source archive. `commonDeclaration` supplies the
 common runtime notice records and must match that producer manifest SHA-256.
 The caller supplies shared package inventory, Mach-O inspection and verification
 services; the producer does not read a launcher catalog or selected version.
+
+`prepareAimSource` accepts an explicit `glesHeaders` checkout alongside its AIM
+and Klepton inputs. Header bytes and the original Git revision are verified
+before use. Without that input, standalone builds use the registered nested
+GLES-header source checkout.

@@ -35,7 +35,7 @@ export const supplier=JSON.parse(fs.readFileSync(path.join(root,'supplier.json')
 
 /** Read pinned sources; adapt only an owned projection. Cargo retains the
  * upstream workspace and dependency graph, including its original lockfile. */
-export function prepareAimSource({source,output,klepton}){
+export function prepareAimSource({source,output,klepton,glesHeaders}){
  prepareSourceTree(output,temporary=>{
   exportSources(source,supplier.sources.aim.commit,['.'],temporary);
   for(const name of ['aim-hostcall.patch','aim-platform.patch','aim-opened-path.patch','aim-display-modes.patch','aim-identities.patch','aim-process-liveness.patch','aim-create-mode.patch'])
@@ -64,7 +64,7 @@ export function prepareAimSource({source,output,klepton}){
   prepareSocketPendingBytes(temporary);
   prepareDatagramReceive(temporary);
   prepareFaultDiagnostics(temporary);
-  prepareAimGlesInterop(temporary);
+  prepareAimGlesInterop(temporary,{glesHeaders});
   prepareWindowBuffers(temporary);
   prepareImportedStorage(temporary);
   preparePackagePaths(temporary);

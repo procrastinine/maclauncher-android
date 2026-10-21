@@ -1,8 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {copyChanged,writeChanged} from '../native/upstream/source-files.mjs';
+import {verifyGlesHeaders} from '../native/gles-headers.mjs';
 
-export function prepareAimGlesInterop(aim) {
+/** The caller may supply its existing pinned checkout; standalone builds use
+ * the registered nested source by default. Verify before publishing headers. */
+export function prepareGlesInteropHeaders({glesHeaders,output}) {
+  const pin=JSON.parse(fs.readFileSync(new URL('../native/gles-headers.json',import.meta.url)));
+  const root=fs.realpathSync(glesHeaders??path.resolve(import.meta.dirname,'../../../..',pin.directory));
+  const manifest=verifyGlesHeaders(root);
+  for(const file of manifest.files.filter(file=>/^include\/(?:EGL|KHR)\//.test(file.path)))
+    copyChanged(path.join(root,file.path),path.join(output,file.path));
+  return {root,manifest};
+}
+
+export function prepareAimGlesInterop(aim,{glesHeaders}={}) {
   const patch=(file,changes)=>{
     const target=path.join(aim,file);let text=fs.readFileSync(target,'utf8');
     for(const [before,after] of changes){
@@ -12,11 +24,10 @@ export function prepareAimGlesInterop(aim) {
     writeChanged(target,text);
   };
   const native=path.join(import.meta.dirname,'native');
-  const headers=JSON.parse(fs.readFileSync(new URL('../native/gles-headers.json',import.meta.url))),headerRoot=path.resolve(import.meta.dirname,'../../../..',headers.directory);
   const cacheRoot=path.join(aim,'crates/aim-host-gpu/src/mac-video');
   copyChanged(path.join(native,'egl-cache.mm'),path.join(cacheRoot,'egl-cache.mm'));
   copyChanged(path.join(native,'../..','native/native-egl-cache.hpp'),path.join(cacheRoot,'native-egl-cache.hpp'));
-  for(const family of ['EGL','KHR'])for(const name of fs.readdirSync(path.join(headerRoot,'include',family)).filter(name=>name.endsWith('.h')))copyChanged(path.join(headerRoot,'include',family,name),path.join(cacheRoot,'include',family,name));
+  prepareGlesInteropHeaders({glesHeaders,output:cacheRoot});
   copyChanged(path.join(native,'egl-cache.rs'),path.join(aim,'crates/aim-host-gpu/src/egl-cache.rs'));
   copyChanged(path.join(native,'buffer-alias.rs'),path.join(aim,'crates/aim-hostcall/src/buffer-alias.rs'));
   copyChanged(path.join(native,'gles-vulkan.rs'),path.join(aim,'crates/aim-host-gpu/src/vulkan.rs'));
