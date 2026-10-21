@@ -61,8 +61,12 @@ memory owner with `ActivityManager` and `Bridge.memoryInfo`: the configured
 `KL_MEM_TOTAL_MB` guest budget is capped by physical memory, and available bytes
 follow the owner's live process headroom. `/proc/meminfo` reports that budget in
 kB and its existing process-footprint accounting; these APIs do not expose a
-separate host-wide RAM or free-page estimate. ART retains original Bionic memory
-queries through its own execution backend.
+separate host-wide RAM or free-page estimate. ART retains original Bionic
+`sysinfo`, `sysconf` and file APIs while AIM's existing memory owner applies the
+same 6144 MiB default, configured MiB conversion and physical-memory cap. ART
+available memory follows actual process footprint and native headroom, bounded
+by that budget. Linux kernel/cache categories without guest accounting report
+zero; actual macOS memory-pressure notifications retain their original watcher.
 Native ABI metadata lookup retains the calling library's class-loader namespace.
 The configured application ABI selects ELF dependencies and system library paths
 before native constructors run. ARM32 and ARM64 imports retain the same platform
