@@ -91,6 +91,7 @@ public final class StorageSettingsProbe {
         pumpUntil(loop,()->{try{return caller.isDestroyed()&&dialog()!=null&&dialog().isShowing();}catch(Exception failure){throw new RuntimeException(failure);}});
         AlertDialog settings=dialog();Activity destination=settings.getOwnerActivity();
         check(destination!=null&&destination!=caller&&!destination.isDestroyed(),"settings owns an independent original Activity after caller destruction");
+        check(HostWindowManager.topView(destination)==settings.getWindow().getDecorView(),"settings dialog stays above its original Activity window");
         check(destination.getTaskId()!=callerTask,"settings has an independent task identity");
         check(!windowOwner.closing(),"the settings task retains its actual display lifetime");
         check(destination.getSystemService(ActivityManager.class).getAppTasks().stream().anyMatch(task->task.getTaskInfo().taskId==destination.getTaskId()),"settings has an owned original AppTask capability");

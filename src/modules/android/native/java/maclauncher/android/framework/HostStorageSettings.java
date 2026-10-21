@@ -52,7 +52,12 @@ final class HostStorageSettings {
             IBinder capability=getIntent().getExtras()==null?null:getIntent().getExtras().getBinder(SESSION);
             synchronized(windows){session=windows.get(capability);}
             if(session==null)throw new IllegalStateException("Android storage settings request is no longer active");
-            setTitle("All files access");session.show(this);
+            setTitle("All files access");
+            // ActivityThread adds the Activity decor after onCreate returns.
+            // Attach the dialog afterward so that it remains the top window.
+            new Handler(getMainLooper()).post(()->{
+                if(!isFinishing()&&!isDestroyed())session.show(this);
+            });
         }
         @Override protected void onDestroy(){
             try{if(session!=null){if(isChangingConfigurations())session.detach(this);else session.close(this);}}
