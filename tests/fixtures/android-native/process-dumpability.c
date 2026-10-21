@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <sys/xattr.h>
 #include <unistd.h>
 
 static void byte(int fd,char value){assert(write(fd,&value,1)==1);}
@@ -41,6 +42,10 @@ int main(int argc,char **argv){
  if(!inherited)_exit(klj_process_get_dumpable()==0?0:91);
  int status;assert(klj_process_wait_native(inherited,&status,0,NULL)==inherited&&WIFEXITED(status)&&!WEXITSTATUS(status));
  assert(!klj_process_set_dumpable(1));
+ KljProcessExecIdentity initial;KljProcessExecLease *initial_leases=NULL;
+ assert(!klj_process_exec_snapshot(&initial,&initial_leases));
+ char prior_policy[128];ssize_t prior_length=fgetxattr(initial_leases[0].descriptor,"com.maclauncher.android.dumpable",prior_policy,sizeof prior_policy,0,0);
+ assert(prior_length>0);free(initial_leases);
  int messages[2],commands[2];assert(!pipe(messages)&&!pipe(commands));
  pid_t child=klj_process_fork();assert(child>=0);
  if(!child){
@@ -49,7 +54,13 @@ int main(int argc,char **argv){
   assert(next(commands[0])=='d');assert(!klj_process_prctl(PR_SET_DUMPABLE,0,0,0,0));
   assert(klj_process_vm_readv(klj_process_id(),&destination,1,&input,1,0)==sizeof payload);
   byte(messages[1],'d');assert(next(commands[0])=='e');assert(!klj_process_set_dumpable(1));byte(messages[1],'e');
-  assert(next(commands[0])=='x');assert(!klj_process_set_dumpable(0));exec_again(argv[0],messages[1]);
+  assert(next(commands[0])=='s');
+  KljProcessExecIdentity stale;KljProcessExecLease *stale_leases=NULL;
+  assert(!klj_process_exec_snapshot(&stale,&stale_leases));
+  // A valid previous process's metadata must not authorize this incarnation.
+  assert(!fsetxattr(stale_leases[0].descriptor,"com.maclauncher.android.dumpable",prior_policy,(size_t)prior_length,0,0));free(stale_leases);
+  byte(messages[1],'s');assert(next(commands[0])=='x');
+  assert(!klj_process_set_dumpable(0));exec_again(argv[0],messages[1]);
  }
  close(messages[1]);close(commands[0]);assert(next(messages[0])=='r');
  assert(!klj_process_may_inspect(child));
@@ -64,8 +75,10 @@ int main(int argc,char **argv){
  byte(commands[1],'e');assert(next(messages[0])=='e');
  assert(!klj_process_may_inspect(child));
  if(amount>0)assert(klj_process_vm_readv(child,&destination,1,&input,1,0)==sizeof payload&&!strcmp(output,"child--data"));
+ byte(commands[1],'s');assert(next(messages[0])=='s');
+ errno=0;assert(klj_process_may_inspect(child)==-1&&errno==EPERM);
  byte(commands[1],'x');assert(next(messages[0])=='x');
  assert(klj_process_wait_native(child,&status,0,NULL)==child&&WIFEXITED(status)&&!WEXITSTATUS(status));
  close(messages[0]);close(commands[1]);
- puts("PASS guest dumpability defaults, invalid values, self-access, fork inheritance, remote read/write policy denial with host restrictions retained and successful exec reset");
+ puts("PASS guest dumpability defaults, invalid values, self-access, fork inheritance, remote read/write policy denial with host restrictions retained stale-incarnation denial and successful exec reset");
 }

@@ -126,6 +126,21 @@ static _Thread_local int planned_fork;
 static const char security_attribute[]="com.maclauncher.android.execution-context";
 static const char command_attribute[]="com.maclauncher.android.process-command";
 static const char dumpable_attribute[]="com.maclauncher.android.dumpable";
+typedef struct {
+    uint32_t version;int32_t host_pid,process_id,state;
+    uint64_t start_seconds,start_microseconds;
+} Dumpability;
+static int process_birth(pid_t host,uint64_t *seconds,uint64_t *microseconds){
+    struct proc_bsdinfo info={0};errno=0;
+    int size=proc_pidinfo(host,PROC_PIDTBSDINFO,1,&info,sizeof info);
+    if(size!=sizeof info||info.pbi_pid!=(uint32_t)host){if(!errno)errno=ESRCH;return -1;}
+    *seconds=info.pbi_start_tvsec;*microseconds=info.pbi_start_tvusec;return 0;
+}
+static int publish_dumpable(int fd,int process,int value){
+    Dumpability policy={.version=1,.host_pid=getpid(),.process_id=process,.state=value};
+    if(process_birth(getpid(),&policy.start_seconds,&policy.start_microseconds))return -1;
+    return fsetxattr(fd,dumpable_attribute,&policy,sizeof policy,0,0);
+}
 static _Atomic(const KljProcessForkTransport *) fork_transport;
 int klj_process_fork_transport(const KljProcessForkTransport *value){
     if(!value||!value->prepare||!value->child){errno=EINVAL;return -1;}
@@ -286,7 +301,7 @@ static int acquire_locked(int kind){
         }
         if((fremovexattr(fd,security_attribute,0)&&errno!=ENOATTR)||
            (fremovexattr(fd,command_attribute,0)&&errno!=ENOATTR)||
-           fsetxattr(fd,dumpable_attribute,&(unsigned char){(unsigned char)atomic_load(&dumpable)},1,0,0)||write_record(fd,&record)||set_lock(fd,F_UNLCK,1,0)){
+           publish_dumpable(fd,record.process_id,atomic_load(&dumpable))||write_record(fd,&record)||set_lock(fd,F_UNLCK,1,0)){
             int error=errno;close(fd);errno=error;return -1;
         }
         // Byte zero authenticates the live process. A fork parent owns byte
@@ -397,7 +412,7 @@ int klj_process_exec_adopt(const KljProcessExecIdentity *identity,const KljProce
     // guest programs have no set-id/file-capability elevation.
     if(!error){
         for(uint32_t i=0;i<identity->count;i++)if(items[i].id==identity->leader)
-            if(fsetxattr(items[i].descriptor,dumpable_attribute,&(unsigned char){1},1,0,0))error=errno;
+            if(publish_dumpable(items[i].descriptor,identity->leader,1))error=errno;
     }
     if(!error){
         directory_fd=identity->directory;leader_id=identity->leader;parent_id=identity->parent;parent_host=identity->host_parent;
@@ -477,8 +492,8 @@ int klj_process_get_dumpable(void){
 int klj_process_set_dumpable(int value){
     if(value!=0&&value!=1){errno=EINVAL;return -1;}
     if(klj_process_id()<0)return -1;
-    lock_ids();unsigned char state=(unsigned char)value;
-    int result=fsetxattr(atomic_load(&leader_descriptor),dumpable_attribute,&state,sizeof state,0,0);
+    lock_ids();
+    int result=publish_dumpable(atomic_load(&leader_descriptor),leader_id,value);
     if(!result)atomic_store_explicit(&dumpable,value,memory_order_release);
     int error=errno;unlock_ids();errno=error;return result;
 }
@@ -489,12 +504,16 @@ static int dumpable_locked(int id,Lease *owner){
     if(before.kind==2){id=before.process_id;if(record_locked(id,&before,0))return -1;}
     int owned=leases[id].descriptor,fd=owned?owned-1:open_id_locked(id);
     if(fd<0)return -1;
-    unsigned char state=0;ssize_t count=fgetxattr(fd,dumpable_attribute,&state,sizeof state,0,0);
+    Dumpability policy={0};ssize_t count=fgetxattr(fd,dumpable_attribute,&policy,sizeof policy,0,0);
     int error=errno,result=-1;
-    if(count==1&&state<=1){
-        if(!record_fd_locked(id,fd,owned,&after,0)&&before.host_pid==after.host_pid&&before.process_id==after.process_id){*owner=after;result=state;}
+    uint64_t seconds=0,microseconds=0;
+    if(count==sizeof policy&&policy.version==1&&policy.state>=0&&policy.state<=1&&
+       policy.host_pid==before.host_pid&&policy.process_id==before.process_id){
+        if(process_birth(before.host_pid,&seconds,&microseconds)){error=errno;}
+        else if(policy.start_seconds!=seconds||policy.start_microseconds!=microseconds)error=EPERM;
+        else if(!record_fd_locked(id,fd,owned,&after,0)&&before.host_pid==after.host_pid&&before.process_id==after.process_id){*owner=after;result=policy.state;}
         else error=ESRCH;
-    }else error=count<0?error:EPROTO;
+    }else error=count<0?error:EPERM;
     if(!owned)close(fd);errno=error;return result;
 }
 int klj_process_dumpable_of(int id){
@@ -842,7 +861,7 @@ pid_t klj_process_fork(void){
         Lease record={.version=3,.kind=1,.host_pid=getpid(),.process_id=fork_reservation,
             .group=inherited_group,.session=inherited_session,.uid=atomic_load(&principal_uid)};
         if(fd<0||set_lock(fd,F_WRLCK,0,1)||
-            fsetxattr(fd,dumpable_attribute,&(unsigned char){(unsigned char)atomic_load(&dumpable)},1,0,0)||write_record(fd,&record))result=errno;
+            publish_dumpable(fd,record.process_id,atomic_load(&dumpable))||write_record(fd,&record))result=errno;
         if(!result){leases[fork_reservation]=(Slot){fd+1,0};leader_id=fork_reservation;leader_descriptor=fd;index_process_locked(leader_id,getpid());}
         // The parent already owns the zombie reservation. Publish the live
         // lease before either side can return from the physical operation.
