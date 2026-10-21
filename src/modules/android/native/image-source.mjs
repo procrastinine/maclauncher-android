@@ -245,5 +245,12 @@ int klj_image_gap_pool_release(KljImagePoolLease *lease,size_t used){
     if(pool->used!=lease->previous+used)return 0;
     pool->used=lease->previous;return 1;
 }\n`;
+ source='#include '+JSON.stringify(path.join(root,'image-dependencies.h'))+'\n'+source;
+ replace('    char *soname;','    KlImageDependencies needed;\n    char *soname;');
+ replace('    free(img->soname);','    klj_image_dependencies_release(&img->needed);\n    free(img->soname);');
+ replace('klj_image_tls_unregister(img);free(img);dlclose(h);','klj_image_tls_unregister(img);klj_image_dependencies_release(&img->needed);free(img);dlclose(h);');
+ replace('    if (!img->symtab || !img->strtab) { err("missing DT_SYMTAB/DT_STRTAB"); return -1; }',
+  '    if (!img->symtab || !img->strtab) { err("missing DT_SYMTAB/DT_STRTAB"); return -1; }\n    for(int i=0;i<phnum;i++)if(ph[i].p_type==PT_DYNAMIC && !klj_image_dependencies_capture(&img->needed,img->base,img->span,\n        (const uint64_t *)(img->base+ph[i].p_vaddr-lo),(size_t)ph[i].p_filesz,img->strtab)) {\n        err("Unable to retain original ELF dependency metadata");return -1;\n    }');
+ source+='\nvoid klj_image_visit_needed(kl_image *image,void (*visit)(void *,const char *),void *context){\n    for(size_t i=0;i<image->needed.count;i++)visit(context,image->needed.names[i]);\n}\n';
  const file=path.join(build,'kl_image.c');fs.writeFileSync(file,source);return file;
 }

@@ -89,3 +89,8 @@ those records alongside the matching common runtime notices.
 and Klepton inputs. Header bytes and the original Git revision are verified
 before use. Without that input, standalone builds use the registered nested
 GLES-header source checkout.
+
+Named ELF library handles resolve symbols in the owning image and its original
+`DT_NEEDED` dependency closure, in breadth-first order. Platform dependencies use
+the existing Android ABI adapters. Unrelated loaded images remain outside that
+handle scope; missing symbols retain the normal `dlerror` result.

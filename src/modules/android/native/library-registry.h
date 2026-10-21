@@ -57,6 +57,16 @@ void *klj_library_group_load(pthread_mutex_t *,KlImageRegistry *,
  * first order, optionally beginning after an existing caller (RTLD_NEXT). */
 void *klj_library_group_symbol(const KljLibraryGroupOperations *,void *space,
     void *root,void *skip_until,const char *name);
+/* Named-handle lookup retains original DT_NEEDED order, including platform
+ * providers represented by their existing ABI gateway rather than an ELF. */
+typedef void (*KljLibraryScopeVisit)(void *,void *image,const char *provider);
+typedef struct {
+    void *context;
+    void *(*symbol)(void *,void *image,const char *name);
+    void *(*provider)(void *,const char *provider,const char *name);
+    void (*children)(void *,void *image,KljLibraryScopeVisit,void *);
+} KljLibraryScopeOperations;
+void *klj_library_scope_symbol(const KljLibraryScopeOperations *,void *root,const char *name);
 #ifdef __cplusplus
 }
 #endif

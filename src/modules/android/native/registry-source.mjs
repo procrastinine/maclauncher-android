@@ -84,6 +84,42 @@ static void *klj_group_public_symbol(void *image,const char *name){
     const KljLibraryGroupOperations ops={.contains=klj_group_contains,.symbol=klj_group_symbol,.children=klj_group_children};
     return klj_library_group_symbol(&ops,klj_default_library_namespace(),image,NULL,name);
 }
+extern void klj_image_visit_needed(kl_image *,void (*)(void *,const char *),void *);
+struct klj_symbol_scope {KlImageRegistrySnapshot snapshot;KljLibraryNamespace *space;};
+struct klj_needed_scope {struct klj_symbol_scope *scope;KljLibraryScopeVisit visit;void *context;};
+static void *klj_scope_symbol(void *context,void *image,const char *name){
+    (void)context;void *value=kl_sym(image,name);
+    return value&&klj_run_initializers(image,NULL,NULL)?value:NULL;
+}
+static void *klj_scope_provider(void *context,const char *provider,const char *name){
+    (void)context;(void)provider;
+    /* These are the existing shim-served DT_NEEDED owners. Keep their ABI
+     * adapters and current export surface; never search unrelated guest images. */
+    return kl_shim_lookup(name);
+}
+static void klj_scope_needed(void *opaque,const char *name){
+    struct klj_needed_scope *call=opaque;
+    if(kl_dep_is_shim_served(name)){call->visit(call->context,NULL,name);return;}
+    const char *base=basename_of(name);
+    for(size_t i=0;i<call->scope->snapshot.count;i++){
+        kl_image *image=call->scope->snapshot.entries[i].img;
+        if(!klj_namespace_contains(call->scope->space,image))continue;
+        const char *declared=klj_image_soname(image),*file=klj_image_path(image);
+        if(!strcmp(call->scope->snapshot.entries[i].soname,base)||
+           (declared&&!strcmp(declared,base))||(file&&!strcmp(basename_of(file),base))){
+            call->visit(call->context,image,NULL);return;
+        }
+    }
+}
+static void klj_scope_children(void *context,void *image,KljLibraryScopeVisit visit,void *opaque){
+    struct klj_needed_scope call={context,visit,opaque};
+    klj_image_visit_needed(image,klj_scope_needed,&call);
+}
+static void *klj_scoped_image_symbol(kl_image *image,const char *name){
+    struct klj_symbol_scope scope={klj_image_registry_snapshot(&klj_images),klj_default_library_namespace()};
+    const KljLibraryScopeOperations ops={&scope,klj_scope_symbol,klj_scope_provider,klj_scope_children};
+    return klj_library_scope_symbol(&ops,image,name);
+}
 static int klj_group_publish(void *context,const KlImageRegistryEntry *entries,void *const *spaces,size_t count){
     (void)context;
     /* The existing registry treats publication allocation failure as fatal;
@@ -143,7 +179,7 @@ kl_image *kl_load_recursive(const char *path) {
             s=NULL;
         }`)
   .replace('            if (v) return v;','            if (v && klj_run_initializers(g_imgs[i].img,NULL,NULL)) return v;')
-  .replace('    void *v = kl_sym((kl_image *)handle, name);','    if (!klj_run_initializers((kl_image *)handle,NULL,NULL)) { snprintf(g_dlerr,sizeof g_dlerr,"dlsym failed: library initialization previously failed");return NULL; }\n    void *v = klj_image_format_payload(handle,1)?klj_group_public_symbol(handle,name):kl_sym((kl_image *)handle,name);');
+  .replace('    void *v = kl_sym((kl_image *)handle, name);','    if (!klj_run_initializers((kl_image *)handle,NULL,NULL)) { snprintf(g_dlerr,sizeof g_dlerr,"dlsym failed: library initialization previously failed");return NULL; }\n    void *v = klj_image_format_payload(handle,1)?klj_group_public_symbol(handle,name):klj_scoped_image_symbol((kl_image *)handle,name);');
  adapted=adapted.slice(0,lookupStart)+lookup+adapted.slice(lookupEnd);
  // A native import can belong to a retained Darwin image rather than a guest
  // ELF. Return that real provider's metadata after guest ownership lookup.

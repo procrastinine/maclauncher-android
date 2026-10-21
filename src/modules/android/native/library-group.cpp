@@ -1,6 +1,8 @@
 #include "library-registry.h"
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
+#include <cerrno>
 #include <cstdio>
 #include <memory>
 #include <stdexcept>
@@ -114,5 +116,26 @@ extern "C" void *klj_library_group_symbol(const KljLibraryGroupOperations *ops,
   }
   if(accessible&&ops->children)ops->children(ops->context,image,[](void *context,void *child){static_cast<std::vector<void *> *>(context)->push_back(child);},&queue);
  }
+ return nullptr;
+}
+
+extern "C" void *klj_library_scope_symbol(const KljLibraryScopeOperations *ops,void *root,const char *name){
+ try{
+  struct ScopeNode{void *image;const char *provider;};
+  std::vector<ScopeNode> queue{{root,nullptr}},visited;
+  for(size_t index=0;index<queue.size();index++){
+   ScopeNode node=queue[index];
+   if(std::any_of(visited.begin(),visited.end(),[&](const ScopeNode &old){
+       return node.image?old.image==node.image:!old.image&&std::strcmp(old.provider,node.provider)==0;
+      }))continue;
+   visited.push_back(node);
+   if(node.image){
+    if(void *value=ops->symbol(ops->context,node.image,name))return value;
+    ops->children(ops->context,node.image,[](void *context,void *image,const char *provider){
+      static_cast<std::vector<ScopeNode> *>(context)->push_back({image,provider});
+     },&queue);
+   }else if(void *value=ops->provider(ops->context,node.provider,name))return value;
+  }
+ }catch(const std::exception &){errno=ENOMEM;}
  return nullptr;
 }
