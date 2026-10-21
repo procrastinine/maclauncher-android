@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 
-/** Bounded metadata reader; executable loading remains the real Klepton loader. */
+/** Metadata strings use validated ELF table bounds; executable loading remains the real Klepton loader. */
 final class ElfNativeExports {
     record Metadata(Set<String> exports,List<String> dependencies){}
     private record Layout(boolean wide,int sectionOffset,int sectionEntry,int sectionCount,int sectionSize,int dataOffset,int dataSize,int link,int entrySize,int symbolSize,int symbolInfo,int symbolSection,int symbolValue) {
@@ -58,10 +58,10 @@ final class ElfNativeExports {
                 if((binding!=1&&binding!=2)||Short.toUnsignedInt(b.getShort(p+layout.symbolSection()))==0||layout.word(b,p+layout.symbolValue())==0)continue;
                 long name=Integer.toUnsignedLong(b.getInt(p));if(name>=stringBytes)throw new IOException("Invalid native symbol name");
                 int start=(int)(stringOffset+name),end=start,limit=(int)(stringOffset+stringBytes);
-                while(end<limit&&b.get(end)!=0){if(end-start>=4096)throw new IOException("Native symbol name exceeds limit");end++;}
+                while(end<limit&&b.get(end)!=0)end++;
                 if(end==limit)throw new IOException("Unterminated native symbol name");
-                String text=new String(b.array(),start,end-start,StandardCharsets.UTF_8);
-                if(text.startsWith("Java_"))exports.add(text);
+                if(end-start>=5&&b.get(start)=='J'&&b.get(start+1)=='a'&&b.get(start+2)=='v'&&b.get(start+3)=='a'&&b.get(start+4)=='_')
+                    exports.add(new String(b.array(),start,end-start,StandardCharsets.UTF_8));
             }
         }
         return new Metadata(Set.copyOf(exports),List.copyOf(dependencies));
