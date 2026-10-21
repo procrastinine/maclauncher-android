@@ -78,14 +78,22 @@ public final class HostActivity {
     private static final Map<IBinder,HostActivity> activities=new IdentityHashMap<>();
     private static final ArrayList<HostActivity> task=new ArrayList<>();
     private static int pendingLaunches;
-    private static int taskId=-1,nextTaskId;
-    private static Boolean excludedFromRecents;
+    private static int nextTaskId;
+    private static final class Task {
+        final int id=nextTaskId++;
+        final boolean platform;
+        Boolean excludedFromRecents;
+        Task(boolean platform){this.platform=platform;}
+    }
     private static final Controller controller=new Controller();
+    private static HostApplication platformProcess;
+    private static LoadedApk platformPackage;
     private static volatile boolean hostSleeping;
     private final Thread owner=Thread.currentThread();
     private Activity activity;
     private final IBinder token;
     private final ActivityThread.ActivityClientRecord record;
+    private Task taskOwner;
     private boolean launched;
     private IApplicationThread resultCaller;
     private IBinder resultTo;private String resultWho;private int requestCode=-1,resultCode=Activity.RESULT_CANCELED;private Intent resultData;
@@ -114,26 +122,40 @@ public final class HostActivity {
     private HostActivity(Activity activity){this.activity=activity;token=new Token();record=new ActivityThread.ActivityClientRecord();launched=false;}
     private HostActivity(ActivityThread.ActivityClientRecord record){this.record=record;token=record.token;launched=true;}
     private static HostActivity top(){synchronized(activities){return task.isEmpty()?null:task.getLast();}}
-    private static void register(HostActivity state){synchronized(activities){if(task.isEmpty()){taskId=nextTaskId++;excludedFromRecents=null;}activities.put(state.token,state);task.add(state);}}
-    static int currentTaskId(){synchronized(activities){return task.isEmpty()?-1:taskId;}}
+    private static void register(HostActivity state){synchronized(activities){
+        if(state.taskOwner==null){for(HostActivity existing:task)if(!existing.taskOwner.platform){state.taskOwner=existing.taskOwner;break;}if(state.taskOwner==null)state.taskOwner=new Task(false);}
+        activities.put(state.token,state);task.add(state);
+    }}
+    private static List<HostActivity> members(Task owner){return task.stream().filter(state->state.taskOwner==owner).toList();}
+    static List<Integer> currentTaskIds(){synchronized(activities){return task.stream().map(state->state.taskOwner.id).distinct().toList();}}
+    static int currentTaskId(){synchronized(activities){return task.isEmpty()?-1:task.getLast().taskOwner.id;}}
     static ActivityManager.RecentTaskInfo taskInfo(int expected){synchronized(activities){
-        if(task.isEmpty()||taskId!=expected)return null;
-        HostActivity first=task.getFirst(),last=task.getLast();var info=new ActivityManager.RecentTaskInfo();
-        var process=HostApplication.current();info.id=info.persistentId=info.taskId=taskId;
+        var states=task.stream().filter(state->state.taskOwner.id==expected).toList();if(states.isEmpty())return null;
+        HostActivity first=states.getFirst(),last=states.getLast();var info=new ActivityManager.RecentTaskInfo();
+        var process=HostApplication.current();info.id=info.persistentId=info.taskId=expected;
         info.userId=process.context.getUserId();info.effectiveUid=android.os.Process.myUid();info.isRunning=true;
         Intent original=(Intent)HostUiAccess.get(first.record,ActivityThread.ActivityClientRecord.class,"intent");
         info.baseIntent=original==null?new Intent():new Intent(original);
-        if(excludedFromRecents!=null){if(excludedFromRecents)info.baseIntent.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);else info.baseIntent.removeFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);}
+        if(first.taskOwner.excludedFromRecents!=null){if(first.taskOwner.excludedFromRecents)info.baseIntent.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);else info.baseIntent.removeFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);}
         info.baseActivity=componentForLocalToken(first.token);info.topActivity=componentForLocalToken(last.token);info.realActivity=info.baseActivity;
-        info.numActivities=task.size();info.displayId=Display.DEFAULT_DISPLAY;info.configuration.setTo(process.context.getResources().getConfiguration());
+        info.numActivities=states.size();info.displayId=Display.DEFAULT_DISPLAY;info.configuration.setTo(process.context.getResources().getConfiguration());
         info.topActivityInfo=(ActivityInfo)HostUiAccess.get(last.record,ActivityThread.ActivityClientRecord.class,"activityInfo");
         info.taskDescription=new ActivityManager.TaskDescription(last.activity==null?null:String.valueOf(last.activity.getTitle()));
         info.isVisible=last.started;info.isVisibleRequested=!last.closing;info.isFocused=last.resumed;
         return info;
     }}
-    static void excludeTask(int expected,boolean excluded){synchronized(activities){if(task.isEmpty()||taskId!=expected)throw new IllegalArgumentException("Activity task no longer exists");excludedFromRecents=excluded;}}
-    static void finishTask(int expected){new Handler(Looper.getMainLooper()).post(()->{HostActivity top=top();if(top!=null&&currentTaskId()==expected)top.finish();});}
-    static void resumeTask(int expected){new Handler(Looper.getMainLooper()).post(()->{if(currentTaskId()==expected)restoreTop();});}
+    static void excludeTask(int expected,boolean excluded){synchronized(activities){for(var state:task)if(state.taskOwner.id==expected){state.taskOwner.excludedFromRecents=excluded;return;}throw new IllegalArgumentException("Activity task no longer exists");}}
+    static void finishTask(int expected){new Handler(Looper.getMainLooper()).post(()->{
+        List<HostActivity> states;synchronized(activities){states=new ArrayList<>(task.stream().filter(state->state.taskOwner.id==expected).toList());}
+        Collections.reverse(states);for(var state:states)if(!state.closed)finish(state.activity);
+        new Handler(Looper.getMainLooper()).post(HostActivity::restoreTop);
+    });}
+    static void resumeTask(int expected){new Handler(Looper.getMainLooper()).post(()->{
+        List<HostActivity> states;synchronized(activities){states=new ArrayList<>(task.stream().filter(state->state.taskOwner.id==expected).toList());}
+        if(states.isEmpty())return;HostActivity previous=top();
+        if(previous!=null&&previous.taskOwner.id!=expected&&previous.resumed){var process=HostApplication.current();process.thread.handleTopResumedActivityChanged(previous.record,false,"task navigation");process.thread.handlePauseActivity(previous.record,false,true,false,new android.app.servertransaction.PendingTransactionActions(),"task navigation");previous.resumed=false;}
+        synchronized(activities){task.removeAll(states);task.addAll(states);}restoreTop();
+    });}
     private Activity foreground(){HostActivity top=top();return top==null?activity:top.activity;}
     public static HostActivity owner(Activity activity){return state(activity);}
     /** Embedded platform settings own a real window, while the original
@@ -275,6 +297,13 @@ public final class HostActivity {
     }
     /** Local task-manager boundary. Original ActivityThread owns every app callback. */
     static void launch(ActivityInfo info,Intent original,IApplicationThread caller,IBinder resultTo,String who,int request,Bundle options){
+        launch(info,original,caller,resultTo,who,request,options,false);
+    }
+    /** Platform settings own a separate task on the same physical display. */
+    static void launchPlatform(ActivityInfo info,Intent intent,IApplicationThread caller,IBinder resultTo,String who){
+        launch(info,intent,caller,resultTo,who,-1,null,true);
+    }
+    private static void launch(ActivityInfo info,Intent original,IApplicationThread caller,IBinder resultTo,String who,int request,Bundle options,boolean platform){
         Intent intent=new Intent(original);
         Bundle windowOptions=options==null?null:new Bundle(options);
         // A completed finishing callback can exhaust the physical display turn
@@ -284,7 +313,7 @@ public final class HostActivity {
         boolean accepted=false;
         try{
             accepted=new Handler(Looper.getMainLooper()).post(()->{
-                try{launchOnMain(info,intent,caller,resultTo,who,request,windowOptions);}
+                try{launchOnMain(info,intent,caller,resultTo,who,request,windowOptions,platform);}
                 finally{synchronized(activities){pendingLaunches--;}}
             });
             if(!accepted)throw new IllegalStateException("Android activity queue is closed");
@@ -292,7 +321,7 @@ public final class HostActivity {
     }
     static void launchUp(ActivityInfo info,Intent intent,IApplicationThread caller,IBinder parent){
         if(!Looper.getMainLooper().isCurrentThread())throw new IllegalStateException("Activity Up requires the task owner thread");
-        launchOnMain(info,intent,caller,parent,null,-1,null);
+        launchOnMain(info,intent,caller,parent,null,-1,null,false);
     }
     /** Launcher-owned requests use Android's original result callback Binder.
      * The Intent and any authenticator response stay in the Android processes. */
@@ -317,8 +346,8 @@ public final class HostActivity {
             restoreTop();
         });
     }
-    private static void launchOnMain(ActivityInfo info,Intent intent,IApplicationThread caller,IBinder resultTo,String who,int request,Bundle options){
-        if(outputWindow!=null||maclauncher.android.bridge.WindowSession.attached()||HostWindowManager.outputAttached()){launchAttached(info,intent,caller,resultTo,who,request,false);return;}
+    private static void launchOnMain(ActivityInfo info,Intent intent,IApplicationThread caller,IBinder resultTo,String who,int request,Bundle options,boolean platform){
+        if(outputWindow!=null||maclauncher.android.bridge.WindowSession.attached()||HostWindowManager.outputAttached()){launchAttached(info,intent,caller,resultTo,who,request,false,platform);return;}
         // A service process acquires the same output owner only when an actual
         // Activity needs presentation. It keeps its application and Binder
         // services after that output closes.
@@ -329,7 +358,7 @@ public final class HostActivity {
         var session=openWindow(String.valueOf(info.loadLabel(HostApplication.current().context.getPackageManager())),viewport.x,viewport.y,null,options);
         Throwable failure=null;
         try{
-            launchAttached(info,intent,caller,resultTo,who,request,true);
+            launchAttached(info,intent,caller,resultTo,who,request,true,platform);
             HostActivity state=top();
             if(state!=null&&state.activity!=null){
                 session.attachActivity(state.activity);
@@ -342,19 +371,40 @@ public final class HostActivity {
         }
         if(failure!=null)HostUiAccess.raise(failure);
     }
-    private static void launchAttached(ActivityInfo info,Intent intent,IApplicationThread caller,IBinder resultTo,String who,int request,boolean firstOutput){
+    private static void launchAttached(ActivityInfo info,Intent intent,IApplicationThread caller,IBinder resultTo,String who,int request,boolean firstOutput,boolean platform){
         HostApplication process=HostApplication.current();HostActivity previous=top();
+        LoadedApk packageInfo=process.apk;
+        if(platform){
+            if(platformProcess!=process){
+                var applicationInfo=new ApplicationInfo(info.applicationInfo);
+                applicationInfo.className=Application.class.getName();applicationInfo.appComponentFactory=null;
+                ClassLoader loader=HostActivity.class.getClassLoader();
+                platformPackage=new LoadedApk(process.thread,applicationInfo,android.content.res.CompatibilityInfo.DEFAULT_COMPATIBILITY_INFO,loader,false,true,false);
+                HostUiAccess.set(platformPackage,LoadedApk.class,"mClassLoader",loader);
+                HostUiAccess.set(platformPackage,LoadedApk.class,"mDefaultClassLoader",loader);
+                Context context=(Context)HostUiAccess.call(HostUiAccess.method(HostUiAccess.type("android.app.ContextImpl"),"createAppContext",ActivityThread.class,LoadedApk.class),null,process.thread,platformPackage);
+                Application application=new Application();
+                HostUiAccess.call(HostUiAccess.method(Application.class,"attach",Context.class),application,context);
+                HostApplication.outerContext(context,application);
+                HostUiAccess.set(platformPackage,LoadedApk.class,"mApplication",application);
+                @SuppressWarnings("unchecked")var applications=(List<Application>)HostUiAccess.get(process.thread,ActivityThread.class,"mAllApplications");applications.add(application);
+                process.instrumentation.callApplicationOnCreate(application);
+                platformProcess=process;
+            }
+            packageInfo=platformPackage;info=new ActivityInfo(info);info.applicationInfo=packageInfo.getApplicationInfo();
+        }
         String className=info.targetActivity==null?info.name:info.targetActivity;
         boolean singleTop=info.launchMode!=ActivityInfo.LAUNCH_MULTIPLE||(intent.getFlags()&Intent.FLAG_ACTIVITY_SINGLE_TOP)!=0;
-        if(singleTop&&previous!=null&&previous.activity.getClass().getName().equals(className)){
+        if(!platform&&singleTop&&previous!=null&&!previous.taskOwner.platform&&previous.activity.getClass().getName().equals(className)){
             process.thread.handleNewIntent(previous.record,List.of(new com.android.internal.content.ReferrerIntent(intent,process.context.getPackageName())));return;
         }
         var pending=new android.app.servertransaction.PendingTransactionActions();
         if(previous!=null&&previous.record.getLifecycleState()==3){process.thread.handlePauseActivity(previous.record,false,true,false,pending,"activity navigation");previous.resumed=false;}
         IBinder token=new Token();
         var record=new ActivityThread.ActivityClientRecord(token,intent,0,info,new Configuration(process.context.getResources().getConfiguration()),process.context.getPackageName(),null,null,null,null,null,null,true,null,process.thread,new Binder(),new Binder(),false,null,new Binder(),new android.window.ActivityWindowInfo());
-        record.packageInfo=process.apk;
+        record.packageInfo=packageInfo;
         HostActivity state=new HostActivity(record);state.orientation=info.screenOrientation;state.resultCaller=caller;state.resultTo=resultTo;state.resultWho=who;state.requestCode=request;
+        if(platform)state.taskOwner=new Task(true);
         register(state);
         try{
             state.activity=process.thread.handleLaunchActivity(record,pending,Context.DEVICE_ID_DEFAULT,null);state.created=true;
@@ -440,6 +490,7 @@ public final class HostActivity {
         if(resultTo==null||request<0)return;
         try{
             boolean local;synchronized(activities){local=activities.containsKey(resultTo);}
+            if(resultTo instanceof Token&&!local)return;
             if(local)HostApplication.current().thread.sendActivityResult(resultTo,who,request,code,data);
             else if("android.content.IIntentReceiver".equals(resultTo.getInterfaceDescriptor()))IIntentReceiver.Stub.asInterface(resultTo).performReceive(data,code,null,null,false,false,android.os.UserHandle.myUserId());
             else if(caller!=null){
@@ -453,10 +504,10 @@ public final class HostActivity {
         private HostActivity find(IBinder token){synchronized(activities){return activities.get(token);}}
         @Override public boolean shouldUpRecreateTask(IBinder token,String affinity){synchronized(activities){
             HostActivity source=activities.get(token);if(source==null||source.closed||task.isEmpty())return false;
-            HostActivity root=task.getFirst();var info=(ActivityInfo)HostUiAccess.get(root.record,ActivityThread.ActivityClientRecord.class,"activityInfo");
+            HostActivity root=members(source.taskOwner).getFirst();var info=(ActivityInfo)HostUiAccess.get(root.record,ActivityThread.ActivityClientRecord.class,"activityInfo");
             if(info.taskAffinity==null||!Objects.equals(info.taskAffinity,affinity))return true;
             Intent base=(Intent)HostUiAccess.get(root.record,ActivityThread.ActivityClientRecord.class,"intent");
-            // Each native output owns one task, with no preceding document task.
+            // This task has no preceding document task to recreate.
             return source==root&&base!=null&&base.isDocument();
         }}
         @Override public boolean navigateUpTo(IBinder token,Intent destination,String type,int code,Intent data){
@@ -464,15 +515,15 @@ public final class HostActivity {
             HostActivity source,parent;List<HostActivity> finish;int expected;boolean found=false;
             synchronized(activities){
                 source=activities.get(token);if(source==null||source.closed||source.closing)return false;
-                int index=task.indexOf(source);if(index<0)return false;
-                int boundary=index-1;parent=boundary<0?null:task.get(boundary);
+                var states=members(source.taskOwner);int index=states.indexOf(source);if(index<0)return false;
+                int boundary=index-1;parent=boundary<0?null:states.get(boundary);
                 ComponentName target=intent.getComponent();
-                if(target!=null)for(int i=index-1;i>=0;i--)if(target.equals(componentForLocalToken(task.get(i).token))){parent=task.get(i);boundary=i;found=true;break;}
-                finish=new ArrayList<>(task.subList(boundary+1,index+1));Collections.reverse(finish);expected=taskId;
+                if(target!=null)for(int i=index-1;i>=0;i--)if(target.equals(componentForLocalToken(states.get(i).token))){parent=states.get(i);boundary=i;found=true;break;}
+                finish=new ArrayList<>(states.subList(boundary+1,index+1));Collections.reverse(finish);expected=source.taskOwner.id;
             }
             if(found&&!HostActivityTasks.permitsUp(intent))return false;
             synchronized(activities){
-                if(taskId!=expected||activities.get(token)!=source||source.closed||source.closing)return false;
+                if(source.taskOwner.id!=expected||activities.get(token)!=source||source.closed||source.closing)return false;
                 for(HostActivity state:finish)state.closing=true;
             }
             HostActivity target=parent;boolean matched=found;
@@ -480,7 +531,7 @@ public final class HostActivity {
             Runnable navigation=new Runnable(){int next;
                 private void cancel(){synchronized(activities){for(HostActivity state:finish)if(activities.get(state.token)==state&&!state.closed)state.closing=false;}}
                 @Override public void run(){
-                synchronized(activities){if(taskId!=expected||next==0&&activities.get(token)!=source||target!=null&&!task.contains(target)){cancel();return;}}
+                synchronized(activities){if(source.taskOwner.id!=expected||next==0&&activities.get(token)!=source||target!=null&&!task.contains(target)){cancel();return;}}
                 if(next<finish.size()){
                     HostActivity state=finish.get(next++);
                     if(!state.closed){state.resultCode=next==1?code:Activity.RESULT_CANCELED;state.resultData=next==1?result:null;finish(state.activity);}
@@ -508,23 +559,34 @@ public final class HostActivity {
                 state=activities.get(token);if(state==null||state.closing)return false;
                 state.closing=true;state.resultCode=code;state.resultData=result==null?null:new Intent(result);
                 removeTask=mode==Activity.FINISH_TASK_WITH_ACTIVITY||
-                    mode==Activity.FINISH_TASK_WITH_ROOT_ACTIVITY&&!task.isEmpty()&&task.getFirst()==state;
-                expectedTask=taskId;
+                    mode==Activity.FINISH_TASK_WITH_ROOT_ACTIVITY&&members(state.taskOwner).getFirst()==state;
+                expectedTask=state.taskOwner.id;
             }
             // Preserve the original server's root-only and always-remove modes.
             // The task owner rechecks identity when the main queue accepts it.
             if(removeTask)finishTask(expectedTask);
-            else new Handler(Looper.getMainLooper()).post(()->{if(state.closed)return;finish(state.activity);restoreTop();});
+            else new Handler(Looper.getMainLooper()).post(()->{if(state.closed)return;finish(state.activity);if(state.taskOwner.platform)new Handler(Looper.getMainLooper()).post(HostActivity::restoreTop);else restoreTop();});
             return true;
         }
-        @Override public boolean finishActivityAffinity(IBinder token){return finishActivity(token,0,null,0);}
+        @Override public boolean finishActivityAffinity(IBinder token){
+            List<HostActivity> finish=new ArrayList<>();
+            synchronized(activities){
+                HostActivity source=activities.get(token);if(source==null||source.closed||source.closing)return false;
+                var states=members(source.taskOwner);int index=states.indexOf(source);
+                var info=(ActivityInfo)HostUiAccess.get(source.record,ActivityThread.ActivityClientRecord.class,"activityInfo");
+                for(int i=index;i>=0;i--){HostActivity state=states.get(i);var candidate=(ActivityInfo)HostUiAccess.get(state.record,ActivityThread.ActivityClientRecord.class,"activityInfo");if(!Objects.equals(info.taskAffinity,candidate.taskAffinity))break;state.closing=true;finish.add(state);}
+            }
+            boolean accepted=new Handler(Looper.getMainLooper()).post(()->{for(var state:finish)if(!state.closed)finish(state.activity);new Handler(Looper.getMainLooper()).post(HostActivity::restoreTop);});
+            if(!accepted)synchronized(activities){for(var state:finish)if(!state.closed)state.closing=false;}
+            return accepted;
+        }
         @Override public boolean isTopOfTask(IBinder token){return find(token)==top();}
         @Override public boolean willActivityBeVisible(IBinder token){return find(token)==top();}
         @Override public int getDisplayId(IBinder token){return Display.DEFAULT_DISPLAY;}
         @Override public Configuration getTaskConfiguration(IBinder token){return new Configuration(HostApplication.current().context.getResources().getConfiguration());}
         @Override public ComponentName getCallingActivity(IBinder token){HostActivity state=find(token);return state==null?null:componentForToken(state.resultTo);}
         @Override public String getCallingPackage(IBinder token){ComponentName caller=getCallingActivity(token);return caller==null?null:caller.getPackageName();}
-        @Override public int getTaskForActivity(IBinder token,boolean onlyRoot){synchronized(activities){var state=find(token);return state==null||(onlyRoot&&state!=task.getFirst())?-1:taskId;}}
+        @Override public int getTaskForActivity(IBinder token,boolean onlyRoot){synchronized(activities){var state=find(token);return state==null||(onlyRoot&&state!=members(state.taskOwner).getFirst())?-1:state.taskOwner.id;}}
         @Override public void setRequestedOrientation(IBinder token,int value){HostActivity state=find(token);if(state==null)return;if(value< -1||value>14)throw new IllegalArgumentException("Unknown orientation request");state.orientation=value;new Handler(Looper.getMainLooper()).post(()->{if(!state.closed&&!state.closing)applyOrientation(state.activity);});}
         @Override public int getRequestedOrientation(IBinder token){HostActivity state=find(token);return state==null?ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED:state.orientation;}
         @Override public void reportSizeConfigurations(IBinder token,android.window.SizeConfigurationBuckets buckets){HostActivity state=find(token);if(state!=null)HostUiAccess.set(state.record,ActivityThread.ActivityClientRecord.class,"mSizeConfigurations",buckets);}

@@ -11,7 +11,7 @@ import com.android.server.am.HostPendingIntentInjector;
 /** macOS activity destinations below the original Context and Instrumentation clients. */
 final class HostActivityTasks extends IActivityTaskManager.Default {
     private final Context context;
-    private AppTask appTask;
+    private final Map<Integer,AppTask> appTasks=new HashMap<>();
     private static final ThreadLocal<Bundle> initiatingWindow=new ThreadLocal<>();
     @FunctionalInterface interface WindowRequest {int run(Bundle options)throws RemoteException;}
     static int windowRequest(Bundle options,WindowRequest request)throws RemoteException{
@@ -24,10 +24,10 @@ final class HostActivityTasks extends IActivityTaskManager.Default {
     @Override public synchronized List<IBinder> getAppTasks(String packageName){
         var peer=HostBinderRpc.callingPeer();String caller=peer==null?context.getPackageName():peer.packageName();
         if(!Objects.equals(caller,packageName))throw new SecurityException("Task caller does not match the calling process");
-        int id=HostActivity.currentTaskId();
-        if(id<0||!Objects.equals(packageName,context.getPackageName())){appTask=null;return List.of();}
-        if(appTask==null||appTask.id!=id)appTask=new AppTask(id);
-        return List.of(HostServiceEndpoints.export(appTask,"android.app.IAppTask",context));
+        if(!Objects.equals(packageName,context.getPackageName()))return List.of();
+        var ids=HostActivity.currentTaskIds();appTasks.keySet().retainAll(ids);var result=new ArrayList<IBinder>();
+        for(int id:ids)result.add(HostServiceEndpoints.export(appTasks.computeIfAbsent(id,AppTask::new),"android.app.IAppTask",context));
+        return result;
     }
     /** The task capability reads the existing lifecycle owner; it keeps no Activity copies. */
     private final class AppTask extends IAppTask.Default {

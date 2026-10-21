@@ -2,6 +2,7 @@ package maclauncher.android.framework;
 
 import android.app.*;
 import android.content.*;
+import android.content.pm.ActivityInfo;
 import android.os.*;
 import android.provider.Settings;
 import android.widget.Switch;
@@ -11,6 +12,7 @@ import java.util.*;
 final class HostStorageSettings {
     private static final String PERMISSION=android.Manifest.permission.MANAGE_EXTERNAL_STORAGE;
     private static final String DECISION="appop:android:manage_external_storage";
+    private static final String SESSION="maclauncher.android.storage-settings";
     private static final Map<IBinder,Session> windows=new IdentityHashMap<>();
     private HostStorageSettings(){}
     static int mode(){
@@ -28,64 +30,66 @@ final class HostStorageSettings {
             var data=intent.getData();
             if(data==null||!"package".equals(data.getScheme())||!context.getPackageName().equals(data.getSchemeSpecificPart()))return ActivityManager.START_PERMISSION_DENIED;
         }
-        Handler main=new Handler(Looper.getMainLooper());
-        return main.post(()->{
-            Activity activity=HostApplication.current().thread.getActivity(token);
-            if(activity==null||activity.isDestroyed()||activity.isFinishing())return;
-            Session existing=windows.get(token);if(existing!=null){existing.results.add(new Result(caller,who,request));existing.dialog.show();return;}
-            new Session(activity,caller,token,who,request).show();
-        })?ActivityManager.START_SUCCESS:ActivityManager.START_CANCELED;
+        synchronized(windows){
+            for(var existing:windows.values())if(existing.callerToken==token){existing.results.add(new Result(caller,who,request));return ActivityManager.START_SUCCESS;}
+            var session=new Session(token,caller,who,request);windows.put(session.capability,session);
+            var info=new ActivityInfo();info.applicationInfo=context.getApplicationInfo();info.packageName=context.getPackageName();
+            info.name=StorageActivity.class.getName();info.processName=HostContext.hostProcessName();info.taskAffinity=info.packageName+".platform.settings";
+            info.theme=android.R.style.Theme_Material_Light_NoActionBar;info.exported=false;
+            Intent launch=new Intent(intent).setComponent(new ComponentName(info.packageName,info.name)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            Bundle extras=new Bundle();extras.putBinder(SESSION,session.capability);launch.putExtras(extras);
+            try{HostActivity.launchPlatform(info,launch,caller,token,who);}
+            catch(RuntimeException|Error failure){windows.remove(session.capability);throw failure;}
+        }
+        return ActivityManager.START_SUCCESS;
     }
     private record Result(IApplicationThread caller,String who,int request){}
-    private static final class Session implements Application.ActivityLifecycleCallbacks {
-        final Activity activity;final IBinder token;final List<Result> results=new ArrayList<>();
-        final Runnable shutdown=this::close;
-        AlertDialog dialog;AutoCloseable lifecycle;boolean closed;
-        Session(Activity activity,IApplicationThread caller,IBinder token,String who,int request){this.activity=activity;this.token=token;results.add(new Result(caller,who,request));}
-        void show(){
-            Switch access=new Switch(activity);access.setText("Allow access to manage all files");
+    /** ActivityThread, PhoneWindow and the original main Looper own this UI. */
+    public static final class StorageActivity extends Activity {
+        private Session session;
+        @Override protected void onCreate(Bundle state){
+            super.onCreate(state);
+            IBinder capability=getIntent().getExtras()==null?null:getIntent().getExtras().getBinder(SESSION);
+            synchronized(windows){session=windows.get(capability);}
+            if(session==null)throw new IllegalStateException("Android storage settings request is no longer active");
+            setTitle("All files access");session.show(this);
+        }
+        @Override protected void onDestroy(){
+            try{if(session!=null){if(isChangingConfigurations())session.detach(this);else session.close(this);}}
+            finally{super.onDestroy();}
+        }
+    }
+    private static final class Session {
+        final IBinder capability=new Binder(),callerToken;
+        final List<Result> results=new ArrayList<>();
+        StorageActivity activity;AlertDialog dialog;boolean closed;
+        Session(IBinder token,IApplicationThread caller,String who,int request){callerToken=token;results.add(new Result(caller,who,request));}
+        void show(StorageActivity owner){
+            activity=owner;
+            Switch access=new Switch(owner);access.setText("Allow access to manage all files");
             access.setChecked(mode()==AppOpsManager.MODE_ALLOWED);access.setEnabled(HostPermissions.requested(PERMISSION));
-            int padding=Math.round(24*activity.getResources().getDisplayMetrics().density);access.setPadding(padding,padding,padding,padding);
+            int padding=Math.round(24*owner.getResources().getDisplayMetrics().density);access.setPadding(padding,padding,padding,padding);
             access.setOnCheckedChangeListener((button,allowed)->{
                 if(!HostPermissions.requested(PERMISSION))return;
                 HostPermissions.decisions().edit().putInt(DECISION,allowed?AppOpsManager.MODE_ALLOWED:AppOpsManager.MODE_ERRORED).apply();
                 HostAppOps.permissionsChanged();
             });
-            dialog=new AlertDialog.Builder(activity).setTitle("All files access")
+            dialog=new AlertDialog.Builder(owner).setTitle("All files access")
                 .setMessage("Access applies to this application's Android storage.")
                 .setView(access).setPositiveButton(android.R.string.ok,(value,which)->{}).create();
-            dialog.setOnDismissListener(value->close());
-            lifecycle=HostActivity.platformDialog(activity);windows.put(token,this);
-            activity.getApplication().registerActivityLifecycleCallbacks(this);
-            if(!HostLooper.addShutdownListener(Looper.getMainLooper(),shutdown)){close();return;}
-            try{dialog.show();}catch(RuntimeException|Error failure){close();throw failure;}
+            dialog.setOwnerActivity(owner);
+            dialog.setOnDismissListener(value->{if(activity==owner&&!owner.isDestroyed()&&!owner.isChangingConfigurations())owner.finish();});
+            dialog.show();
         }
-        void close(){
-            if(closed)return;closed=true;windows.remove(token,this);
-            HostLooper.removeShutdownListener(Looper.getMainLooper(),shutdown);
-            activity.getApplication().unregisterActivityLifecycleCallbacks(this);
-            if(dialog!=null)dialog.dismiss();
-            try{
-                if(!activity.isDestroyed()&&!activity.isFinishing())for(Result result:results)HostActivity.deliverResult(result.caller,token,result.who,result.request,Activity.RESULT_CANCELED,null);
-            }finally{
-                results.clear();
-                AutoCloseable owned=lifecycle;lifecycle=null;
-                // sendActivityResult queues the original ActivityResultItem.
-                // Let it run while the caller is paused, before restoring the
-                // foreground lifecycle; otherwise it introduces a second
-                // artificial pause/resume around an already resumed Activity.
-                Runnable resume=()->{
-                    if(owned!=null)try{owned.close();}catch(RuntimeException|Error failure){throw failure;}catch(Exception failure){throw new IllegalStateException("Android settings window could not close",failure);}
-                };
-                if(!new Handler(Looper.getMainLooper()).post(resume))resume.run();
-            }
+        void detach(StorageActivity owner){
+            if(activity!=owner)return;activity=null;
+            if(dialog!=null){dialog.setOnDismissListener(null);dialog.dismiss();dialog=null;}
         }
-        @Override public void onActivityDestroyed(Activity value){if(value==activity)close();}
-        @Override public void onActivityCreated(Activity value,Bundle state){}
-        @Override public void onActivityStarted(Activity value){}
-        @Override public void onActivityResumed(Activity value){}
-        @Override public void onActivityPaused(Activity value){}
-        @Override public void onActivityStopped(Activity value){}
-        @Override public void onActivitySaveInstanceState(Activity value,Bundle state){}
+        void close(StorageActivity owner){
+            if(closed)return;closed=true;detach(owner);
+            synchronized(windows){windows.remove(capability);}
+            try{for(Result result:results)HostActivity.deliverResult(result.caller,callerToken,result.who,result.request,Activity.RESULT_CANCELED,null);}
+            finally{results.clear();}
+        }
     }
 }
