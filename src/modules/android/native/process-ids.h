@@ -39,6 +39,12 @@ int klj_process_child_reaped(pid_t host);
 pid_t klj_process_child_host(int logical_id);
 /* Authenticated principal and signal state live on the same kernel lease. */
 int klj_process_publish_principal(uid_t uid);
+/* Guest dumpability belongs to the existing live process lease. It does not
+ * grant a Darwin task port or change the host debugger/core-dump policy. */
+int klj_process_get_dumpable(void);
+int klj_process_set_dumpable(int value);
+int klj_process_dumpable_of(int id);
+int klj_process_may_inspect(int id);
 /* Command metadata belongs to the same live process lease, never host argv or
  * an independently retained process catalog. Returned IDs are Android IDs. */
 int klj_process_publish_name(const char *name);

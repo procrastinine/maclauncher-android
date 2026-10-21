@@ -27,6 +27,7 @@ static ssize_t transfer(int writing,pid_t id,const struct iovec *local,unsigned 
     pid_t caller_host;int caller_kind,caller_process;uid_t caller_uid;
     if(klj_process_signal_owner(klj_process_id(),&caller_host,&caller_kind,&caller_process,&caller_uid)){errno=ESRCH;return -1;}
     if(uid!=caller_uid){errno=EPERM;return -1;}
+    if(klj_process_may_inspect(id))return -1;
     task_t task=mach_task_self();int borrowed=physical==getpid();
     if(!borrowed){
         if(task_for_pid(mach_task_self(),physical,&task)!=KERN_SUCCESS){errno=EPERM;return -1;}
@@ -34,6 +35,7 @@ static ssize_t transfer(int writing,pid_t id,const struct iovec *local,unsigned 
         // acquisition. Never interpret an arbitrary physical Mac PID as an ID.
         pid_t current;int current_kind,current_process;uid_t current_uid;
         if(klj_process_signal_owner(id,&current,&current_kind,&current_process,&current_uid)||current!=physical||current_uid!=uid){mach_port_deallocate(mach_task_self(),task);errno=ESRCH;return -1;}
+        if(klj_process_may_inspect(id)){int error=errno;mach_port_deallocate(mach_task_self(),task);errno=error;return -1;}
     }
     size_t li=0,ri=0,lo=0,ro=0,done=0;int failure=0;
     // The same ordered-vector/fault-safe Mach copy used by AIM's original

@@ -61,6 +61,12 @@ no complete image or Google package is included in the platform component
 collection. The APK is a binary build input and is not committed to this source
 repository.
 
+Linux process dumpability belongs to the existing guest process lease. Normal
+executables start dumpable, fork inherits the setting, and ordinary exec resets
+it. Disabling dumpability restricts peer inspection; self-access remains
+available. Inspection also remains subject to the host sandbox and task-port
+restrictions. These controls do not grant host debugger access.
+
 The ART package producer is `src/modules/android/art/package.mjs`. Its inputs
 include the completed supplier, common runtime, verified original image identity,
 extractor and corresponding source archive. `commonDeclaration` supplies the

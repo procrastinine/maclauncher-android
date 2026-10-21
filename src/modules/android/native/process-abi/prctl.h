@@ -1,5 +1,6 @@
 #pragma once
 #include "process-abi/prctl-constants.h"
+#include "process-ids.h"
 #include <errno.h>
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
@@ -25,10 +26,14 @@ static int klj_process_prctl(int operation,uintptr_t first,uintptr_t second,uint
   if(error){errno=error;return -1;}memcpy(name,native,15);
   if(mach_vm_write(mach_task_self(),(mach_vm_address_t)first,(vm_offset_t)name,sizeof(name))!=KERN_SUCCESS){errno=EFAULT;return -1;}return 0;
  }
- // Darwin's crash reports and debugger/task-port authority do not implement
- // Linux's mutable dumpability or Yama tracer grants. Never report that these
- // controls changed, and never grant host tracing authority on their behalf.
- if(operation==PR_GET_DUMPABLE||operation==PR_SET_DUMPABLE||operation==PR_SET_PTRACER){errno=ENOTSUP;return -1;}
+ if(operation==PR_GET_DUMPABLE)return klj_process_get_dumpable();
+ if(operation==PR_SET_DUMPABLE){
+  if(first>1){errno=EINVAL;return -1;}
+  return klj_process_set_dumpable((int)first);
+ }
+ // Yama tracer exceptions are distinct from dumpability and do not grant
+ // debugger authority on the host.
+ if(operation==PR_SET_PTRACER){errno=ENOTSUP;return -1;}
  // Other Linux process controls are not recognized by this host kernel.
  errno=EINVAL;return -1;
 }
