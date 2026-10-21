@@ -73,6 +73,10 @@ extractor and corresponding source archive. `commonDeclaration` supplies the
 common runtime notice records and must match that producer manifest SHA-256.
 The caller supplies shared package inventory, Mach-O inspection and verification
 services; the producer does not read a launcher catalog or selected version.
+Optional `hwuiLibrary` and `hwuiNotices` supplier inputs deliver a complete
+Android graphics library and its source notices beside the original image.
+Component notice directories become supplier-relative records; packaging keeps
+those records alongside the matching common runtime notices.
 
 `prepareAimSource` accepts an explicit `glesHeaders` checkout alongside its AIM
 and Klepton inputs. Header bytes and the original Git revision are verified

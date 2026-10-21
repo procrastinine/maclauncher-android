@@ -20,7 +20,7 @@ import components from './components.json' with {type:'json'};
 /** Component destinations are shared by producers and explicit reassembly. */
 export function artSupplierComponents(inputs={}){
  const surfaces=inputs.compositionSurface?{compositionSurface:'guest/libmaclauncher-composition-surface.so'}:{};
- return {...components,...surfaces,...(inputs.platformPackages?{platformPackages:'config/platform-packages.json'}:{}),...(inputs.serviceWaiter?{serviceWaiter:'guest/android-art-service-wait'}:{}),...(inputs.bootImage?{bootImage:'boot-image'}:{}),...(inputs.linuxTranslate?{linuxTranslate:'host/linux-translate'}:{}),...(inputs.ptyHolder?{ptyHolder:'host/aim-pty-holder'}:{}),...(inputs.glesLibrary?{glesLibrary:'hal/libgles.so'}:{}),...(inputs.nativeBridge?{nativeBridge:'guest/'+arm32Components.bindings.art,nativeBridgeNotices:'licenses/native-bridge',...Object.fromEntries(arm32Components.preloads.map(item=>[item.name,'guest/'+item.file]))}:{})};
+ return {...components,...surfaces,...(inputs.hwuiLibrary?{hwuiLibrary:'guest/libhwui.so',hwuiNotices:'licenses/hwui'}:{}),...(inputs.platformPackages?{platformPackages:'config/platform-packages.json'}:{}),...(inputs.serviceWaiter?{serviceWaiter:'guest/android-art-service-wait'}:{}),...(inputs.bootImage?{bootImage:'boot-image'}:{}),...(inputs.linuxTranslate?{linuxTranslate:'host/linux-translate'}:{}),...(inputs.ptyHolder?{ptyHolder:'host/aim-pty-holder'}:{}),...(inputs.glesLibrary?{glesLibrary:'hal/libgles.so'}:{}),...(inputs.nativeBridge?{nativeBridge:'guest/'+arm32Components.bindings.art,nativeBridgeNotices:'licenses/native-bridge',...Object.fromEntries(arm32Components.preloads.map(item=>[item.name,'guest/'+item.file]))}:{})};
 }
 
 /** Complete delivered image identity. This runs when producing a supplier,
@@ -58,6 +58,13 @@ export function assembleArtSupplier({output,inputs,bootClasspath,sourceVersion,b
    const destination=path.join(temporary,relative);fs.mkdirSync(path.dirname(destination),{recursive:true});
    fs.cpSync(source,destination,{recursive:true,mode:fs.constants.COPYFILE_FICLONE,dereference:false,verbatimSymlinks:true});
   }
+  const notices=[];
+  for(const [name,relative]of Object.entries(delivered))if(name.endsWith('Notices')){
+   for(const file of originalTreeFiles(path.join(temporary,relative))){
+    const member=path.relative(temporary,file).split(path.sep).join('/');
+    notices.push({name:'Android runtime — '+member.replace(/^licenses\//,'').replaceAll('/',' — '),license:'See included license',path:member});
+   }
+  }
   const license=supplier.imageAcquisition.license;
   copyChanged(path.join(import.meta.dirname,license.path),path.join(temporary,license.path));
   const android={...supplier.android,architectures:[...supplier.android.architectures,...(inputs.nativeBridge?['armeabi-v7a','armeabi']:[])]};
@@ -71,7 +78,7 @@ export function assembleArtSupplier({output,inputs,bootClasspath,sourceVersion,b
   const image=sameImage?retained.image:imageContentIdentity(path.join(temporary,delivered.image));
   const catalog=inputs.platformPackages?(()=>{const file=path.join(temporary,delivered.platformPackages),stat=fs.statSync(file);return {sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'),size:stat.size,mode:stat.mode&0o7777};})():null;
   const platformSupplier={schemaVersion:1,image,catalog};
-  const manifest={schemaVersion:1,execution:'art',supplier:supplier.id,version:sourceVersion,android,imageAcquisition:supplier.imageAcquisition,hostcallVersion:supplier.hostcallVersion,components:delivered,platformSupplier,bootClasspath,...(bootImage?{bootImage}:{})};
+  const manifest={schemaVersion:1,execution:'art',supplier:supplier.id,version:sourceVersion,android,imageAcquisition:supplier.imageAcquisition,hostcallVersion:supplier.hostcallVersion,components:delivered,platformSupplier,bootClasspath,...(notices.length?{notices}:{}),...(bootImage?{bootImage}:{})};
   writeChanged(path.join(temporary,'runtime.json'),JSON.stringify(manifest,null,2)+'\n');
   fs.renameSync(temporary,output);return manifest;
  }finally{fs.rmSync(temporary,{recursive:true,force:true});}

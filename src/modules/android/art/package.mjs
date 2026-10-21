@@ -106,8 +106,10 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
       directoryRelative:'android-art/'+version+'/arm64',manifestRelative:'runtime.json',manifestSha256:sha(path.join(stage,'runtime.json')),
       sourceRelative:'source.tar.gz',sourceSha256:sourceHash,files:[...files,{path:'runtime.json',size:fs.statSync(path.join(stage,'runtime.json')).size,mode:0o644,sha256:sha(path.join(stage,'runtime.json'))}],
       notices:[]};
-    // Notice records belong to this exact common producer, not launcher selection.
-    declaration.notices=notices;
+    // Each notice belongs to its exact common or ART supplier. Supplier paths
+    // are relative to the separately packaged ART component tree.
+    if(supplier.notices!==undefined&&!Array.isArray(supplier.notices))throw Error('Android ART supplier notice records are invalid.');
+    declaration.notices=[...notices,...(supplier.notices||[]).map(notice=>({...notice,path:'art/'+notice.path}))];
     metadata.validateDeclaration(declaration);metadata.verifyPayload(stage,declaration);
     fs.renameSync(stage,output);return {root:output,declaration};
   }finally{fs.rmSync(stage,{recursive:true,force:true});}
