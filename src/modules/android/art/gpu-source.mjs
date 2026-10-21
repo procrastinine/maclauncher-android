@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {execFileSync} from 'node:child_process';
 import {copyChanged,writeChanged} from '../native/upstream/source-files.mjs';
 import {verifyGlesHeaders} from '../native/gles-headers.mjs';
 
@@ -9,8 +10,24 @@ export function prepareGlesInteropHeaders({glesHeaders,output}) {
   const pin=JSON.parse(fs.readFileSync(new URL('../native/gles-headers.json',import.meta.url)));
   const root=fs.realpathSync(glesHeaders??path.resolve(import.meta.dirname,'../../../..',pin.directory));
   const manifest=verifyGlesHeaders(root);
-  for(const file of manifest.files.filter(file=>/^include\/(?:EGL|KHR)\//.test(file.path)))
-    copyChanged(path.join(root,file.path),path.join(output,file.path));
+  const git=args=>execFileSync('git',['-C',root,...args],{encoding:'utf8',timeout:10000}).trim();
+  const tracked=new Map();
+  for(const row of git(['ls-tree','-r','-z',manifest.revision,'--','include/EGL','include/KHR']).split('\0').filter(Boolean)){
+    const match=row.match(/^100(?:644|755) blob ([a-f0-9]{40})\t(.+)$/);
+    if(match&&match[2].endsWith('.h'))tracked.set(match[2],match[1]);
+  }
+  const files=['EGL','KHR'].flatMap(family=>fs.readdirSync(path.join(root,'include',family))
+    .filter(name=>name.endsWith('.h')).map(name=>'include/'+family+'/'+name)).sort();
+  if(JSON.stringify(files)!==JSON.stringify([...tracked.keys()].sort()))
+    throw Error('GLES header directory differs from its original pinned source.');
+  for(const relative of files){
+    const file=fs.realpathSync(path.join(root,relative));
+    if(!file.startsWith(root+path.sep)||!fs.statSync(file).isFile()||git(['hash-object','--no-filters',file])!==tracked.get(relative))
+      throw Error('GLES header differs from its original pinned source: '+relative);
+  }
+  // The manifest records minimum identity evidence; original extension headers
+  // are part of this complete verified family even when absent from that list.
+  for(const relative of files)copyChanged(path.join(root,relative),path.join(output,relative));
   return {root,manifest};
 }
 
