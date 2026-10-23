@@ -37,7 +37,14 @@ export async function buildArtRuntime({inputs,check=false}){
   options.inputs={...options.inputs,art:produced.art};
  }
  const supplier=await buildArt({...options,host:{klepton:sources.klepton,...options.host,aim},runner:{unicorn:path.resolve(import.meta.dirname,'../src/external/unicorn'),...runner,aim}});
- if(afterBuild)sourceArchive=exportSources();
+ if(afterBuild){
+  try{sourceArchive=exportSources();}
+  catch(error){
+   // This invocation created the unpublished supplier. Keep reusable compiler
+   // outputs while allowing the same source build to finish on a retry.
+   fs.rmSync(path.join(options.output,'runtime'),{recursive:true,force:true});throw error;
+  }
+ }
  return {...supplier,root:path.join(options.output,'runtime'),sourceArchive};
 }
 
