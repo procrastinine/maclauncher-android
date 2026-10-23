@@ -12,6 +12,7 @@
 typedef struct ImageLoader {
     uintptr_t base,end;
     jobject loader;
+    jclass anchor;
     int ambiguous;
     const void *lifetime;int (*active)(const void *);
     struct ImageLoader *next;
@@ -61,6 +62,17 @@ static int loader_for_address(JNIEnv *env,uintptr_t address,jobject *loader){
     }
     pthread_mutex_unlock(&lookup_mutex);
     return owned;
+}
+
+/* A detached Android native thread has no Java caller frame. Its original
+ * image's retained declaration supplies the same real defining namespace. */
+jclass klj_class_for_address(JNIEnv *env,uintptr_t address){
+    jclass anchor=NULL;pthread_mutex_lock(&lookup_mutex);
+    for(ImageLoader *entry=image_loaders;entry;entry=entry->next){
+        if(entry->active&&!entry->active(entry->lifetime))continue;
+        if(address>=entry->base&&address<entry->end){if(!entry->ambiguous)anchor=(*env)->NewLocalRef(env,entry->anchor);break;}
+    }
+    pthread_mutex_unlock(&lookup_mutex);return anchor;
 }
 
 jclass klj_find_from_image(JNIEnv *env,const char *name,uintptr_t caller){
@@ -158,8 +170,9 @@ int klj_class_lookup_bind_range(JNIEnv *env,uintptr_t start,size_t length,jclass
     ImageLoader *entry=calloc(1,sizeof(*entry));
     if(entry){
         entry->loader=loader?(*env)->NewGlobalRef(env,loader):NULL;
-        if(entry->loader||!loader){entry->base=start;entry->end=start+length;entry->lifetime=lifetime;entry->active=active;entry->next=image_loaders;image_loaders=entry;}
-        else{free(entry);entry=NULL;}
+        if(entry->loader||!loader)entry->anchor=(*env)->NewGlobalRef(env,entry_class);
+        if(entry->anchor){entry->base=start;entry->end=start+length;entry->lifetime=lifetime;entry->active=active;entry->next=image_loaders;image_loaders=entry;}
+        else{if(entry->loader)(*env)->DeleteGlobalRef(env,entry->loader);free(entry);entry=NULL;}
     }
     pthread_mutex_unlock(&lookup_mutex);(*env)->DeleteLocalRef(env,loader);
     return entry!=NULL;

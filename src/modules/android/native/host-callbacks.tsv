@@ -39,6 +39,7 @@ text_input	maclauncher/android/framework/HostTextInput	text	(Ljava/lang/String;Z
 text_shortcut	maclauncher/android/framework/HostTextInput	shortcut	(I)V	static
 relative	maclauncher/android/framework/HostInput	relative	(IFFI)Landroid/view/MotionEvent;	static
 input	maclauncher/android/framework/HostWindowManager	input	(Landroid/view/InputEvent;)Z	static
+xr_input_focused	maclauncher/android/framework/HostWindowManager	xrInputFocused	(Landroid/app/Activity;)Z	static
 overlay_create	maclauncher/android/bridge/CanvasOverlay	hostCreate	(Landroid/app/Activity;JII)Lmaclauncher/android/bridge/CanvasFrameSource;	static
 frame_pump	maclauncher/android/bridge/CanvasFrameSource	hostPump	()I	instance
 frame_resize	maclauncher/android/bridge/CanvasFrameSource	resize	(II)V	instance
@@ -105,3 +106,11 @@ queue_motion_getaxisvalue	android/view/MotionEvent	getAxisValue	(II)F	instance
 queue_motion_gethistoricalaxisvalue	android/view/MotionEvent	getHistoricalAxisValue	(III)F	instance
 queue_motion_gethistoricaleventtimenanos	android/view/MotionEvent	getHistoricalEventTimeNanos	(I)J	instance
 sleep	maclauncher/android/framework/HostActivity	hostSleep	(Z)V	static
+xr_surface_create	maclauncher/android/framework/XrSurface	create	(II)Lmaclauncher/android/framework/XrSurface;	static
+xr_surface_object	maclauncher/android/framework/XrSurface	surface	()Landroid/view/Surface;	instance
+xr_surface_identity	maclauncher/android/framework/XrSurface	identity	()J	instance
+xr_surface_release	maclauncher/android/framework/XrSurface	close	()V	instance
+device_string	maclauncher/android/framework/HostNativeDevice	string	(Ljava/lang/String;)Ljava/lang/String;	static
+device_version	maclauncher/android/framework/HostNativeDevice	version	()J	static
+device_locale	maclauncher/android/framework/HostNativeDevice	locale	()[Ljava/lang/String;	static
+device_low_memory	maclauncher/android/framework/HostNativeDevice	lowMemory	()I	static

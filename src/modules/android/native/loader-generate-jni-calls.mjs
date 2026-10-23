@@ -30,7 +30,7 @@ Lklj_jni_call:
 `;
  const variants=operations.flatMap(o=>[{...o,isV:false},{...o,isV:true}]);
  variants.forEach((o,i)=>{header+=`extern void klj_jni_call_${i}(void);\n`;assembly+=`.p2align 2\n.globl _klj_jni_call_${i}\n_klj_jni_call_${i}:\n mov x16,#${i}\n b Lklj_jni_call\n`;});
- header+='static struct JNINativeInterface_ guest_functions;\nint klj_jni_calls_prepare(JNIEnv *env,jniNativeInterface *table,jvmtiEnv *ti){if(!prepare_call_lifecycle(env,ti))return 0;originals=*table;prepare_guest_functions();\n';
+ header+='static struct JNINativeInterface_ guest_functions;\nint klj_jni_calls_prepare(JNIEnv *env,jniNativeInterface *table,jvmtiEnv *ti){if(!prepare_call_lifecycle(env,ti)||!prepare_native_load_methods(env,table))return 0;originals=*table;prepare_guest_functions();\n';
  variants.forEach((o,i)=>{const field=o.name+(o.isV?'V':'');header+=`guest_functions.${field}=(__typeof__(guest_functions.${field}))klj_jni_call_${i};\n`;});
  header+='return 1;}\nvoid *klj_jni_dispatch(CallFrame *f,unsigned operation){\nif(operation>=62)return NULL;\nf->integer=f->floating=0;JNIEnv *env=klj_host_env((JNIEnv*)f->x[0]);if((*env)->ExceptionCheck(env))return NULL;\nunsigned fixed=(operation>=42)?4:3;jmethodID method=(jmethodID)f->x[fixed-1];Method descriptor;\nif(!signature(env,method,&descriptor))return NULL;jvalue values[255]={{0}};if(!decode(env,f,fixed,operation&1,&descriptor,values))return NULL;\nswitch(operation/2){\n';
  operations.forEach((o,i)=>{let statement=o.kind==='Void'?o.invoke+';':o.kind==='Float'?`jfloat value=${o.invoke};memcpy(&f->floating,&value,sizeof value);`:o.kind==='Double'?`jdouble value=${o.invoke};memcpy(&f->floating,&value,sizeof value);`:`f->integer=(uint64_t)${o.invoke};`;header+=`case ${i}:{${statement}break;}\n`;});
@@ -41,7 +41,8 @@ Lklj_jni_call:
  let forward='static struct JNINativeInterface_ guest_functions;\n';
  for(const {name,result,parameters}of fields){if(variable.has(name))continue;
   const args=parameters.slice(1).map(p=>{const match=p.match(/([A-Za-z_]\w*)$/);if(!match)throw Error('JNI parameter declaration is incomplete: '+p);return match[1];});
-  const invoke=name==='GetJavaVM'?'guest_get_vm(env,vm)':name==='FindClass'?'guest_find_class(env,name,__builtin_return_address(0))':'originals.'+name+'(klj_host_env(env)'+(args.length?','+args.join(','):'')+')';
+  const void_family={CallVoidMethodA:0,CallStaticVoidMethodA:1,CallNonvirtualVoidMethodA:2};
+  const invoke=Object.hasOwn(void_family,name)?'invoke_void(klj_host_env(env),'+(name==='CallStaticVoidMethodA'?'NULL':args[0])+','+(name==='CallVoidMethodA'?'NULL':name==='CallStaticVoidMethodA'?args[0]:args[1])+','+args.slice(-2).join(',')+', (uintptr_t)__builtin_return_address(0),'+void_family[name]+')':name==='GetJavaVM'?'guest_get_vm(env,vm)':name==='FindClass'?'guest_find_class(env,name,__builtin_return_address(0))':'originals.'+name+'(klj_host_env(env)'+(args.length?','+args.join(','):'')+')';
   const reenters=/^(FindClass|DefineClass|AllocObject|Get(?:Static)?(?:Method|Field)ID|ExceptionDescribe|NewObjectA|Call(?:Static|Nonvirtual)?\w+MethodA)$/.test(name);
   forward+='static '+result+' JNICALL guest_'+name+'('+parameters.join(',')+'){'+(reenters?
     'JNIEnv *host=klj_host_env(env);if(!klj_jni_before_java(host))'+(result==='void'?'return;':'return ('+result+')0;')+
@@ -60,7 +61,8 @@ export function jniCallOperations(){
  for(const group of ['','Static','Nonvirtual'])for(const kind of ['Object','Boolean','Byte','Char','Short','Int','Long','Float','Double','Void']){
   const name='Call'+group+kind+'Method',fixed=group==='Nonvirtual'?4:3;
   const args=group==='Nonvirtual'?'env,(jobject)f->x[1],(jclass)f->x[2],method,values':`env,(${group==='Static'?'jclass':'jobject'})f->x[1],method,values`;
-  operations.push({name,kind,fixed,invoke:'originals.'+name+'A('+args+')'});
+  const invoke=kind==='Void'?`invoke_void(env,${group==='Static'?'NULL':'(jobject)f->x[1]'},${group==='Nonvirtual'?'(jclass)f->x[2]':group==='Static'?'(jclass)f->x[1]':'NULL'},method,values,(uintptr_t)f->lr,${group==='Static'?1:group==='Nonvirtual'?2:0})`:'originals.'+name+'A('+args+')';
+  operations.push({name,kind,fixed,invoke});
  }
  return operations;
 }

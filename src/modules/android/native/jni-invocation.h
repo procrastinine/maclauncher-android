@@ -5,6 +5,12 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+/* One real VM and its Android ABI facade are published by the process loader.
+ * Cold invocation-API queries and platform callbacks borrow that same owner. */
+int klj_jni_publish_vm(JavaVM *actual,JavaVM *guest);
+JavaVM *klj_jni_actual_vm(void);
+void klj_jni_clear_vm(JavaVM *actual);
+jint klj_jni_get_created_vms(JavaVM **buffer,jsize capacity,jsize *count);
 /* Stack ownership around an original native invocation. Resources are attached
  * lazily; ordinary JNI calls allocate neither transport nor resource records. */
 typedef struct KljJniInvocation KljJniInvocation;

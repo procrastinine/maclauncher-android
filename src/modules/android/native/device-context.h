@@ -4,7 +4,6 @@
 
 /* Borrowed JVM references; thread retirement is owned by the common native
  * thread lifetime. These helpers do not create a VM or a Java object model. */
-void klj_set_device_vm(JavaVM *actual,JavaVM *guest);
 JNIEnv *klj_device_environment(void);
 KLHostCallbacks *klj_device_callbacks(void);
 void klj_device_context_release(JNIEnv *env);

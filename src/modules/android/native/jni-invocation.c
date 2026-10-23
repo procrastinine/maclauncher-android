@@ -15,6 +15,31 @@ static _Thread_local KljJniAttachScope *attachment;
 static _Atomic(const KljJniThreadLifecycle *) thread_lifecycle;
 static _Atomic(KljJniThreadObserver *) retirement_observers;
 static pthread_mutex_t retirement_mutex=PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t vm_owner_mutex=PTHREAD_MUTEX_INITIALIZER;
+static JavaVM *actual_vm_owner,*guest_vm_owner;
+int klj_jni_publish_vm(JavaVM *actual,JavaVM *guest){
+    if(!actual||!guest)return 0;
+    pthread_mutex_lock(&vm_owner_mutex);
+    int okay=!actual_vm_owner||(actual_vm_owner==actual&&guest_vm_owner==guest);
+    if(okay){actual_vm_owner=actual;guest_vm_owner=guest;}
+    pthread_mutex_unlock(&vm_owner_mutex);return okay;
+}
+JavaVM *klj_jni_actual_vm(void){
+    pthread_mutex_lock(&vm_owner_mutex);JavaVM *vm=actual_vm_owner;
+    pthread_mutex_unlock(&vm_owner_mutex);return vm;
+}
+void klj_jni_clear_vm(JavaVM *actual){
+    pthread_mutex_lock(&vm_owner_mutex);
+    if(actual&&actual_vm_owner==actual){actual_vm_owner=NULL;guest_vm_owner=NULL;}
+    pthread_mutex_unlock(&vm_owner_mutex);
+}
+jint klj_jni_get_created_vms(JavaVM **buffer,jsize capacity,jsize *count){
+    if(capacity<0||!count||(capacity>0&&!buffer))return JNI_EINVAL;
+    pthread_mutex_lock(&vm_owner_mutex);
+    *count=guest_vm_owner?1:0;
+    if(capacity>0&&guest_vm_owner)buffer[0]=guest_vm_owner;
+    pthread_mutex_unlock(&vm_owner_mutex);return JNI_OK;
+}
 int klj_jni_thread_observe(KljJniThreadObserver *owner){
     if(!owner||(!owner->javaEnd&&!owner->physicalEnd))return 0;
     pthread_mutex_lock(&retirement_mutex);KljJniThreadObserver *head=atomic_load_explicit(&retirement_observers,memory_order_acquire);

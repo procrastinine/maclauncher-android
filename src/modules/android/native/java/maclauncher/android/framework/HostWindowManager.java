@@ -35,6 +35,13 @@ public final class HostWindowManager {
     private static void completeDelegated(InputEvent event,InputCompletion ticket,boolean handled){check();if(inputCompletions.get(event)!=ticket)return;inputCompletions.remove(event);event.recycle();ticket.callback.accept(handled);}
     private HostWindowManager(){}
     public static boolean outputAttached(){return owner!=null;}
+    /** Desktop XR controls belong only to the rendered Activity's own input root. */
+    public static boolean xrInputFocused(Activity activity){
+        check();if(owner!=activity||!outputFocused||inputOutput!=null||HostActivity.hostSleeping()||HostTextInput.active()||focusedRoot==null)return false;
+        View decor=activity.getWindow().getDecorView();if(focusedRoot.getView()!=decor)return false;
+        for(ViewRootImpl root:roots()){View view=root.getView();if(view!=null&&view!=decor&&view.isAttachedToWindow()&&view.getVisibility()==View.VISIBLE&&root.mSurface.isValid()&&(root.mWindowAttributes.flags&WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)==0)return false;}
+        return true;
+    }
     static boolean ownsOutput(Activity activity){return owner==activity;}
     static boolean canOrientOutput(Activity activity){return ownsOutput(activity)&&(orientationOutput!=null||maclauncher.android.bridge.WindowSession.attached());}
     static void requestOrientation(Activity activity,boolean landscape){check();if(!ownsOutput(activity))throw new IllegalStateException("Orientation requires the attached Activity");if(orientationOutput!=null)orientationOutput.request(activity,landscape);else maclauncher.android.bridge.WindowSession.hostRequestOrientation(activity,landscape);}

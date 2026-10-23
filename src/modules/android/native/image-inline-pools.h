@@ -6,7 +6,7 @@ static int klj_image_inline_pools(kl_image *image,const Elf64_Phdr *headers,int 
     if(!image->inline_pools)return -1;
     uint8_t *mapping=image->base-image->map_off;
     image->inline_pools[0]=(KljInlinePool){mapping+image->map_size,image->x18_arena_size,0,0};
-    image->inline_pools[1]=(KljInlinePool){mapping,image->inline_prefix_size,0,0};
+    image->inline_pools[1]=(KljInlinePool){mapping-image->x18_pre_arena_size,image->x18_pre_arena_size,0,0};
     image->inline_pool_count=2;
     if(!image->inline_prefix_size)return 0;
     uintptr_t page=(uintptr_t)getpagesize();

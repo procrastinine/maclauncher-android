@@ -4,6 +4,8 @@ export function prepareImageSource(vendor,build) {
  let source=fs.readFileSync(path.join(vendor,'runtime/kl_image.c'),'utf8');
  const replace=(from,to)=>{if(source.split(from).length!==2)throw Error('Pinned ELF initialization source changed: '+from);source=source.replace(from,to);};
  const replaceBetween=(from,to,value)=>{const start=source.indexOf(from),end=source.indexOf(to,start);if(start<0||end<0)throw Error('Pinned ELF source range changed: '+from);source=source.slice(0,start)+value+source.slice(end);};
+ replace('        if (gva < s->sh_addr || gva + len > s->sh_addr + s->sh_size) continue;',
+  '        if(gva<s->sh_addr || gva-s->sh_addr>s->sh_size || len>s->sh_size-(gva-s->sh_addr))continue;');
  // Relocation precedes this shared page plan. Seal ordinary RELRO as well as
  // pages where RELRO resolves a write/execute collision. Keep any writable
  // neighbor outside the original range when a host page contains both.
@@ -112,36 +114,27 @@ const char *klj_image_runpath(kl_image *image){
     }`);
  replace('                             free(img); munmap(file, sb.st_size); return NULL; }','                             klj_code_metadata_release(&img->code_metadata);free(img); munmap(file, sb.st_size); return NULL; }');
  replace('    if (bind_dynamic(img, ph, eh->e_phnum, lo) != 0) {\n        munmap(file, sb.st_size); return NULL;\n    }','    if (bind_dynamic(img, ph, eh->e_phnum, lo) != 0) {\n        kl_unload(img);munmap(file, sb.st_size); return NULL;\n    }');
- replace(`    for (int i = 0; sh && i < eh->e_shnum; i++) {
-        if (sh[i].sh_type != SHT_PROGBITS || !(sh[i].sh_flags & SHF_EXECINSTR)) continue;
-        if (sh[i].sh_offset + sh[i].sh_size > (uint64_t)sb.st_size) continue;
-        x18_arena += (size_t)kl_x18_count(file + sh[i].sh_offset, (size_t)sh[i].sh_size);
-    }`,`    KlImageCodeCursor reservation_cursor={.metadata=&img->code_metadata};KlImageCodeRange reservation;
-    size_t inline_sites=0,inline_ranges=0;
+ replaceBetween('    for (int i = 0; sh && i < eh->e_shnum; i++) {\n        if (sh[i].sh_type != SHT_PROGBITS || !(sh[i].sh_flags & SHF_EXECINSTR)) continue;\n        if (sh[i].sh_offset + sh[i].sh_size > (uint64_t)sb.st_size) continue;\n        x18_arena +=', '    if (x18_arena) {', `    KlImageCodeCursor reservation_cursor={.metadata=&img->code_metadata};KlImageCodeRange reservation;
     while(klj_image_code_next(eh,ph,sh,(size_t)sb.st_size,&reservation_cursor,&reservation)) {
         size_t sites=klj_inline_syscall_count_context(file+reservation.offset,reservation.size,
             &(klx_code_context){img->code_metadata.marks,img->code_metadata.count,reservation.address,img->code_metadata.reachable,img->code_metadata.reachableCount});
         sites+=(size_t)kl_x18_capacity(file+reservation.offset,reservation.size);
-        inline_sites+=sites;if(sites)inline_ranges++;
-        x18_arena += sites;
-    }`);
- replace('    img->x18_arena_size = x18_arena;',`    img->x18_arena_size = x18_arena;
-    if(inline_sites && img->map_size+x18_arena>=(1ULL<<27)) {
-        if(inline_sites>(SIZE_MAX-pg)/48 || inline_ranges>(SIZE_MAX-inline_sites*48-pg)/pg) {
-            err("Inline instruction arena size overflow");free(img);munmap(file,sb.st_size);return NULL;
+        if(sites>SIZE_MAX-x18_arena) {
+            err("Inline instruction arena size overflow");klj_code_metadata_release(&img->code_metadata);free(img);munmap(file,sb.st_size);return NULL;
         }
-        img->inline_prefix_size=(inline_sites*48+inline_ranges*pg+pg-1)&~((size_t)pg-1);
-        img->map_off+=img->inline_prefix_size;img->map_size+=img->inline_prefix_size;
-    }`);
+        x18_arena+=sites;
+    }
+    if(x18_arena>(SIZE_MAX-(64u<<10)*64-(size_t)pg)/(KLX_VEN_MAX_INSN*4)) {
+        err("Inline instruction arena size overflow");klj_code_metadata_release(&img->code_metadata);free(img);munmap(file,sb.st_size);return NULL;
+    }
+`);
+ // The upstream pre-image reservation also supplies the owned pool planner.
+ // Preserve exact PT_LOAD gaps for sites beyond either outer arena's reach.
+ replace('    img->x18_arena_size = x18_arena;',
+  '    img->x18_arena_size = x18_arena;\n    img->inline_prefix_size=x18_arena;\n    if(img->map_size>SIZE_MAX-x18_arena || x18_arena>SIZE_MAX-img->map_size-x18_arena) {\n        err("Inline instruction mapping size overflow");klj_code_metadata_release(&img->code_metadata);free(img);munmap(file,sb.st_size);return NULL;\n    }');
  replace('static int protect_pages(kl_image *img, const Elf64_Ehdr *eh,',
   '#include '+JSON.stringify(path.join(root,'x18-pools.inc'))+'\n#include '+JSON.stringify(path.join(root,'image-inline-pools.h'))+'\n\nstatic int protect_pages(kl_image *img, const Elf64_Ehdr *eh,');
- replace('    size_t   x18_arena_used = 0;',`    size_t   x18_arena_used = 0;
-    if(klj_image_inline_pools(img,ph,eh->e_phnum,lo)) {
-        err("Inline instruction arena metadata: %s",strerror(errno));
-        kl_unload(img);munmap(file,sb.st_size);return NULL;
-    }`);
- replaceBetween('    int veneer = sh != NULL;','    // ...and code inside those sections, not whole sections.',`    int veneer = 1;
-    // Original ELF code can reach a context-completing veneer before any
+ replaceBetween('    int veneer = sh != NULL;','    // ...and code inside those sections, not whole sections.',`    // Original ELF code can reach a context-completing veneer before any
     // executable mmap import. Capture the live VM's dispositions at load time.
     if(klj_executable_signal_enable()) {
         err("Native signal adaptation: %s",strerror(errno));
@@ -149,24 +142,43 @@ const char *klj_image_runpath(kl_image *image){
     }
 
 `);
- replace(`    for (int i = 0; sh && i < eh->e_shnum; i++) {
-        if (sh[i].sh_type != SHT_PROGBITS || !(sh[i].sh_flags & SHF_EXECINSTR)) continue;
-        uint64_t cursor = sh[i].sh_addr, cva;
-        size_t csz;
-        while (kl_x18_next_code(sh[i].sh_addr, (size_t)sh[i].sh_size,
-                                skip, nskip, &cursor, &cva, &csz)) {`,`    KlImageCodeCursor rewrite_cursor={.metadata=&img->code_metadata};KlImageCodeRange code;
+ replaceBetween('    uint8_t *x18_arena_base = img->x18_arena_size',
+  '    // Measured guest patches,',`    if(klj_image_inline_pools(img,ph,eh->e_phnum,lo)) {
+        err("Inline instruction arena metadata: %s",strerror(errno));
+        kl_unload(img);munmap(file,sb.st_size);return NULL;
+    }
+    struct x18_img_ctx ictx={sh,sh?eh->e_shnum:0,(uint64_t)(uintptr_t)img->base-lo};
+    kl_x18_image ximg={x18_img_data_at,&ictx};
+    KlImageCodeCursor rewrite_cursor={.metadata=&img->code_metadata};KlImageCodeRange code;
     while(klj_image_code_next(eh,ph,sh,(size_t)sb.st_size,&rewrite_cursor,&code)) {
         uint64_t cursor=code.address,cva;size_t csz;
-        while(kl_x18_next_code(code.address,code.size,skip,nskip,&cursor,&cva,&csz)) {`);
- replace('            rewrite_tls(p, csz, cva, path, &img->stats);','            klx_code_context code_context={img->code_metadata.marks,img->code_metadata.count,cva,img->code_metadata.reachable,img->code_metadata.reachableCount};\n            rewrite_tls(p, csz, cva, path, &img->stats, &code_context, &img->code_metadata, &img->tls_data_words);');
- replace('            if (kl_x18_patch(p, csz, x18_arena_base, img->x18_arena_size,\n                             &x18_arena_used, &xs) != 0) {','            if (klj_image_instruction_patch_context(p, csz, img->inline_pools, img->inline_pool_count, &xs, &code_context) != 0) {');
- replace(`                fprintf(stderr, "  [klepton] %s: x18 veneering failed to start\\n", path);
-                veneer = 0;
-                continue;`,`                err("Linux inline instruction adaptation: %s",strerror(errno));
-                kl_unload(img);munmap(file,sb.st_size);return NULL;`);
- replace(`    uint8_t *x18_arena_base = img->x18_arena_size
-                            ? img->base - img->map_off + img->map_size : NULL;
-    size_t   x18_arena_used = 0;`, '');
+        while(kl_x18_next_code(code.address,code.size,skip,nskip,&cursor,&cva,&csz)) {
+            uint8_t *p=img->base+cva-lo;
+            // The upstream recogniser observes producers before any ordinary
+            // per-instruction rewrite. The shared planner still chooses exact
+            // reachable pools, including genuine gaps within large images.
+            klx_code_context context={img->code_metadata.marks,img->code_metadata.count,cva,img->code_metadata.reachable,img->code_metadata.reachableCount};
+            kl_x18_stats tables;
+            if(klj_image_tables_patch_context(p,csz,img->inline_pools,img->inline_pool_count,&ximg,&tables,&context)) {
+                err("Native jump-table adaptation: %s",strerror(errno));
+                kl_unload(img);munmap(file,sb.st_size);return NULL;
+            }
+            rewrite_tls(p,csz,cva,path,&img->stats,&context,&img->code_metadata,&img->tls_data_words);
+            kl_x18_stats xs;
+            if(klj_image_instruction_patch_context(p,csz,img->inline_pools,img->inline_pool_count,&xs,&context)) {
+                err("Linux inline instruction adaptation: %s",strerror(errno));
+                kl_unload(img);munmap(file,sb.st_size);return NULL;
+            }
+            img->stats.x18_sites+=xs.sites+tables.jt_sites;
+            img->stats.x18_patched+=xs.patched+tables.jt_sites;
+            img->stats.x18_refused+=xs.refused;
+            img->stats.x18_data_words+=xs.data_words;
+            img->stats.ctr_sites+=xs.ctr_sites;
+            img->stats.ctr_patched+=xs.ctr_patched;
+            img->stats.ctr_refused+=xs.ctr_refused;
+        }
+    }
+`);
  replace('    if (protect_pages(img, eh, ph, sh, lo) != 0) {\n        munmap(file, (size_t)sb.st_size); return NULL;',
   '    if (protect_pages(img, eh, ph, sh, lo) != 0 || klj_inline_syscall_pools_seal(img->inline_pools,img->inline_pool_count) != 0) {\n        kl_unload(img);munmap(file, (size_t)sb.st_size); return NULL;');
  replace('        uint64_t *slot = (uint64_t *)(img->base + r->r_offset);\n        uint32_t type = ELF64_R_TYPE(r->r_info);',

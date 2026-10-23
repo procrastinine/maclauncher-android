@@ -4,6 +4,9 @@ const header='#include '+JSON.stringify(path.join(import.meta.dirname,'signal-br
 function replace(source,from,to){if(source.split(from).length!==2)throw Error('Upstream signal boundary changed: '+from);return source.replace(from,to);}
 /** Adapt handler registration by ABI; one-argument handlers receive no ucontext. */
 export function adaptSignalSource(source) {
+  // The JVM launcher has always used the upstream unconfigured-driver default
+  // here. Preserve that register repair policy without a standalone Java driver.
+  source=replace(source,'        extern kl_guest_kind kl_driver_kind(void);\n        v = kl_env_on("KL_SIG_X18_REPAIR", kl_driver_kind() == KL_GUEST_UNITY);','        v = kl_env_on("KL_SIG_X18_REPAIR", 1);');
   const refusal=source.indexOf('    static int allow_guest = -1;');
   const registration=source.indexOf('    if (in) {',refusal);
   if(refusal<0||registration<0)throw Error('Upstream signal registration boundary changed');

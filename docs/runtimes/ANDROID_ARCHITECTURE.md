@@ -20,6 +20,19 @@ serve both bindings. Java, NDK and XR entry points use those same owners.
 | AOSP native modules | Binder, libcore, cryptography, media formats, fonts and portable algorithms | Pinned original implementation units with owned Darwin adaptations |
 | macOS and ANGLE | Windows, input, graphics execution, audio, devices and network transport | Native platform operations below Android's public APIs |
 
+Native libraries use the executing JVM or ART for Java classes, objects and
+native-method registration. `JNI_GetCreatedJavaVMs` returns the same Android ABI
+facade supplied to `JNI_OnLoad`; Klepton's standalone synthetic Java bootstrap
+is excluded. Native package, version, locale and memory-pressure helpers use the
+original framework and application context. Native system properties remain
+below the original AOSP `Build` class, sharing one device metadata owner without
+calling Java during property initialization.
+
+Converted bytecode and direct guest JNI calls to the original `System.load`,
+`System.loadLibrary`, `Runtime.load` and `Runtime.loadLibrary` methods share
+the Android ELF loader and the calling application's native-library namespace.
+Host JNI calls retain the JDK's native macOS loading behavior.
+
 Robolectric supplies executable framework and native artifacts. Its test runner,
 shadow dispatch, sandbox class loader and simulated services are separate from
 the application runtime. Framework assembly adds the complete original Apache
@@ -583,6 +596,13 @@ image remains unavailable for reuse until its readers retire. Swaps copy the
 preceding contents only when preserved-buffer behavior is explicitly selected.
 Directly writable hardware-buffer sources use a three-image GPU snapshot pool
 capped at 128 MiB per process, inside the existing producer fence.
+
+OpenXR surface swapchains create an original Android `Surface` with a detached
+`SurfaceTexture` consumer. The same native-window lease connects that surface
+to the shared projection compositor. Generated JNI callbacks use the application's
+actual VM, and swapchain destruction releases the window, surface and consumer.
+Desktop projection input uses keyboard and mouse mappings for virtual head and
+controller poses.
 Planar video uses the same CoreImage conversion source for both VM bindings.
 The original ART allocator supplies the NV12, NV21, YV12 or P010 plane offsets,
 strides and color metadata. Its existing EGL image registry retains the mapped
@@ -1465,6 +1485,10 @@ device identities and PCM or camera buffers; the shared physical owner retains
 capture conversion, device authorization, stream tokens and retirement.
 Microphone resampling and anti-alias state use Klepton's original conversion
 code in that same physical owner, shared by AAudio and media input bindings.
+Concurrent AudioRecord, AAudio and OpenSL capture streams share one physical
+device with separate PCM cursors and resampling state. The first stream opens
+the selected device and the last closes it. Each stream reports its own history
+overruns; device loss or revoked access disconnects its consumers.
 The media platform component owns selected devices, capture authorization,
 microphone stream lifetime and camera sessions; VM adapters marshal strings,
 tokens and sample buffers without maintaining separate media policy.
@@ -1654,3 +1678,5 @@ clipboard, location, camera, microphone and account integration require their
 own supported policy and explicit selection; runtime selection does not grant
 host capabilities. Provider-native graphics, input and audio keep their upstream
 ownership below this launcher boundary.
+
+Desktop VR keyboard and mouse controls apply to a running OpenXR or OVRPlugin session after its first completed VR frame. Android dialogs, other Activities, text editors and application pointer capture keep their normal input ownership. macOS command shortcuts remain available.

@@ -32,6 +32,7 @@ import {prepareLibraryNamespaces} from './library-namespace-source.mjs';
 import {prepareImageSource} from './image-source.mjs';
 import {prepareClockSources} from './native-clock/clock-sources.mjs';
 import {prepareNativeLifecycle} from './native-lifecycle/build.mjs';
+import {prepareJniInvocationSource} from './jni-invocation-source.mjs';
 import {prepareNativeMath} from './native-math/build.mjs';
 import {prepareNativeCtype} from './native-ctype/build.mjs';
 import {prepareNativeTerminal} from './native-terminal/build.mjs';
@@ -52,7 +53,6 @@ import {prepareVulkanSource} from './vulkan-sources.mjs';
 import {prepareMpegSource} from './mpeg-source.mjs';
 import {prepareOpenSlIds} from './opensl-ids.mjs';
 import {prepareMediaSymbolSources} from './media-symbol-sources.mjs';
-import {preparePreferencesSource} from './preferences-source.mjs';
 import {prepareObbSource,prepareDirectoryCallers} from './obb-source.mjs';
 import {frameworkInputs} from './framework-base.mjs';
 import {buildFrameworkModules} from './framework-modules.mjs';
@@ -147,7 +147,7 @@ const includes=['','jni','libc','gfx','xr','media','guest','diag'].map(name=>'-I
 const jni=['-I'+path.join(options.jdk,'include'),'-I'+path.join(options.jdk,'include/darwin')];
 const flags=['-I'+root,'-I'+path.join(options['gles-headers'],'include'),'-I'+build,'-I'+path.join(build,'jni'),'-arch','arm64','-mmacosx-version-min=13.0','-O1','-Wall','-Wextra','-Wno-unused-parameter',...includes,...jni,'-I'+options['vulkan-headers']];
 const sources=read('make',['-s','-f',path.join(root,'source-list.mk'),'maclauncher-source-list'],{cwd:options.klepton}).split('\n');
-if(sources.length<50||sources.some(file=>!file.startsWith('runtime/')||file.includes('..')||!fs.statSync(path.join(options.klepton,file)).isFile()))throw Error('Unexpected Klepton native source list');
+if(!sources.length||sources.some(file=>!file.startsWith('runtime/')||file.includes('..')||!fs.statSync(path.join(options.klepton,file)).isFile()))throw Error('Unexpected Klepton native source list');
 const frameworks=names=>names.flatMap(name=>['-framework',name]);
 const common=frameworks(['AudioToolbox','VideoToolbox','CoreMedia','CoreVideo','IOSurface','CoreFoundation','AVFoundation','Foundation','CoreAudio']);
 // Set the install name before another owned library links this output.
@@ -160,11 +160,9 @@ const executableMemory=buildExecutableMemory({source:options['aim-source'],revis
   output:path.join(build,'executable-memory'),rustToolchain:options['rust-toolchain']});
 fs.cpSync(executableMemory.notices,path.join(output,'notices/executable-memory'),{recursive:true});
 executable('android-application-icon',[path.join(root,'application-icon.m')],['-arch','arm64','-mmacosx-version-min=13.0','-O2','-fobjc-arc'],['-framework','AppKit']);
-const prefsSource=preparePreferencesSource(options.klepton,build);
 const obbSource=prepareObbSource(options.klepton,build);
 const ndkLooperSource=prepareLooperSource(options.klepton,build);
 const nativeSurfaceFlags=prepareNativeSurfaceSources(options.klepton,build);generate(build,options.jdk);
-nativeSurfaceFlags.push('-DKLEPTON_VARARGS_SOURCE='+JSON.stringify(path.join(options.klepton,'runtime/libc/kl_va_thunks.S')));
 const surfaceOverlays={'runtime/guest/kl_ndk.c':'asset-overlay.c','runtime/libc/kl_pthread.c':'pthread-lifetime-overlay.c','runtime/media/kl_aaudio.c':'aaudio-overlay.c','runtime/media/kl_audio.c':'audio-pause-overlay.c','runtime/media/kl_mediaplayer.c':'mpeg-player.c','runtime/media/kl_mediandk.c':'hardware-buffer-overlay.c'};
 const openSlIds=prepareOpenSlIds({wilhelmSource:options['wilhelm-source'],build,jni});
 fs.cpSync(openSlIds.notices,path.join(output,'notices/opensl-ids'),{recursive:true});
@@ -180,6 +178,7 @@ fs.cpSync(libraryNamespaces.notices,path.join(output,'notices/library-namespaces
 const imageSource=prepareImageSource(options.klepton,build);
 const clocks=prepareClockSources(options.klepton,build,path.join(root,'legacy-cxx-shim.c'));
 const lifecycle=prepareNativeLifecycle({bionicSource:options['bionic-source'],klepton:options.klepton,build});
+prepareJniInvocationSource(lifecycle.shim);
 nativeSurfaceFlags.push(...lifecycle.abiFlags);
 prepareImportRegistry(lifecycle.shim);
 let ndkDeclarations;
@@ -235,6 +234,7 @@ const gzip=prepareGzip({zlibSource:options['zlib-source'],klepton:options.klepto
 lifecycle.objects.push(...gzip.objects);
 const wideStdio=prepareWideStdio({bionicSource:options['bionic-source'],compilerRtSource:options['compiler-rt-source'],klepton:options.klepton,build,shim:lifecycle.shim,libcSource:clocks.libc,table:path.join(math.output,'libc-table.h')});
 const variadicHandlers=prepareVariadicHandlers({klepton:options.klepton,build,wideStdio,additionalThunks:[exec.thunks]});
+nativeSurfaceFlags.push('-DKLEPTON_VARARGS_SOURCE='+JSON.stringify(variadicHandlers.thunks));
 lifecycle.objects.push(...wideStdio.objects);
 fs.cpSync(wideStdio.notices,path.join(output,'notices/bionic-wide-stdio'),{recursive:true});
 fs.cpSync(gzip.notices,path.join(output,'notices/zlib-gzip'),{recursive:true});
@@ -264,10 +264,10 @@ prepareAndroidLogSources({shim:lifecycle.shim,slink:lifecycle.slink,handlers:fil
 const xr=prepareXrSources(options.klepton,build);
 const vulkanSource=prepareVulkanSource(options.klepton,build);
 const x18Source=prepareX18Source(options.klepton,build);
-const adapted=sources.map(file=>file==='runtime/libc/kl_va_handlers.c'?fileVarargs:file==='runtime/libc/kl_libc_slink.c'?lifecycle.slink:file==='runtime/kl_image.c'?imageSource:file==='runtime/kl_x18.c'?x18Source:file==='runtime/guest/kl_obbmap.c'?obbSource:file==='runtime/libc/kl_va_thunks.S'?path.join(root,'native-varargs.S'):file==='runtime/gfx/kl_glfb.c'?xr.glfb:file==='runtime/gfx/kl_vulkan.c'?vulkanSource:file==='runtime/kl_dl.c'?registrySource:file==='runtime/libc/kl_libc.c'?clocks.libc:file==='runtime/libc/kl_shim.c'?clocks.shim:file==='runtime/jni/kl_jni_prefs.c'?prefsSource:surfaceOverlays[file]?path.join(root,surfaceOverlays[file]):mediaSymbols[file]||file);
+const adapted=sources.map(file=>file==='runtime/libc/kl_va_handlers.c'?fileVarargs:file==='runtime/libc/kl_libc_slink.c'?lifecycle.slink:file==='runtime/kl_image.c'?imageSource:file==='runtime/kl_x18.c'?x18Source:file==='runtime/guest/kl_obbmap.c'?obbSource:file==='runtime/libc/kl_va_thunks.S'?path.join(root,'native-varargs.S'):file==='runtime/xr/kl_openxr.c'?xr.openxr:file==='runtime/xr/kl_ovrp.c'?xr.ovrp:file==='runtime/gfx/kl_glfb.c'?xr.glfb:file==='runtime/gfx/kl_vulkan.c'?vulkanSource:file==='runtime/kl_dl.c'?registrySource:file==='runtime/libc/kl_libc.c'?clocks.libc:file==='runtime/libc/kl_shim.c'?clocks.shim:surfaceOverlays[file]?path.join(root,surfaceOverlays[file]):mediaSymbols[file]||file);
 lifecycle.objects.push(object('media-platform',path.join(root,'media-platform.mm'),['-std=c++20','-fobjc-arc']));
 lifecycle.objects.push(object('proc-maps',path.join(root,'proc-maps.c')));
-compile('libklepton-jvm.dylib',[libraryNamespaceObject,libraryGroupObject,path.join(root,'library-registry.c'),path.join(root,'native-import-registry.c'),path.join(root,'jni-invocation.c'),...fileEvents.objects,openSlIds.object,variadicHandlers.source,allocator.source,path.join(root,'platform-poll.m'),path.join(root,'media-format.c'),path.join(root,'media-surface.c'),path.join(root,'media-data-source.c'),path.join(root,'inline-syscall.c'),path.join(root,'inline-syscall.S'),path.join(root,'guest-paths.c'),path.join(root,'file-xattrs.c'),path.join(root,'process-identity.c'),path.join(root,'process-memory.c'),path.join(root,'process-ids.c'),path.join(root,'thread-identity.c'),path.join(root,'signal-bridge.c'),path.join(root,'executable-memory/jvm.c'),path.join(root,'elf-tls.c'),path.join(root,'elf-tls.S'),path.join(root,'poll-bridge.c'),path.join(root,'directory-bridge.c'),path.join(root,'network-policy.c'),path.join(root,'ndk-choreographer.c'),path.join(root,'audio-volume.c'),path.join(root,'audio-pcm.c'),path.join(root,'audio-device.c'),path.join(root,'audio-capture.c'),path.join(root,'bridge.c'),path.join(root,'android-log.c'),path.join(root,'web-links.c'),path.join(root,'web-links-platform.c'),path.join(root,'compat.c'),path.join(root,'connectivity.c'),path.join(root,'file-observer.c'),path.join(root,'parcel-fd.c'),path.join(root,'supervisor-channel.c'),clocks.bridge,...lifecycle.objects,...adapted],[...nativeSurfaceFlags,...lifecycle.linkFlags,executableMemory.archive,...executableMemory.linkFlags,'-DKLEPTON_NDK_SOURCE='+JSON.stringify(ndkLooperSource),'-DKL_SHIM_IMPLEMENTATION='+JSON.stringify(lifecycle.shim),'-include',path.join(root,'compat.h'),'-include',clocks.include,'-fblocks','-lz','-liconv','-lc++',...common,...frameworks(['Network','CoreServices','SystemConfiguration','AppKit'])]);
+compile('libklepton-jvm.dylib',[libraryNamespaceObject,libraryGroupObject,path.join(root,'library-registry.c'),path.join(root,'native-import-registry.c'),path.join(root,'jni-invocation.c'),path.join(root,'xr-surface.c'),path.join(root,'native-console.c'),path.join(root,'device-context.c'),path.join(build,'host-callbacks.c'),...fileEvents.objects,openSlIds.object,variadicHandlers.source,allocator.source,path.join(root,'platform-poll.m'),path.join(root,'media-format.c'),path.join(root,'media-surface.c'),path.join(root,'media-data-source.c'),path.join(root,'inline-syscall.c'),path.join(root,'inline-syscall.S'),path.join(root,'guest-paths.c'),path.join(root,'file-xattrs.c'),path.join(root,'process-identity.c'),path.join(root,'process-memory.c'),path.join(root,'process-ids.c'),path.join(root,'thread-identity.c'),path.join(root,'signal-bridge.c'),path.join(root,'executable-memory/jvm.c'),path.join(root,'elf-tls.c'),path.join(root,'elf-tls.S'),path.join(root,'poll-bridge.c'),path.join(root,'directory-bridge.c'),path.join(root,'network-policy.c'),path.join(root,'ndk-choreographer.c'),path.join(root,'audio-volume.c'),path.join(root,'audio-pcm.c'),path.join(root,'audio-device.c'),path.join(root,'audio-capture.c'),path.join(root,'bridge.c'),path.join(root,'android-log.c'),path.join(root,'web-links.c'),path.join(root,'web-links-platform.c'),path.join(root,'compat.c'),path.join(root,'connectivity.c'),path.join(root,'file-observer.c'),path.join(root,'parcel-fd.c'),path.join(root,'supervisor-channel.c'),clocks.bridge,...lifecycle.objects,...adapted],[...nativeSurfaceFlags,...lifecycle.linkFlags,executableMemory.archive,...executableMemory.linkFlags,'-DKLEPTON_NDK_SOURCE='+JSON.stringify(ndkLooperSource),'-DKL_SHIM_IMPLEMENTATION='+JSON.stringify(lifecycle.shim),'-include',path.join(root,'compat.h'),'-include',clocks.include,'-fblocks','-lz','-liconv','-lc++',...common,...frameworks(['Network','CoreServices','SystemConfiguration','AppKit'])]);
 const keyMapHeaders=prepareKeyMapHeaders({framework:options['framework-source'],native:options['native-source'],base:options['libbase-source'],fmt:options['fmt-source'],pins,build});
 const keyMapObject=object('framework-keymap',path.join(root,'framework-keymap.cpp'),['-std=c++20','-I'+keyMapHeaders]);
 const activityThread=prepareActivityThread({frameworkSource:options['framework-source'],bionicSource:options['bionic-source'],build});

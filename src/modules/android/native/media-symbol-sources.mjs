@@ -3,6 +3,7 @@ import path from 'node:path';
 import {openSlIdSource} from './opensl-ids.mjs';
 import {openSlConfigurationSource} from './opensl-configuration.mjs';
 import {audioActivity} from './native-surface-sources.mjs';
+import {adaptOpenSlCapture} from './audio-capture-sources.mjs';
 import {mediaCodecSource} from './media-codec-source.mjs';
 import {videoDecoderSource,videoDecoderHeader} from './video-decoder-source.mjs';
 import {mediaFormatSource} from './media-format-source.mjs';
@@ -26,7 +27,7 @@ export function prepareMediaSymbolSources(klepton,build){
     if(source.split(before).length!==2)throw Error('Pinned native symbol lookup needs an upstream update: '+file);
     const output=path.join(build,path.basename(file));
     let adapted=source.replace(before,after);
-    if(file==='runtime/media/kl_opensl.c')adapted=openSlConfigurationSource(openSlIdSource(audioActivity(adapted,'p','SL_PLAYSTATE_PLAYING')));
+    if(file==='runtime/media/kl_opensl.c')adapted=openSlConfigurationSource(openSlIdSource(audioActivity(adaptOpenSlCapture(adapted),'p','SL_PLAYSTATE_PLAYING')));
     if(file==='runtime/media/kl_mediandk.c')adapted=retireTraceSamples(mediaFormatSource(mediaCodecSource(mediaExtractorSource(adapted))));
     fs.writeFileSync(output,adapted);files[file]=output;
   }
