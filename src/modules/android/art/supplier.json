@@ -13,7 +13,7 @@
   },
   "sources": {
     "aim": {
-      "path": "src/external/aim",
+      "path": "src/external/aim-custom",
       "url": "https://github.com/hahnlee/aim.git",
       "commit": "9b5068fa8185d3f51f1862fe7c54d88d51f09ec8",
       "license": "Apache-2.0"

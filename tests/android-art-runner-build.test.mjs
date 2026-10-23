@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {assembleArtSupplier,artSupplierComponents} from '../src/modules/android/art/build.mjs';
-import {buildArtRunner} from '../src/modules/android/art/build-runner.mjs';
+import {buildArtRunner,stageArtRunnerNotices} from '../src/modules/android/art/build-runner.mjs';
 
 test('ART supplier preserves runner upstream notices beside the delivered runner',t=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-runner-notices-'));
@@ -32,6 +33,23 @@ test('ART supplier preserves runner upstream notices beside the delivered runner
  const compact=path.join(root,'compact'),{image:unusedImage,...retainedInputs}=inputs;const compactManifest=assembleArtSupplier({output:compact,inputs:retainedInputs,bootClasspath:[],sourceVersion:'0.1.0-compact',baseSupplier:{root:output,manifest},includeImage:false,originalImage:{archiveSha256:manifest.android.imageSha256,content:manifest.platformSupplier.image}});
  assert.equal(fs.existsSync(path.join(compact,'image')),false);assert.deepEqual(compactManifest.platformSupplier.image,manifest.platformSupplier.image);assert.equal(fs.readFileSync(path.join(compact,extra),'utf8'),'Retained original notice\n');assert(compactManifest.notices.some(row=>row.path===extra));
  assert.throws(()=>assembleArtSupplier({output:path.join(root,'rejected'),inputs:retainedInputs,bootClasspath:[],sourceVersion:'0.1.0-rejected',includeImage:false}),/verified original image identity/);
+});
+
+test('ART runner notices preserve supplier exceptions and supplied CPU notices',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-runner-license-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const aim=path.join(root,'aim'),cpuNotices=path.join(root,'cpu'),output=path.join(root,'published');
+ const files=['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md','licensing/OPENJDK.md','licensing/rust-dependencies.txt','licensing/upstream-sources.json','licensing/third-party/art-openjdkjvm-LICENSE'];
+ for(const name of files){const file=path.join(aim,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,'Original '+name+'\n');}
+ fs.writeFileSync(path.join(aim,'licensing/upstream-sources.json'),JSON.stringify({files:[{file:'licensing/third-party/art-openjdkjvm-LICENSE',sha256:createHash('sha256').update(fs.readFileSync(path.join(aim,'licensing/third-party/art-openjdkjvm-LICENSE'))).digest('hex')}]}));
+ fs.mkdirSync(cpuNotices);fs.writeFileSync(path.join(cpuNotices,'unicorn-COPYING'),'Original CPU license\n');
+ const original=files.map(name=>fs.readFileSync(path.join(aim,name))),cpu=fs.readFileSync(path.join(cpuNotices,'unicorn-COPYING'));
+ assert.equal(stageArtRunnerNotices({aim,cpuNotices,output}),output);
+ for(const [index,name]of files.entries()){assert.deepEqual(fs.readFileSync(path.join(output,'aim',name)),original[index]);assert.deepEqual(fs.readFileSync(path.join(aim,name)),original[index]);}
+ assert.deepEqual(fs.readFileSync(path.join(output,'unicorn-COPYING')),cpu);assert.deepEqual(fs.readFileSync(path.join(cpuNotices,'unicorn-COPYING')),cpu);
+ fs.writeFileSync(path.join(output,'obsolete-notice'),'retired');stageArtRunnerNotices({aim,cpuNotices,output});assert.equal(fs.existsSync(path.join(output,'obsolete-notice')),false);
+ fs.writeFileSync(path.join(aim,'licensing/third-party/art-openjdkjvm-LICENSE'),'changed license');assert.throws(()=>stageArtRunnerNotices({aim,cpuNotices,output}),/AIM license differs from its source record/);fs.writeFileSync(path.join(aim,'licensing/third-party/art-openjdkjvm-LICENSE'),original.at(-1));
+ fs.rmSync(path.join(aim,'licensing/OPENJDK.md'));assert.throws(()=>stageArtRunnerNotices({aim,cpuNotices,output}),/Missing AIM license input: licensing\/OPENJDK.md/);
+ assert.deepEqual(fs.readFileSync(path.join(output,'aim/licensing/OPENJDK.md')),original[4],'A failed retry preserves the complete prior notice bundle');
 });
 
 test('prepared ART runner builds offline with its native continuation and static CPU',{timeout:600000},t=>{

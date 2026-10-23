@@ -1,8 +1,36 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {buildPrecise} from '../native/arm64/precise-build.mjs';
 import {nativePathFlags,nativeRustPathEnvironment,publishNativeBinary} from '../native/upstream/native-paths.mjs';
+
+/** Keep the pinned supplier's license exceptions and verbatim third-party
+ * notices with its native products, alongside the supplied CPU notices. */
+export function stageArtRunnerNotices({aim,cpuNotices,output}){
+ aim=path.resolve(aim);cpuNotices=path.resolve(cpuNotices);output=path.resolve(output);
+ const required=['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md','licensing/OPENJDK.md','licensing/rust-dependencies.txt','licensing/upstream-sources.json'];
+ for(const name of required)if(!fs.statSync(path.join(aim,name),{throwIfNoEntry:false})?.isFile())throw Error('Missing AIM license input: '+name);
+ if(!fs.statSync(path.join(aim,'licensing/third-party'),{throwIfNoEntry:false})?.isDirectory())throw Error('Missing AIM third-party license directory.');
+ const catalog=JSON.parse(fs.readFileSync(path.join(aim,'licensing/upstream-sources.json'),'utf8'));
+ if(!Array.isArray(catalog.files)||!catalog.files.length)throw Error('Missing AIM third-party license records.');
+ for(const row of catalog.files){
+  if(typeof row.file!=='string'||!row.file.startsWith('licensing/third-party/')||row.file.split(/[\\/]/).some(part=>part==='..')||!/^[a-f0-9]{64}$/.test(row.sha256))throw Error('Invalid AIM third-party license record.');
+  const file=path.join(aim,row.file);if(!fs.statSync(file,{throwIfNoEntry:false})?.isFile())throw Error('Missing AIM license input: '+row.file);
+  if(crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')!==row.sha256)throw Error('AIM license differs from its source record: '+row.file);
+ }
+ if(!fs.statSync(cpuNotices,{throwIfNoEntry:false})?.isDirectory())throw Error('Missing ARM64 CPU notices.');
+ if([aim,cpuNotices].some(input=>output===input||input.startsWith(output+path.sep)||output.startsWith(input+path.sep)))throw Error('ART notice output must be separate from its source inputs.');
+ fs.mkdirSync(path.dirname(output),{recursive:true});
+ const temporary=fs.mkdtempSync(path.join(path.dirname(output),'.runner-notices-'));
+ try{
+  fs.cpSync(cpuNotices,temporary,{recursive:true});
+  const original=path.join(temporary,'aim');fs.mkdirSync(original,{recursive:true});
+  for(const name of ['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md','licensing'])fs.cpSync(path.join(aim,name),path.join(original,name),{recursive:true});
+  fs.rmSync(output,{recursive:true,force:true});fs.renameSync(temporary,output);
+  return output;
+ }finally{fs.rmSync(temporary,{recursive:true,force:true});}
+}
 
 /** Build a supplied, prepared AIM tree using its original Cargo workspace.
  * A buildPrecise result can reuse existing static CPU archives. Only the runner
@@ -42,5 +70,6 @@ export function buildArtRunner({aim,output,unicorn,precise,work,target,cargo='ca
  const lockHolder=path.join(output,'host/aim-lock-holder'),ptyHolder=path.join(output,'host/aim-pty-holder');
  publishNativeBinary(path.join(target,'release/aim-lock-holder'),lockHolder);
  publishNativeBinary(path.join(target,'release/aim-pty-holder'),ptyHolder);
- return {linuxRun,binder,lockHolder,ptyHolder,binderSenderIdentityVersion:1,runnerNotices:path.resolve(cpu.notices)};
+ const runnerNotices=stageArtRunnerNotices({aim,cpuNotices:cpu.notices,output:path.join(output,'notices/runner')});
+ return {linuxRun,binder,lockHolder,ptyHolder,binderSenderIdentityVersion:1,runnerNotices};
 }

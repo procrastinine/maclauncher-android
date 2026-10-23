@@ -1290,7 +1290,9 @@ The supplier manifest records relative component paths and the Android image
 identity. The Android payload contract `artExecutionVersion: 1` selects a supplied
 ART entry; the declaration is independent of the JVM's conversion contracts.
 The runner producer builds `linux-run`, `aim-binderd`, `aim-lock-holder` and
-`aim-pty-holder` from the same prepared source. The `lockHolder` and `ptyHolder`
+`aim-pty-holder` from the same prepared source. Its notice directory combines
+the supplied CPU notices with AIM's original license, copyright notice, license
+exceptions and third-party documents from that pinned source. The `lockHolder` and `ptyHolder`
 components map to their corresponding paths beside `host/linux-run`, following
 AIM's original host-node dependency declaration in `crates/aim-build/src/cargo.rs`.
 Original Linux lock and terminal operations start those native owners through
