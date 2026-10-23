@@ -59,7 +59,9 @@ void KlDesktopXrInput::release(SDL_Window *window){
 void KlDesktopXrInput::tick(SDL_Window *window,bool enabled){
  uint64_t now=SDL_GetTicksNS();float dt=previous?float(now-previous)/1e9f:0;previous=now;if(dt>0.05f)dt=0.05f;
  bool soft_input_on=!enabled||SDL_GetKeyboardFocus()!=window;
- if(soft_input_on){release(window);return;}
+ // Focus controls actions, not the stationary tracking sample. The original
+ // viewer still publishes head/hand poses while its keyboard is unavailable.
+ if(soft_input_on)release(window);
  const bool mono=false;
  #define KL_VIEW_MOVE_SPEED 2.0f
  #include "xr-input-generated.inc"
