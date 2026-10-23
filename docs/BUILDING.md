@@ -49,7 +49,8 @@ source-export options and reusable component suppliers.
 
 MacLauncher Android supplies the pinned producer source used by
 [MacLauncher Builds](https://github.com/procrastinine/maclauncher-builds).
-MacLauncher Builds packages selected runtime binaries, required notices and
-corresponding sources into versioned runtime distributions. The original Android
-system image is acquired separately. Ordinary runtime installation and play do
-not require this source checkout or compiler tools.
+MacLauncher Builds publishes selected runtime binaries and required notices in
+binary-only release archives. Its tagged source tree contains the build recipes,
+owned patches and pinned Android source. The original Android system image is
+acquired separately. Ordinary runtime installation and play do not require this
+source checkout or compiler tools.

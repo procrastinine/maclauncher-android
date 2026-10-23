@@ -38,8 +38,10 @@ components. Source Gitlinks and metadata can be checked without initializing
 checkouts; initialized checkouts are also checked for exact HEAD identity and
 tracked changes. The source check performs no downloads.
 
-maclauncher-builds packages runtime releases and their corresponding sources. Runtime installation and updates are explicit launcher
-actions; this source project performs no background update checks.
+MacLauncher Builds publishes binary-only runtime release archives. Its tagged
+source tree contains the build recipes, owned patches and pinned Android source.
+Runtime installation and updates are explicit launcher actions; this source
+project performs no background update checks.
 
 Native instruction analysis is shared by the JVM and ART producers. Intact
 stack-protected continuations retain the original Android thread-pointer and
