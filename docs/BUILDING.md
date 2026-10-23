@@ -42,7 +42,7 @@ node tools/build-art.mjs --inputs /absolute/path/to/art-inputs.json
 Its inputs include the pinned AIM, Klepton and GLES-header checkouts, host and
 Java suppliers, Android component inputs and boot class path. The producer
 returns the runtime supplier directory and corresponding source archive. The
-[repository reference](../README.md) describes the individual input groups,
+[source and runtime reference](REFERENCE.md) describes the individual input groups,
 source-export options and reusable component suppliers.
 
 ## Distribution

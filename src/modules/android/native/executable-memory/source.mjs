@@ -8,6 +8,35 @@ import {prepareAshmemCapability} from '../../art/ashmem-access-source.mjs';
  * allocator, migration and instruction-store implementation stay authoritative. */
 export function prepareExecutableMemoryApi(aim){
  prepareAshmemCapability(aim);
+ // Retain the original FIONREAD branches on stable Rust. An if-let match
+ // guard requires an unstable language feature; the nested match has the
+ // same evaluation order, result and error propagation.
+ const ioctl=path.join(aim,'crates/aim-linux-abi/src/sys/fs.rs');
+ let ioctlSource=fs.readFileSync(ioctl,'utf8');
+ const guarded=`                    None if let Some(r) = super::net::fionread(fd) => match r {
+                        Ok(n) => n,
+                        Err(error) => return error,
+                    },
+                    None => {
+                        let mut n = 0i32;
+                        if libc::ioctl(fd, libc::FIONREAD, &mut n) < 0 {
+                            return -(errno::last() as i64);
+                        }
+                        n
+                    }`;
+ const stable=`                    None => match super::net::fionread(fd) {
+                        Some(Ok(n)) => n,
+                        Some(Err(error)) => return error,
+                        None => {
+                            let mut n = 0i32;
+                            if libc::ioctl(fd, libc::FIONREAD, &mut n) < 0 {
+                                return -(errno::last() as i64);
+                            }
+                            n
+                        }
+                    }`;
+ if(ioctlSource.split(guarded).length!==2)throw Error('AIM pending-byte source boundary changed');
+ writeChanged(ioctl,ioctlSource.replace(guarded,stable));
  const root=path.join(aim,'crates/aim-linux-abi/src/sys');
  const file=path.join(root,'mod.rs'),source=fs.readFileSync(file,'utf8'),needle='mod jit;';
  if(source.split(needle).length!==2)throw Error('AIM executable-memory owner changed');

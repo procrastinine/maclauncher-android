@@ -1216,7 +1216,7 @@
       "alias": "piex",
       "project": "platform/external/piex",
       "repository": "https://android.googlesource.com/platform/external/piex",
-      "revision": "6d3d1e7dc6e4b0d348c60160f5a9397a28eae630",
+      "revision": "c7c1d44ab9b98e9e51baf1e5d02f65ba03fbed28",
       "gitTree": "7682f4e7561d1bd71e9b7415e419697bd1bb4df1",
       "licensePaths": [
         "LICENSE"
@@ -1447,7 +1447,7 @@
       "alias": "ultrahdr",
       "project": "platform/external/libultrahdr",
       "repository": "https://android.googlesource.com/platform/external/libultrahdr",
-      "revision": "8ca5f9daff887eb2fd412bb66e00f850f582a3f5",
+      "revision": "4a5906659019f5b73b211759d0bfca0375fc6300",
       "gitTree": "527f8e19cc05aaf5ba0a0ceaa7c03eb844b0e202",
       "licensePaths": [
         "LICENSE"
@@ -1540,7 +1540,7 @@
       "alias": "wuffs",
       "project": "platform/external/wuffs-mirror-release-c",
       "repository": "https://android.googlesource.com/platform/external/wuffs-mirror-release-c",
-      "revision": "ecaeabeb59e4fb29313f893ead3c9d90dc2fb586",
+      "revision": "0e0e6e4100c92d5ae42759ec93221b1c91903029",
       "gitTree": "fbe2fc2383d6e05c79f986863b3f04c437ded070",
       "licensePaths": [
         "LICENSE"
@@ -1871,7 +1871,7 @@
       "key": "googletest",
       "project": "platform/external/googletest",
       "repository": "https://android.googlesource.com/platform/external/googletest",
-      "revision": "ed43ae9f2f62df2b77e2400da414c126e7203e7a",
+      "revision": "cbeab5d01811d23ea488efc07f2c31f7c53024e2",
       "gitTree": "1945169f458807ba86c8b75812e11613fd4bac77",
       "licensePaths": [
         "LICENSE"

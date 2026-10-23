@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repository": "https://github.com/krkrz/angle.git",
-  "revision": "f82b1b4dc548dc8325ec83c11cd2363f3656a894",
+  "revision": "7dbabd125373889681e0f4169e2a2496a789e5dc",
   "directory": "src/external/android-gles-headers",
   "license": "MIT AND SGI-B-2.0",
   "files": [
