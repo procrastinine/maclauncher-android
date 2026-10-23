@@ -14,6 +14,50 @@ typedef struct {uint64_t x[9],lr;unsigned char vectors[8][16];uint64_t stack,int
 _Static_assert(sizeof(CallFrame)==256,"JNI assembly frame size");
 _Static_assert(offsetof(CallFrame,stack)==208,"JNI assembly stack offset");
 static struct JNINativeInterface_ originals;
+static jmethodID system_load,system_load_library,runtime_load,runtime_load_library;
+static jclass native_load_class;
+static jmethodID native_load_method;
+static pthread_mutex_t native_load_mutex=PTHREAD_MUTEX_INITIALIZER;
+static int prepare_native_load_methods(JNIEnv *env,jniNativeInterface *table){
+ if(system_load&&system_load_library&&runtime_load&&runtime_load_library)return 1;
+ jclass system=table->FindClass(env,"java/lang/System"),runtime=system?table->FindClass(env,"java/lang/Runtime"):NULL;
+ if(runtime){
+  system_load=table->GetStaticMethodID(env,system,"load","(Ljava/lang/String;)V");
+  if(system_load)system_load_library=table->GetStaticMethodID(env,system,"loadLibrary","(Ljava/lang/String;)V");
+  if(system_load_library)runtime_load=table->GetMethodID(env,runtime,"load","(Ljava/lang/String;)V");
+  if(runtime_load)runtime_load_library=table->GetMethodID(env,runtime,"loadLibrary","(Ljava/lang/String;)V");
+ }
+ if(runtime)(*env)->DeleteLocalRef(env,runtime);if(system)(*env)->DeleteLocalRef(env,system);
+ return system_load&&system_load_library&&runtime_load&&runtime_load_library;
+}
+extern jclass klj_class_for_address(JNIEnv *,uintptr_t);
+static int native_load(JNIEnv *env,jobject receiver,jmethodID method,const jvalue *arguments,uintptr_t caller,int is_static){
+ int library=method==(is_static?system_load_library:runtime_load_library);
+ if(!arguments||(!is_static&&!receiver)||(!library&&method!=(is_static?system_load:runtime_load)))return 0;
+ if((*env)->ExceptionCheck(env))return 1;
+ pthread_mutex_lock(&native_load_mutex);jclass type=native_load_class?(*env)->NewLocalRef(env,native_load_class):NULL;jmethodID operation=native_load_method;pthread_mutex_unlock(&native_load_mutex);
+ if((*env)->ExceptionCheck(env))return 1;
+ if(!type){
+  jclass found=originals.FindClass(env,"maclauncher/android/bridge/GuestNativeLoader");if(!found)return 1;
+  jmethodID load=originals.GetStaticMethodID(env,found,"loadFromNative","(Ljava/lang/Class;Ljava/lang/String;Z)V");
+  if(!load){(*env)->DeleteLocalRef(env,found);return 1;}
+  pthread_mutex_lock(&native_load_mutex);
+  if(!native_load_class){native_load_class=(*env)->NewGlobalRef(env,found);native_load_method=load;}
+  type=native_load_class?(*env)->NewLocalRef(env,native_load_class):NULL;operation=native_load_method;pthread_mutex_unlock(&native_load_mutex);(*env)->DeleteLocalRef(env,found);
+ }
+ if(type){
+  jclass anchor=klj_class_for_address(env,caller);
+  if(!(*env)->ExceptionCheck(env)){jvalue values[3]={{.l=anchor},arguments[0],{.z=(jboolean)library}};originals.CallStaticVoidMethodA(env,type,operation,values);}
+  if(anchor)(*env)->DeleteLocalRef(env,anchor);(*env)->DeleteLocalRef(env,type);
+ }
+ return 1;
+}
+static void invoke_void(JNIEnv *env,jobject receiver,jclass type,jmethodID method,const jvalue *arguments,uintptr_t caller,unsigned family){
+ if(native_load(env,receiver,method,arguments,caller,family==1))return;
+ if(family==1)originals.CallStaticVoidMethodA(env,type,method,arguments);
+ else if(family==2)originals.CallNonvirtualVoidMethodA(env,receiver,type,method,arguments);
+ else originals.CallVoidMethodA(env,receiver,method,arguments);
+}
 static jvmtiEnv *runtime_ti;
 static JavaVM *lifetime_vm;
 static pthread_mutex_t lifetime_mutex=PTHREAD_MUTEX_INITIALIZER;
@@ -99,6 +143,7 @@ static void retire_components(JNIEnv *env,int phase){
 }
 static void JNICALL vm_death(jvmtiEnv *ti,JNIEnv *env){
  (void)ti;retire_components(env,KLJ_JNI_VM_DEATH);
+ pthread_mutex_lock(&native_load_mutex);if(native_load_class)(*env)->DeleteGlobalRef(env,native_load_class);native_load_class=NULL;native_load_method=NULL;pthread_mutex_unlock(&native_load_mutex);
  pthread_mutex_lock(&method_mutex);
  for(unsigned i=0;i<method_count;i++)(*env)->DeleteGlobalRef(env,methods[i].owner);
  method_count=0;pthread_mutex_unlock(&method_mutex);

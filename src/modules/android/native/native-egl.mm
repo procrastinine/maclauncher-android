@@ -80,6 +80,8 @@ unsigned terminate(void*d){
 int (*platformHandle)(const void*);
 void *(*guestSymbol)(void*,const char*);
 char *(*guestError)();
+void *(*xrSurfaceSwapchain)(void*);
+int (*xrSurfacePresent)(void*);
 thread_local char symbolError[256];
 thread_local bool hasSymbolError=false;
 void *findPlatformSymbol(void *handle,const char *name){
@@ -105,7 +107,7 @@ struct WindowImage {
 };
 struct WindowSurface {
  void *display,*config,*window,*presenter;std::atomic<void*> surface;
- bool texture;void *nativeLayerLease=nullptr,*composition=nullptr;std::vector<int> attributes;std::atomic<uintptr_t> producer{0};std::atomic<bool> destroyed{false};
+ bool texture;void *nativeLayerLease=nullptr,*composition=nullptr,*xrSwapchain=nullptr;std::vector<int> attributes;std::atomic<uintptr_t> producer{0};std::atomic<bool> destroyed{false};
  const uint64_t identity=surfaceSerial.fetch_add(1,std::memory_order_relaxed)+1;
  std::atomic<uint64_t> binds{0},swaps{0},submitted{0},failed{0},resizes{0};
  std::atomic<unsigned> lastError{0};
@@ -113,7 +115,7 @@ struct WindowSurface {
  std::array<void*,3> rawBuffers{};int drawing=0;bool preserved=false;
  std::shared_ptr<WindowImage> destroyedCurrentImage;
  std::vector<std::pair<int,int>> surfaceAttributes;
- WindowSurface(void*d,void*c,void*w,void*p,void*s):display(d),config(c),window(w),presenter(p),surface(s),texture(klj_surface_is_texture(w)){}
+ WindowSurface(void*d,void*c,void*w,void*p,void*s):display(d),config(c),window(w),presenter(p),surface(s),texture(klj_surface_is_texture(w)),xrSwapchain(xrSurfaceSwapchain?xrSurfaceSwapchain(w):nullptr){}
  ~WindowSurface(){if(composition)klj_composition_release(composition);}
 };
 void retireBuffers(WindowSurface &owner){for(auto &raw:owner.rawBuffers)if(raw){fn<unsigned(*)(void*,void*)>("eglDestroySurface")(owner.display,raw);raw=nullptr;}for(auto &image:owner.buffers.images)image.reset();}
@@ -272,6 +274,9 @@ unsigned swap(void *d,void *surface){
  }}
  auto failed=[&](unsigned code){error=code;owner->lastError.store(code,std::memory_order_relaxed);owner->failed.fetch_add(1,std::memory_order_relaxed);return 0u;};
  if(d!=owner->display)return failed(EGL_BAD_DISPLAY);
+ // An Android-Surface XR swapchain releases its finished GL frame here,
+ // before texture publication or EGL swaps can replace the current image.
+ if(owner->xrSwapchain&&(!xrSurfacePresent||xrSurfacePresent(owner->xrSwapchain)<0))return failed(EGL_BAD_SURFACE);
  if(owner->nativeLayerLease){
   // ANGLE's original Vulkan WSI presents its GPU image into the native carrier.
   // The existing layer callback submits that image to the common presenter;
@@ -384,7 +389,9 @@ extern "C" const char *klj_native_egl_install(void *runtime,void *(*resolve)(con
  targetClockReady.store(klj_target::clockContract((int(*)())dlsym(runtime,"klj_android_monotonic_contract_v1"),(int(*)(int,timespec*))resolve("clock_gettime"),uptimeNanos),std::memory_order_release);
  platformHandle=(decltype(platformHandle))dlsym(runtime,"kl_egl_is_handle");
  guestSymbol=(decltype(guestSymbol))resolve("dlsym");guestError=(decltype(guestError))resolve("dlerror");
- return platformHandle&&guestSymbol&&guestError?nullptr:"Guest graphics dynamic lookup exports are incomplete";
+ xrSurfaceSwapchain=(decltype(xrSurfaceSwapchain))dlsym(runtime,"kl_xr_swapchain_for_surface");
+ xrSurfacePresent=(decltype(xrSurfacePresent))dlsym(runtime,"kl_xr_android_surface_present");
+ return platformHandle&&guestSymbol&&guestError&&xrSurfaceSwapchain&&xrSurfacePresent?nullptr:"Guest graphics dynamic lookup exports are incomplete";
 }
 extern "C" void *klj_native_egl_lookup(const char *name){
  if(!symbol)return nullptr;

@@ -5,7 +5,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.zip.*;
 
-/** Native-load facade used only by converted APK callsites, never host JDK calls. */
+/** Android native loads from converted APK callsites and the guest JNI facade. */
 public final class GuestNativeLoader {
     private static final StackWalker CALLER=StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static volatile State state;
@@ -76,6 +76,22 @@ public final class GuestNativeLoader {
     }
     public static void loadLibrary(String name){loadLibraryFrom(CALLER.getCallerClass(),name);}
     public static void load(String filename){loadFrom(CALLER.getCallerClass(),filename);}
+    /** JNI calls enter JDK System/Runtime methods without converted bytecode.
+     * Keep the actual Java native declaration as caller; a native-only thread
+     * borrows its image's real declaration and defining class-loader namespace. */
+    public static void loadFromNative(Class<?> anchor,String name,boolean library){
+        Class<?> caller=CALLER.walk(frames->frames.map(StackWalker.StackFrame::getDeclaringClass)
+            .filter(type->type!=GuestNativeLoader.class).findFirst().orElse(anchor));
+        State value=requireState();Owner nativeOwner=null;
+        synchronized(value){
+            for(Owner candidate:value.owners.values()){
+                var entry=candidate.nativeEntry.get();
+                if(entry!=null&&(entry.getDeclaringClass()==caller||caller==null&&entry.getDeclaringClass()==anchor)){nativeOwner=candidate;break;}
+            }
+        }
+        if(nativeOwner==null){if(caller==null)throw new UnsatisfiedLinkError("Native load has no Android application class loader");nativeOwner=owner(caller);}
+        Path file=library?libraryPath(nativeOwner.loader,name):checkedFile(name);load(nativeOwner,file,true);
+    }
     static void loadFrom(Class<?> caller,String filename){Path file=checkedFile(filename);load(owner(caller),file,true);}
     static void loadLibraryFrom(Class<?> caller,String name){Path file=libraryPath(caller.getClassLoader(),name);load(owner(caller),file,true);}
     private static Owner owner(Class<?> caller){

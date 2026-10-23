@@ -112,8 +112,9 @@ extern "C" int klj_xr_retire(void *value){
  p->drained=true;
  return 1;
 }
-extern "C" void klj_xr_event(void *value,void *window,const void *event,int appHandled){auto p=static_cast<Owner*>(value);if(!p||p!=owner||!p->started||p->retired)return;p->controls.event(static_cast<SDL_Window*>(window),*static_cast<const SDL_Event*>(event),appHandled!=0);}
-extern "C" void klj_xr_controls(void *value,void *window,int enabled){auto p=static_cast<Owner*>(value);if(!p||p!=owner||!p->started||p->retired)return;p->window=static_cast<SDL_Window*>(window);p->controls.tick(p->window,enabled!=0);}
+extern "C" int klj_xr_input_active(void *value){auto p=static_cast<Owner*>(value);return p&&p==owner&&p->started&&!p->retired&&KlDesktopXrInput::active();}
+extern "C" int klj_xr_event(void *value,void *window,const void *event,int enabled){auto p=static_cast<Owner*>(value);if(!p||p!=owner||!p->started||p->retired)return 0;return p->controls.event(static_cast<SDL_Window*>(window),*static_cast<const SDL_Event*>(event),enabled&&klj_xr_input_active(p));}
+extern "C" void klj_xr_controls(void *value,void *window,int enabled){auto p=static_cast<Owner*>(value);if(!p||p!=owner||!p->started||p->retired)return;p->window=static_cast<SDL_Window*>(window);p->controls.tick(p->window,enabled&&klj_xr_input_active(p));}
 extern "C" void klj_xr_detach(void *value){
  auto p=static_cast<Owner*>(value);if(!p||p!=owner)return;if(!klj_xr_retire(p))return;klj_xr_compositor_stop();owner=nullptr;delete p;
 }

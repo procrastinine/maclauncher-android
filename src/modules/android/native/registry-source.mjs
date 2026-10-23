@@ -7,6 +7,9 @@ export function prepareRegistrySource(vendor,build){
  let adapted='#include '+JSON.stringify(path.join(root,'native-import-registry.h'))+'\n'+'#include '+JSON.stringify(path.join(root,'library-registry.h'))+'\n#include '+JSON.stringify(path.join(root,'library-namespace.h'))+'\nstatic void klj_update_library_namespace(void);\n'+source;
  adapted='#include <dlfcn.h>\n'+['image-format.h','image-unwind.h','proc-maps.h','elf-tls.h'].map(name=>'#include '+JSON.stringify(path.join(root,name))).join('\n')+'\n'+adapted;
  const replace=(from,to)=>{if(adapted.split(from).length!==2)throw Error('Pinned native initialization anchor changed: '+from);adapted=adapted.replace(from,to);};
+ // The JVM supplies every engine's real Java lifecycle. Retain the already
+ // active unconfigured-driver system-library behavior without a second driver.
+ replace('    extern kl_guest_kind kl_driver_kind(void);\n    if (kl_driver_kind() != KL_GUEST_UNITY) return 0;','');
  replace('void kl_set_library_path(const char *dir) { snprintf(g_libdir, sizeof g_libdir, "%s", dir); }',
   'void kl_set_library_path(const char *dir) { snprintf(g_libdir, sizeof g_libdir, "%s", dir);klj_update_library_namespace(); }\n#include <limits.h>\n#include '+JSON.stringify(path.join(root,'guest-paths.h'))+'\n#include '+JSON.stringify(path.join(root,'library-paths.inc')));
  replace('int kl_dl_iterate_phdr(int (*cb)(void *, size_t, void *), void *data) {',`uintptr_t dl_unwind_find_exidx(uintptr_t pc,int *count) {

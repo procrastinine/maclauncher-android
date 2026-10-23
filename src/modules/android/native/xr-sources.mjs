@@ -7,7 +7,16 @@ const root=path.dirname(fileURLToPath(import.meta.url));
 const replace=(text,from,to)=>{if(text.split(from).length!==2)throw Error('Pinned XR source changed: '+from);return text.replace(from,to);};
 export function prepareXrSources(klepton,build){
  let openxr=fs.readFileSync(path.join(klepton,'runtime/xr/kl_openxr.c'),'utf8');
- openxr=replace(openxr,'#include "kl_jni.h"','#include "device-context.h"\n#include "xr-surface.h"');
+ openxr=replace(openxr,'#include "kl_jni.h"','#include "kl_jni.h"\n#include "xr-surface.h"');
+ openxr=includeDependencies(openxr,'#include <stdatomic.h>');
+ openxr=replace(openxr,'static klxr_instance g_instance;','static klxr_instance g_instance;\nstatic _Atomic int klj_openxr_running;\nint klj_openxr_input_active(void){return atomic_load_explicit(&klj_openxr_running,memory_order_acquire);}');
+ openxr=replace(openxr,'    s->running = 1;','    s->running = 1;\n    atomic_store_explicit(&klj_openxr_running,1,memory_order_release);');
+ openxr=replace(openxr,'    s->running = 0;','    s->running = 0;\n    atomic_store_explicit(&klj_openxr_running,0,memory_order_release);');
+ openxr=replace(openxr,'    s->magic = 0;','    atomic_store_explicit(&klj_openxr_running,0,memory_order_release);\n    s->magic = 0;');
+ openxr=replace(openxr,'    inst->magic = 0;','    atomic_store_explicit(&klj_openxr_running,0,memory_order_release);\n    inst->magic = 0;');
+ openxr=openxr.replaceAll('    memset(&g_session, 0, sizeof g_session);','    atomic_store_explicit(&klj_openxr_running,0,memory_order_release);\n    memset(&g_session, 0, sizeof g_session);');
+ let ovrp=includeDependencies(fs.readFileSync(path.join(klepton,'runtime/xr/kl_ovrp.c'),'utf8'),'#include <stdatomic.h>');
+ ovrp=replace(ovrp,'static int g_ovrp_initialized;','static _Atomic int g_ovrp_initialized;\nint klj_ovrp_input_active(void){return atomic_load_explicit(&g_ovrp_initialized,memory_order_acquire);}');
  openxr=replace(openxr,'    void    *surface;','    KljXrSurface *surface;');
  const surfaceBegin=openxr.indexOf('// XR_KHR_android_surface_swapchain —'),surfaceEnd=openxr.indexOf('static XrResult klxr_CreateSwapchainAndroidSurfaceKHR',surfaceBegin);
  if(surfaceBegin<0||surfaceEnd<0)throw Error('Pinned XR Surface entry changed');
@@ -58,11 +67,11 @@ export function prepareXrSources(klepton,build){
  view=replace(view,'            [cmd commit];\n            return 0;','            klj_xr_discard(cmd,v);\n            [cmd commit];\n            return 0;');
  view=replace(view,'    g_started = 1;','    klj_xr_fences(g_event,gl);\n    g_started = 1;');
  view=replace(view,'    g_started = 0;','    g_started = 0;g_last_value=0;g_frames=0;');
- const files={glfb:gl,provider,compositor:view,openxr},outputs={};
+ const files={glfb:gl,provider,compositor:view,openxr,ovrp},outputs={};
  const controls=fs.readFileSync(path.join(klepton,'runtime/gfx/kl_view.c'),'utf8');
  const controlsBegin=controls.indexOf('        const bool *keys = SDL_GetKeyboardState(NULL);'),controlsEnd=controls.indexOf('        // ---- frame out.',controlsBegin);
  if(controlsBegin<0||controlsEnd<0)throw Error('Pinned desktop XR control mapping changed');
  writeChanged(path.join(build,'xr-input-generated.inc'),controls.slice(controlsBegin,controlsEnd).replace('SDL_GetKeyboardState(NULL)','acceptedKeys').replace('static const bool no_keys[SDL_SCANCODE_COUNT];','static const bool no_keys[SDL_SCANCODE_COUNT]={};'));
- for(const [name,text]of Object.entries(files)){outputs[name]=path.join(build,'xr-'+name+(['glfb','openxr'].includes(name)?'.c':'.m'));writeChanged(outputs[name],text);}
+ for(const [name,text]of Object.entries(files)){outputs[name]=path.join(build,'xr-'+name+(['glfb','openxr','ovrp'].includes(name)?'.c':'.m'));writeChanged(outputs[name],text);}
  return outputs;
 }

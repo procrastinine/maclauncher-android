@@ -118,7 +118,8 @@ static void run_host(JNIEnv *env,jobject view,jobject activity,jstring title,jin
   {uint64_t extent=klj_metal_committed_extent(presenter);if(extent&&(int)(extent>>32)==width&&(int)(extent&UINT32_MAX)==height&&!klj_session_committed_output(env,KL_SESSION_NATIVE,width,height,outputWidth,outputHeight))goto done;}
   kl_host_drain(env,callbacks,lifecycle);if((*env)->ExceptionCheck(env))goto done;
   if(!klj_native_activity_pump(env))goto done;
-  int dialogModal=0;
+  int xrInputFocused=0;
+  if(projection&&klj_xr_input_active(projection)){xrInputFocused=kl_host_xr_input_focused(env,callbacks,activityOwner);if((*env)->ExceptionCheck(env))goto done;}
   jlong version=kl_host_title_revision(env,callbacks,lifecycle);if((*env)->ExceptionCheck(env))goto done;
   if(version!=titleRevision){
    // The Activity stores an immutable String. Convert actual UTF-16 to UTF-8;
@@ -160,7 +161,8 @@ static void run_host(JNIEnv *env,jobject view,jobject activity,jstring title,jin
   }
   if(requestedCursor.object)(*env)->DeleteLocalRef(env,requestedCursor.object);
   jboolean requestedCapture=kl_host_capture_requested(env,callbacks,viewOwner);if((*env)->ExceptionCheck(env))goto done;
-  int actualCapture=requestedCapture&&!dialogModal&&SDL_GetKeyboardFocus()==window;
+  if(projection&&requestedCapture)klj_xr_controls(projection,window,0);
+  int actualCapture=requestedCapture&&SDL_GetKeyboardFocus()==window;
   if(actualCapture!=pointerCaptured){
    if(!SDL_SetWindowRelativeMouseMode(window,actualCapture)){fail(env,SDL_GetError());goto done;}
    pointerCaptured=actualCapture;
@@ -168,7 +170,6 @@ static void run_host(JNIEnv *env,jobject view,jobject activity,jstring title,jin
   }
   jboolean requested=kl_host_closing(env,callbacks,lifecycle);if((*env)->ExceptionCheck(env))goto done;if(requested)break;
   SDL_Event event;int quit=0,awoke=0;while(SDL_PollEvent(&event)){
-   int appInputHandled=0;
    int sleeping=0;if(kl_application_sleep_event(&event,SDL_GetWindowID(window),&sleeping)){kl_host_sleep(env,callbacks,(jboolean)sleeping);if((*env)->ExceptionCheck(env))goto done;continue;}
    if(klj_session_event(env,&event)){awoke=1;continue;}
    int gamepadEvent=event.type==SDL_EVENT_WINDOW_FOCUS_GAINED?0:klj_gamepads_event(env,gamepads,&event);if(gamepadEvent<0)goto done;if(gamepadEvent)continue;
@@ -196,6 +197,9 @@ static void run_host(JNIEnv *env,jobject view,jobject activity,jstring title,jin
     if((*env)->ExceptionCheck(env))goto done;
     if(event.type==SDL_EVENT_WINDOW_FOCUS_GAINED&&klj_gamepads_event(env,gamepads,&event)<0)goto done;
    }
+   /* Android's input return means queued, not consumed. Route only the active
+      desktop XR controls before enqueueing; dialogs/editors retain Android. */
+   if(projection&&klj_xr_event(projection,window,&event,xrInputFocused&&!pointerCaptured))continue;
    if(physical->kind==KL_INPUT_WHEEL){
     float x=physical->x,y=physical->y;if(!klj_session_input(env,&x,&y))goto done;
     // SDL already applies the user's natural-scroll preference. Keep its signed
@@ -211,16 +215,15 @@ static void run_host(JNIEnv *env,jobject view,jobject activity,jstring title,jin
     kl_host_input(env,callbacks,kl_host_bind_KLHost_android_view_InputEvent(env,callbacks,input));(*env)->DeleteLocalRef(env,input);if((*env)->ExceptionCheck(env))goto done;continue;
    }
    if(physical->kind==KL_INPUT_TOUCH){float x=physical->x,y=physical->y;if(!klj_session_input(env,&x,&y))goto done;jobject input=kl_host_motion(env,callbacks,physical->action,x,y).object;if((*env)->ExceptionCheck(env)||!input)goto done;
-    appInputHandled=kl_host_input(env,callbacks,kl_host_bind_KLHost_android_view_InputEvent(env,callbacks,input));(*env)->DeleteLocalRef(env,input);if((*env)->ExceptionCheck(env))goto done;
+    kl_host_input(env,callbacks,kl_host_bind_KLHost_android_view_InputEvent(env,callbacks,input));(*env)->DeleteLocalRef(env,input);if((*env)->ExceptionCheck(env))goto done;
    }
    if(klj_session_text_event(env,&event)){if((*env)->ExceptionCheck(env))goto done;continue;}
    if(physical->kind==KL_INPUT_KEY){
-    jobject input=kl_host_key(env,callbacks,physical->action,physical->code,decoded.unicode,physical->meta).object;if((*env)->ExceptionCheck(env)||!input)goto done;appInputHandled=kl_host_input(env,callbacks,kl_host_bind_KLHost_android_view_InputEvent(env,callbacks,input));(*env)->DeleteLocalRef(env,input);if((*env)->ExceptionCheck(env))goto done;
+    jobject input=kl_host_key(env,callbacks,physical->action,physical->code,decoded.unicode,physical->meta).object;if((*env)->ExceptionCheck(env)||!input)goto done;kl_host_input(env,callbacks,kl_host_bind_KLHost_android_view_InputEvent(env,callbacks,input));(*env)->DeleteLocalRef(env,input);if((*env)->ExceptionCheck(env))goto done;
    }
-   if(projection)klj_xr_event(projection,window,&event,appInputHandled);
   }
   if(quit)break;
-  if(projection){klj_xr_controls(projection,window,!dialogModal);if(!klj_xr_pump(env,projection,width,height))goto done;}
+  if(projection){klj_xr_controls(projection,window,xrInputFocused&&!pointerCaptured);if(!klj_xr_pump(env,projection,width,height))goto done;}
   #ifdef KLJ_NATIVE_OVERLAY
   if(overlaySource.object){uint64_t now=SDL_GetTicksNS();if(now>=nextOverlayFrame){
    kl_host_frame_pump(env,callbacks,overlaySource);if((*env)->ExceptionCheck(env))goto done;

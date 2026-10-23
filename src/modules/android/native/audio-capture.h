@@ -10,6 +10,7 @@ void klj_audio_capture_destroy(KljAudioCapture *);
 int32_t klj_audio_capture_read(KljAudioCapture *,void *,int32_t,int64_t);
 unsigned klj_audio_capture_rate(const KljAudioCapture *);
 unsigned klj_audio_capture_channels(const KljAudioCapture *);
+unsigned klj_audio_capture_overruns(const KljAudioCapture *);
 #ifdef __cplusplus
 }
 #endif

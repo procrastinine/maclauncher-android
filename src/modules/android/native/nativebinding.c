@@ -13,6 +13,10 @@
 #include <pthread.h>
 #include <stdatomic.h>
 #include <errno.h>
+#include "xr-surface.h"
+#include "jni-lifetime.h"
+#include "jni-invocation.h"
+#include "device-context.h"
 
 static pthread_mutex_t provider_mutex=PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t loader_setup_mutex=PTHREAD_MUTEX_INITIALIZER;
@@ -69,6 +73,8 @@ extern void klj_input_queue_install(JNIEnv*);
 static void problem(JNIEnv *env,const char *message){if((*env)->ExceptionCheck(env))return;jclass c=(*env)->FindClass(env,"java/lang/IllegalStateException");if(c)(*env)->ThrowNew(env,c,message);}
 static int initializer_failed(void *context){JNIEnv *env=context;return (*env)->ExceptionCheck(env);}
 static int current_initializer_failed(void *context){JavaVM *vm=context;JNIEnv *env=NULL;return (*vm)->GetEnv(vm,(void **)&env,JNI_VERSION_1_6)==JNI_OK && (*env)->ExceptionCheck(env);}
+static void xr_surface_retire(JNIEnv *env,int phase){if(phase==KLJ_JNI_VM_DEATH){JavaVM *vm=NULL;klj_xr_surface_shutdown(env);klj_device_context_release(env);if((*env)->GetJavaVM(env,&vm)==JNI_OK)klj_jni_clear_vm(vm);}}
+static KljJniVmObserver xr_surface_owner={.retire=xr_surface_retire};
 static void observe_initializers(JNIEnv *env,void *runtime){
     extern void *klj_native_jni_import(const char *,void *);
     void (*imports)(void *(*)(const char *,void *))=dlsym(runtime,"klj_set_native_import_adapter");
@@ -77,6 +83,12 @@ static void observe_initializers(JNIEnv *env,void *runtime){
     void (*observe)(int (*)(void *),void *)=dlsym(runtime,"klj_set_initializer_observer");
     void (*thread_vm)(JavaVM *)=dlsym(runtime,"klj_set_guest_thread_vm");
     if((*env)->GetJavaVM(env,&vm)==JNI_OK){
+        extern int klj_registration_prepare_facade(JNIEnv *);
+        if(!klj_registration_prepare_facade(env))return;
+        if(!klj_jni_publish_vm(vm,klj_guest_vm(vm))){problem(env,"Android native VM is already configured differently");return;}
+        (void)klj_jni_vm_observe(env,&xr_surface_owner);
+        void (*pressure)(void)=dlsym(runtime,"kl_mem_pressure_init");
+        if(pressure)pressure();
         if(observe)observe(current_initializer_failed,vm);
         if(thread_vm)thread_vm(vm);
     }

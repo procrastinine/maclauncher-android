@@ -162,7 +162,6 @@ static int dp_imm(uint32_t w, klx_info *o) {`);
         klx_info decoded; klx_decode(w,&decoded);
         if (!decoded.ok) return 1;
     }`);
-  replace('in.hazard || in.pcrel == KLX_PC_ADR || in.pcrel == KLX_PC_LITERAL ||','in.hazard ||');
   replace('// The emitter proper.',`// Stack writeback needs a real temporary frame: the original memory access
 // may overwrite the old red zone. Keep all scratch below both guest extents,
 // execute the access through the original SP in a scratch register, then commit
@@ -211,9 +210,9 @@ static int klj_stack_alu(uint32_t word,unsigned a,unsigned b,uint32_t *plain) {
 }
 
 // The emitter proper.`);
-  replace('        if (in.hazard ||',`        int stack_delta = 0; uint32_t stack_plain = 0;
+  replace('        if (in.hazard) { note_refusal(word); st->refused++; continue; }',`        int stack_delta = 0; uint32_t stack_plain = 0;
         int stack_memory = in.hazard == KLX_HZ_SPWRITE && klj_stack_memory(word, &stack_delta, &stack_plain);
-        if ((in.hazard && !stack_memory) ||`);
+        if (in.hazard && !stack_memory) { note_refusal(word); st->refused++; continue; }`);
   replace('        int stack_delta = 0; uint32_t stack_plain = 0;',`        uint32_t simd_plain,alu_plain;unsigned frame_a,frame_b;
         pick_scratch(in.gp_used,&frame_a,&frame_b);
         int stack_simd=klj_stack_simd(word,&simd_plain);
@@ -257,34 +256,24 @@ static int klj_stack_alu(uint32_t word,unsigned a,unsigned b,uint32_t *plain) {
             }
             body[k++] = enc_ldp(a, b, stack_memory ? 0 : -16);
             if (stack_memory) body[k++] = 0x910003ffu | ((stack_reserve + stack_delta) << 10); // commit guest SP`);
-  replace('            body[k++] = sub;\n            if (in.roles & KLX_W)',`            if (in.pcrel == KLX_PC_ADR || in.pcrel == KLX_PC_LITERAL) {
-                // PC-relative addresses belong to the original instruction.
-                // Materialize it in scratch with ADRP+ADD; the nearby pool may
-                // exceed ADR's 1 MiB range but stays inside ADRP's 4 GiB range.
-                uint32_t raw = ((word >> 5) & 0x7ffffu) << 2;
-                if (in.pcrel == KLX_PC_ADR) raw |= (word >> 29) & 3u;
-                int64_t immediate = (int64_t)(raw ^ 0x100000u) - 0x100000;
-                uint64_t target = spc + (uint64_t)immediate;
-                int64_t pages = ((int64_t)(target & ~0xfffull) - (int64_t)((vpc + k * 4) & ~0xfffull)) / 4096;
-                if (pages < -(1LL << 20) || pages >= (1LL << 20)) ok = 0;
-                uint32_t encoded = (uint32_t)((uint64_t)pages & 0x1fffffu);
-                body[k++] = 0x90000000u | ((encoded & 3u) << 29) | ((encoded >> 2) << 5) | b;
-                body[k++] = 0x91000000u | ((uint32_t)(target & 0xfffu) << 10) | (b << 5) | b;
-                if (in.pcrel == KLX_PC_LITERAL) {
-                    // LDR W/X and LDRSW preserve their zero/sign extension.
-                    // The destination doubles as the address scratch, leaving
-                    // the thread-slot base and every guest register intact.
-                    unsigned opc = word >> 30;
-                    uint32_t load = opc == 0 ? 0xb9400000u : opc == 1 ? 0xf9400000u : 0xb9800000u;
-                    body[k++] = load | (b << 5) | b;
-                }
-            } else body[k++] = sub;
-            if (in.roles & KLX_W)`);
+  // Keep upstream's ADR/literal implementation. Loading through the complete
+  // address also preserves literals without natural 64-bit alignment.
+  replace('                case 1:  body[k++] = enc_ldr(b, b, off);                // ldr  x18\n                         if (off & 7) ok = 0;\n                         break;',
+    '                case 1:  body[k++] = enc_add_imm(b,b,off);\n                         body[k++] = enc_ldr(b,b,0); break;');
   replace('    imm = (imm << 43) >> 43;                                  // sign-extend 21 bits\n    int64_t target = (int64_t)(oldpc & ~0xFFFULL) + (imm << 12);',
     '    imm = (imm ^ 0x100000) - 0x100000;                         // sign-extend 21 bits\n    int64_t target = (int64_t)(oldpc & ~0xFFFULL) + imm * 4096;');
+  // Sign extension must not overflow a signed left shift, including for valid
+  // negative literals and tables on an earlier image page.
+  replace('    return pc + (uint64_t)((imm << 43) >> 43);',
+    '    return pc + (uint64_t)((imm ^ 0x100000) - 0x100000);');
+  replace('    return pc + (uint64_t)(((imm << 45) >> 45) << 2);',
+    '    return pc + (uint64_t)(((imm ^ 0x40000) - 0x40000) * 4);');
+  replace('    imm = (kind == KLX_PC_CBZ) ? ((imm << 45) >> 45) : ((imm << 50) >> 50);\n    return pc + (uint64_t)(imm << 2);',
+    '    imm = (kind == KLX_PC_CBZ) ? ((imm ^ 0x40000) - 0x40000) : ((imm ^ 0x2000) - 0x2000);\n    return pc + (uint64_t)(imm * 4);');
+  replace('(uint64_t)(page << 12)', '(uint64_t)(page * 4096)');
   replace(`                ok &= fits;
             }
-            if (in.pcrel == KLX_PC_ADR || in.pcrel == KLX_PC_LITERAL) {`,
+            body[k++] = sub;`,
     `                if (fits) body[k++] = sub;
                 else {
                     // A nearby island can cross ADRP's signed 4 GiB edge.
@@ -295,7 +284,7 @@ static int klj_stack_alu(uint32_t word,unsigned a,unsigned b,uint32_t *plain) {
                     uint64_t target = (spc & ~0xfffULL) + (uint64_t)(pages * 4096);
                     k += enc_mov_imm64(b, target, body + k);
                 }
-            } else if (in.pcrel == KLX_PC_ADR || in.pcrel == KLX_PC_LITERAL) {`);
+            } else body[k++] = sub;`);
   // Derive a necessary-condition prefilter from the complete original decoder.
   // Recognition, data classification and veneer generation remain upstream.
   const fields=[...new Set([...source.matchAll(/addfld\(o, w, (KLX_[A-Z]+),/g)].map(match=>match[1]))];
@@ -311,14 +300,23 @@ static unsigned klx_survey(`);
   const decode='        klx_info in;\n        klx_decode(w[i], &in);';
   if(source.split(decode).length!==3)throw Error('Klepton register scan loops changed');
   source=source.replaceAll(decode,'        if (!klj_x18_candidate(w[i])) continue;\n'+decode);
-  // The live loader has already surveyed the chunk to size its veneer pool.
-  // Reuse that result rather than decoding the entire chunk again in emit.
+  // Preserve the upstream image-aware API and reuse the loader's survey.
   replace(`int kl_x18_emit(void *code, size_t size, uint64_t code_va,
                 void *pool, size_t poolcap, uint64_t pool_va,
-                kl_x18_stats *st, size_t *pool_used) {`,`static int klj_x18_emit_surveyed(void *code, size_t size, uint64_t code_va,
+                kl_x18_stats *st, size_t *pool_used) {
+    return kl_x18_emit_img(code, size, code_va, pool, poolcap, pool_va,
+                           NULL, st, pool_used);
+}
+
+`, '');
+  replace(`int kl_x18_emit_img(void *code, size_t size, uint64_t code_va,
+                    void *pool, size_t poolcap, uint64_t pool_va,
+                    const kl_x18_image *image,
+                    kl_x18_stats *st, size_t *pool_used) {`, `static int klj_x18_emit_surveyed(void *code, size_t size, uint64_t code_va,
                 void *pool, size_t poolcap, uint64_t pool_va,
-                kl_x18_stats *st, size_t *pool_used,
-                unsigned want, unsigned data_words, unsigned ctr_sites) {`);
+                const kl_x18_image *image, kl_x18_stats *st, size_t *pool_used,
+                unsigned want, unsigned data_words, unsigned ctr_sites,
+                const klx_code_context *context, int tables_only) {`);
   replace(`    unsigned want = klx_survey(code, size, &st->data_words, &st->ctr_sites);
     st->sites = want;
     if (pool_used)`, `    st->data_words = data_words; st->ctr_sites = ctr_sites;
@@ -327,27 +325,42 @@ static unsigned klx_survey(`);
   replace('static uint8_t *klx_place_pool(',`int kl_x18_emit(void *code, size_t size, uint64_t code_va,
                 void *pool, size_t poolcap, uint64_t pool_va,
                 kl_x18_stats *st, size_t *pool_used) {
-    unsigned data_words, ctr_sites;
-    unsigned want = klx_survey(code, size, &data_words, &ctr_sites);
-    return klj_x18_emit_surveyed(code, size, code_va, pool, poolcap, pool_va,
-                                st, pool_used, want, data_words, ctr_sites);
+    return kl_x18_emit_img(code,size,code_va,pool,poolcap,pool_va,NULL,st,pool_used);
 }
-
-static uint8_t *klx_place_pool(`);
-  replace('static uint8_t *klx_place_pool(',`int kl_x18_emit_context(void *code,size_t size,uint64_t address,
+int kl_x18_emit_img(void *code,size_t size,uint64_t code_va,
+    void *pool,size_t poolcap,uint64_t pool_va,const kl_x18_image *image,
+    kl_x18_stats *st,size_t *pool_used) {
+    unsigned data,ctr;unsigned want=klx_survey(code,size,&data,&ctr);
+    return klj_x18_emit_surveyed(code,size,code_va,pool,poolcap,pool_va,
+        image,st,pool_used,want,data,ctr,NULL,0);
+}
+int kl_x18_emit_context(void *code,size_t size,uint64_t address,
     void *pool,size_t capacity,uint64_t pool_address,kl_x18_stats *stats,size_t *used,
     const klx_code_context *context) {
-    unsigned data,ctr;
-    unsigned count=klj_x18_survey_context(code,size,&data,&ctr,context);
+    unsigned data,ctr;unsigned count=klj_x18_survey_context(code,size,&data,&ctr,context);
     return klj_x18_emit_surveyed(code,size,address,pool,capacity,pool_address,
-        stats,used,count,data,ctr,context);
+        NULL,stats,used,count,data,ctr,context,0);
+}
+// Recognise every table before the ordinary per-site planner rewrites producers.
+// Unrecognised or unreachable tables retain the upstream guarded branch.
+int kl_x18_emit_tables_context(void *code,size_t size,uint64_t address,
+    void *pool,size_t capacity,uint64_t pool_address,const kl_x18_image *image,
+    kl_x18_stats *stats,size_t *used,const klx_code_context *context) {
+    unsigned data,ctr;unsigned count=klj_x18_survey_context(code,size,&data,&ctr,context);
+    return klj_x18_emit_surveyed(code,size,address,pool,capacity,pool_address,
+        image,stats,used,count,data,ctr,context,1);
 }
 
 static uint8_t *klx_place_pool(`);
-  replace(`    int rc = kl_x18_emit(code, size, (uint64_t)(uintptr_t)code,
-                         base, cap, (uint64_t)(uintptr_t)base, st, NULL);`,`    int rc = klj_x18_emit_surveyed(code, size, (uint64_t)(uintptr_t)code,
-                         base, cap, (uint64_t)(uintptr_t)base, st, NULL,
-                         want, st->data_words, st->ctr_sites);`);
+  replace(`    int rc = kl_x18_emit_img(code, size, (uint64_t)(uintptr_t)code,
+                             base, cap, (uint64_t)(uintptr_t)base, image, st, NULL);`,
+    `    int rc = klj_x18_emit_surveyed(code,size,(uint64_t)(uintptr_t)code,
+        base,cap,(uint64_t)(uintptr_t)base,image,st,NULL,
+        want,st->data_words,st->ctr_sites,context,0);`);
+  replace('        uint32_t word = w[i];',
+    '        uint32_t word = w[i];\n        if(tables_only && in.hazard!=KLX_HZ_TERMBR)continue;');
+  replace('            if (out + VEN_MAX_INSN > pool_end) {\n                note_refusal(word); st->refused++; continue;\n            }',
+    '            if(tables_only)continue;\n            if (out + VEN_MAX_INSN > pool_end) {\n                note_refusal(word); st->refused++; continue;\n            }');
   // Function/initializer boundaries bound the neighborhood vote without
   // fragmenting allocation into one 64 KiB veneer pool per function.
   replace('static int klx_looks_like_data(const uint32_t *w, size_t n, size_t i) {',
@@ -395,44 +408,33 @@ unsigned kl_x18_capacity(const void *code,size_t size) {
     const uint32_t *words=code;unsigned count=0;
     for(size_t i=0;i<size/4;i++)if(klj_x18_candidate(words[i])) {
         klx_info in;klx_decode(words[i],&in);count+=!!in.nfields+!!in.sysreg;
+        if(in.hazard==KLX_HZ_TERMBR)count+=KLX_JT_MAX_INSN/KLX_VEN_MAX_INSN+2;
     }
     return count;
 }
 unsigned kl_x18_count(const void *code, size_t size) {`);
-  replace('                unsigned want, unsigned data_words, unsigned ctr_sites) {',
-    '                unsigned want, unsigned data_words, unsigned ctr_sites, const klx_code_context *context) {');
-  replace('        if (klx_looks_like_data(w, n, i)) continue;',
-    '        if (klj_x18_data_context(w, n, i, context)) continue;');
-  replace('                                st, pool_used, want, data_words, ctr_sites);',
-    '                                st, pool_used, want, data_words, ctr_sites, NULL);');
+  const dataCheck='if (klx_looks_like_data(w, n, i)) continue;';
+  if(source.split(dataCheck).length!==3)throw Error('Klepton image register classification changed');
+  source=source.replaceAll(dataCheck,'if (klj_x18_data_context(w, n, i, context)) continue;');
   replace(`int kl_x18_patch(void *code, size_t size, void *arena, size_t arena_size,
-                 size_t *arena_used, kl_x18_stats *st) {`,`int kl_x18_patch_context(void *code, size_t size, void *arena, size_t arena_size,
-                 size_t *arena_used, kl_x18_stats *st, const klx_code_context *context) {`);
+                 size_t *arena_used, const kl_x18_image *image,
+                 kl_x18_stats *st) {`,`static int klj_x18_patch_owned(void *code, size_t size, void *arena, size_t arena_size,
+                 size_t *arena_used, const kl_x18_image *image,
+                 kl_x18_stats *st, const klx_code_context *context,int owned) {`);
   replace('    unsigned want = klx_survey(code, size, &st->data_words, &st->ctr_sites);',
     '    unsigned want = klj_x18_survey_context(code, size, &st->data_words, &st->ctr_sites, context);');
-  replace('                         want, st->data_words, st->ctr_sites);',
-    '                         want, st->data_words, st->ctr_sites, context);');
-  replace('// ---------------------------------------------------- data inside code',`int kl_x18_patch(void *code,size_t size,void *arena,size_t arena_size,size_t *arena_used,kl_x18_stats *stats) {
-    return kl_x18_patch_context(code,size,arena,arena_size,arena_used,stats,NULL);
-}
-
-// ---------------------------------------------------- data inside code`);
   // The original linker retains the resource lease itself. Reuse the same
   // placement/decoder without an untracked fallback allocation on this path.
-  replace(`int kl_x18_patch_context(void *code, size_t size, void *arena, size_t arena_size,
-                 size_t *arena_used, kl_x18_stats *st, const klx_code_context *context) {`,
-    `static int klj_x18_patch_owned(void *code, size_t size, void *arena, size_t arena_size,
-                 size_t *arena_used, kl_x18_stats *st, const klx_code_context *context, int owned) {`);
   replace('    if (!base) base = klx_place_pool(code, size, cap);',
     '    if (!base && !owned) base = klx_place_pool(code, size, cap);');
   replace('    mprotect(base, cap, PROT_READ | PROT_EXEC);',
     '    if (mprotect(base, cap, PROT_READ | PROT_EXEC) != 0 && owned) return -1;');
-  replace('int kl_x18_patch(void *code,size_t size,void *arena,size_t arena_size,size_t *arena_used,kl_x18_stats *stats) {',`
+  replace('// ---------------------------------------------------- data inside code',`
 int kl_x18_patch_context(void *code,size_t size,void *arena,size_t arena_size,size_t *used,kl_x18_stats *stats,const klx_code_context *context) {
-    return klj_x18_patch_owned(code,size,arena,arena_size,used,stats,context,0);
+    return klj_x18_patch_owned(code,size,arena,arena_size,used,NULL,stats,context,0);
 }
 int kl_x18_patch_owned(void *code,size_t size,void *arena,size_t arena_size,size_t *used,kl_x18_stats *stats,const klx_code_context *context) {
-    int result=klj_x18_patch_owned(code,size,arena,arena_size,used,stats,context,1);
+    int result=klj_x18_patch_owned(code,size,arena,arena_size,used,NULL,stats,context,1);
     if(!result && stats->refused) { errno=ENOEXEC;return -1; }
     return result;
 }
@@ -446,7 +448,11 @@ void *kl_x18_reserve_near(void *code,size_t size,size_t capacity) {
     }
     return memory;
 }
-int kl_x18_patch(void *code,size_t size,void *arena,size_t arena_size,size_t *arena_used,kl_x18_stats *stats) {`);
+int kl_x18_patch(void *code,size_t size,void *arena,size_t arena_size,size_t *used,const kl_x18_image *image,kl_x18_stats *stats) {
+    return klj_x18_patch_owned(code,size,arena,arena_size,used,image,stats,NULL,0);
+}
+
+// ---------------------------------------------------- data inside code`);
   const header=fs.readFileSync(path.join(klepton,'runtime/kl_x18.h'),'utf8')
     .replace('    unsigned nfields;', '    uint32_t gp_written; // original decoded GP write roles\n    unsigned nfields;');
   if(header.split('#define KLX_VEN_MAX_INSN 8').length!==2)throw Error('Klepton veneer size declaration changed');
@@ -457,6 +463,7 @@ int klx_stack_resume(void *);
 unsigned kl_x18_count_context(const void *,size_t,const klx_code_context *);
 unsigned kl_x18_capacity(const void *,size_t);
 int kl_x18_emit_context(void *,size_t,uint64_t,void *,size_t,uint64_t,kl_x18_stats *,size_t *,const klx_code_context *);
+int kl_x18_emit_tables_context(void *,size_t,uint64_t,void *,size_t,uint64_t,const kl_x18_image *,kl_x18_stats *,size_t *,const klx_code_context *);
 int kl_x18_patch_context(void *,size_t,void *,size_t,size_t *,kl_x18_stats *,const klx_code_context *);
 int kl_x18_patch_owned(void *,size_t,void *,size_t,size_t *,kl_x18_stats *,const klx_code_context *);
 void *kl_x18_reserve_near(void *,size_t,size_t);
@@ -492,8 +499,11 @@ export function prepareX18Core(klepton,build){
     'static void note_refusal(uint32_t word) { (void)word; }\n');
   // The stack-memory adaptation precedes the emitter marker and is retained.
   const stack=between('static int klj_stack_memory(', '// The emitter proper.');
-  emit=emit.replace('unsigned ctr_sites, const klx_code_context *context) {',
-    'unsigned ctr_sites, const klx_code_context *context, unsigned slot, uint64_t ctr) {')
+  const tables=between('// ======================== the `br x18` jump-table rewrite', 'static int klj_stack_memory(');
+  emit=emit.replace('const kl_x18_image *image, kl_x18_stats *st, size_t *pool_used,',
+    'kl_x18_stats *st, size_t *pool_used,')
+    .replace('unsigned ctr_sites,\n                const klx_code_context *context, int tables_only) {',
+    'unsigned ctr_sites, const klx_code_context *context, unsigned slot, uint64_t ctr) {\n    const kl_x18_image *image=NULL;int tables_only=0;')
     .replace('want && veneer_enabled()', 'want != 0')
     .replace('st->ctr_sites && ctr_enabled()', 'st->ctr_sites != 0')
     .replaceAll('(unsigned)KLX_TSD_SLOT', 'slot').replaceAll('ctr_value()', 'ctr');
@@ -525,7 +535,7 @@ int klx_core_emit(uint32_t word,uint64_t site,uint64_t pool,unsigned slot,uint64
   const types=image.indexOf('typedef struct { uint8_t e_ident[16];'),end=image.indexOf('struct kl_image {',types);
   if(types<0||end<0)throw Error('Klepton ELF declarations changed');
   fs.writeFileSync(path.join(build,'image-elf-types.h'),image.slice(types,end));
-  fs.writeFileSync(output,'#include <string.h>\n#include <stdlib.h>\n#include "kl_x18.h"\n#define VEN_MAX_INSN KLX_VEN_MAX_INSN\n'+decoder+survey+stack+emit+api+farEmitterSource(emit)+'\n#include "instruction-evidence.h"\n#include "image-elf-types.h"\n#include "image-instruction-evidence.h"\n#include "x18-stack-resume.h"\n'+farStackResumeSource(fs.readFileSync(path.join(import.meta.dirname,'x18-stack-resume.h'),'utf8')));
+  fs.writeFileSync(output,'#include <string.h>\n#include <stdlib.h>\n#include "kl_x18.h"\n#define VEN_MAX_INSN KLX_VEN_MAX_INSN\n'+decoder+survey+tables+stack+emit+api+farEmitterSource(emit)+'\n#include "instruction-evidence.h"\n#include "image-elf-types.h"\n#include "image-instruction-evidence.h"\n#include "x18-stack-resume.h"\n'+farStackResumeSource(fs.readFileSync(path.join(import.meta.dirname,'x18-stack-resume.h'),'utf8')));
   return output;
 }
 

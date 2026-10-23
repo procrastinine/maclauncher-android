@@ -123,6 +123,12 @@ static int32_t owned_get_hardware(klaa_stream *stream,unsigned which){
 static int32_t owned_get_hardware_rate(klaa_stream *s){return owned_get_hardware(s,0);}
 static int32_t owned_get_hardware_channels(klaa_stream *s){return owned_get_hardware(s,1);}
 static int32_t owned_get_hardware_format(klaa_stream *s){return owned_get_hardware(s,2);}
+static int32_t owned_get_xruns(klaa_stream *stream){
+    if(!stream)return AAUDIO_ERROR_NULL;
+    if(stream->direction!=AAUDIO_DIRECTION_INPUT)return klaa_getXRunCount(stream);
+    if(stream->resources_released)return AAUDIO_ERROR_INVALID_STATE;
+    unsigned count=klj_audio_capture_overruns(stream->capture);return count>INT32_MAX?INT32_MAX:(int32_t)count;
+}
 static aaudio_result_t owned_get_timestamp(klaa_stream *stream,clockid_t clock,int64_t *position,int64_t *nanos){
     if(!stream||!position||!nanos)return AAUDIO_ERROR_NULL;
     // Linux clock IDs are carried unchanged by the guest ABI. A native caller
@@ -186,6 +192,7 @@ void *kl_aaudio_lookup(const char *name){
     OWNED("AAudioStream_getHardwareChannelCount",owned_get_hardware_channels);
     OWNED("AAudioStream_getHardwareFormat",owned_get_hardware_format);
     OWNED("AAudioStream_getHardwareSampleRate",owned_get_hardware_rate);
+    OWNED("AAudioStream_getXRunCount",owned_get_xruns);
     OWNED("AAudioStream_getOffloadDelay",owned_offload_result);
     OWNED("AAudioStream_getOffloadPadding",owned_offload_result);
     OWNED("AAudioStream_getTimestamp",owned_get_timestamp);

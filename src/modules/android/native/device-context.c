@@ -6,16 +6,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-static _Atomic(JavaVM *) actual_vm,guest_vm;
 static _Atomic(KLHostCallbacks *) callbacks;
 extern void klj_enter_guest_thread(void);
-
-void klj_set_device_vm(JavaVM *actual,JavaVM *guest){
-    atomic_store_explicit(&actual_vm,actual,memory_order_release);
-    if(guest)atomic_store_explicit(&guest_vm,guest,memory_order_release);
-}
+extern void kl_ndk_set_assets_dir(const char *);
+static const char *assets_directory,*files_directory;
+void kl_jni_set_assets_dir(const char *directory){assets_directory=directory;kl_ndk_set_assets_dir(directory);}
+void kl_jni_set_files_dir(const char *directory){files_directory=directory;}
+const char *kl_jni_assets_dir(void){return assets_directory;}
+const char *kl_jni_files_dir(void){return files_directory;}
 JNIEnv *klj_device_environment(void){
-    JavaVM *vm=atomic_load_explicit(&actual_vm,memory_order_acquire);
+    JavaVM *vm=klj_jni_actual_vm();
     JNIEnv *env=NULL;if(!vm)return NULL;
     jint status=(*vm)->GetEnv(vm,(void**)&env,JNI_VERSION_1_6);
     if(status==JNI_OK)return env;
@@ -73,15 +73,8 @@ static const char *device_string(const char *key){
     klj_jni_after_java(env);return result;
 }
 const char *kl_driver_target_name(void){return device_string("package");}
-const char *kl_jni_build_string(const char *field){return device_string(field);}
-int kl_jni_build_int(const char *field,int fallback){
-    JNIEnv *env=klj_device_environment();if(!env||(*env)->ExceptionCheck(env))return fallback;
-    KLHostCallbacks *cb=klj_device_callbacks();if(!cb||!klj_jni_before_java(env))return fallback;
-    jstring name=(*env)->NewStringUTF(env,field);
-    int result=name?kl_host_device_integer(env,cb,(KLHost_java_lang_String){name},fallback):fallback;
-    if(name)(*env)->DeleteLocalRef(env,name);
-    klj_jni_after_java(env);return result;
-}
+const char *klj_guest_package(void){return device_string("package");}
+const char *kl_jni_guest_package(void){return klj_guest_package();}
 void kl_jni_guest_version(long *code,const char **name){
     if(name)*name=device_string("versionName");
     if(!code)return;
@@ -113,9 +106,9 @@ int kl_jni_low_memory(void){
     KLHostCallbacks *cb=klj_device_callbacks();if(!cb||!klj_jni_before_java(env))return 0;
     int result=kl_host_device_low_memory(env,cb);klj_jni_after_java(env);return result;
 }
-void *kl_jni_vm(void){return atomic_load_explicit(&guest_vm,memory_order_acquire);}
+void *kl_jni_vm(void){JavaVM *vm=NULL;jsize count=0;return klj_jni_get_created_vms(&vm,1,&count)==JNI_OK&&count==1?vm:NULL;}
 void kl_jni_report(FILE *output){
-    JavaVM *vm=atomic_load_explicit(&actual_vm,memory_order_acquire);JNIEnv *env=NULL;
+    JavaVM *vm=klj_jni_actual_vm();JNIEnv *env=NULL;
     jint state=vm?(*vm)->GetEnv(vm,(void**)&env,JNI_VERSION_1_6):JNI_ERR;
     fprintf(output,"[android-jvm] VM %s, current thread %s\n",vm?"present":"absent",state==JNI_OK?"attached":"detached");
 }
@@ -124,5 +117,5 @@ void klj_device_context_release(JNIEnv *env){
     pthread_mutex_lock(&strings_lock);
     while(strings){DeviceString *next=strings->next;free(strings->key);free(strings->value);free(strings);strings=next;}
     pthread_mutex_unlock(&strings_lock);
-    atomic_store(&actual_vm,NULL);atomic_store(&guest_vm,NULL);
+    assets_directory=files_directory=NULL;
 }
