@@ -87,6 +87,7 @@ export function prepareAimSource({source,output,klepton,glesHeaders,mutableCode=
   prepareExecQueueRetirement(temporary);
   prepareTimerExec(temporary);
   prepareBinderSenderIdentity(temporary);
+  execFileSync('git',['apply','--unsafe-paths',path.join(root,'adapters/aim-upstream-process.patch')],{cwd:temporary,stdio:'inherit',env:{...process.env,GIT_CEILING_DIRECTORIES:path.dirname(temporary)}});
  });
  return output;
 }

@@ -18,6 +18,18 @@ public final class JvmPortability extends java.io.Writer {
     private final StringBuilder text=new StringBuilder(256);
     private boolean truncated;
     private JvmPortability(){}
+    /** Keep ordinary reflection and access checks; only libcore's descriptor
+     * spelling differs from the JDK's field on the same FileDescriptor object. */
+    public static java.lang.reflect.Field getDeclaredField(Class<?> type,String name)throws NoSuchFieldException{
+        Objects.requireNonNull(type);
+        try{return type.getDeclaredField(name);}
+        catch(NoSuchFieldException missing){
+            if(type==java.io.FileDescriptor.class&&"descriptor".equals(name)){
+                try{return type.getDeclaredField("fd");}catch(NoSuchFieldException absent){}
+            }
+            throw missing;
+        }
+    }
     public static Object newUnpaddedArray(Object runtime,Class<?> component,int length){
         Objects.requireNonNull(runtime);return Array.newInstance(component,length);
     }

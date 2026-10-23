@@ -27,6 +27,8 @@ public final class PortableCalls {
             return new Call(Opcodes.INVOKESTATIC,"maclauncher/android/framework/HostStrictJarFile","dataOffset","(Ljava/util/zip/ZipEntry;)J","zip-entry-offset");
         if(opcode==Opcodes.INVOKEVIRTUAL&&(owner.equals("java/net/Socket")||owner.equals("java/net/DatagramSocket"))&&name.equals("getFileDescriptor$")&&descriptor.equals("()Ljava/io/FileDescriptor;"))
             return new Call(Opcodes.INVOKESTATIC,"maclauncher/android/framework/HostFileDescriptor","socketDescriptor","(L"+owner+";)Ljava/io/FileDescriptor;","socket-descriptor");
+        if(opcode==Opcodes.INVOKEVIRTUAL&&owner.equals("java/lang/Class")&&name.equals("getDeclaredField")&&descriptor.equals("(Ljava/lang/String;)Ljava/lang/reflect/Field;"))
+            return new Call(Opcodes.INVOKESTATIC,HELPER,name,"(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/reflect/Field;","libcore-reflection");
         if(opcode==Opcodes.INVOKEVIRTUAL&&owner.equals("java/io/FileDescriptor")){
             String adapted=switch(name+descriptor){
                 case "getInt$()I"->"getInt";case "setInt$(I)V"->"setInt";

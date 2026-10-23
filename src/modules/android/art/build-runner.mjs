@@ -6,7 +6,7 @@ import {nativePathFlags,nativeRustPathEnvironment,publishNativeBinary} from '../
 
 /** Build a supplied, prepared AIM tree using its original Cargo workspace.
  * A buildPrecise result can reuse existing static CPU archives. Only the runner
- * and upstream notices are delivery components; compiler products stay in work.
+ * and its descriptor holders share the upstream notices; compiler products stay in work.
  */
 export function buildArtRunner({aim,output,unicorn,precise,work,target,cargo='cargo',env=process.env,jobs=2,pathRoots=[]}){
  if(!aim||!output)throw Error('Expected prepared AIM source and runner output paths.');
@@ -31,7 +31,7 @@ export function buildArtRunner({aim,output,unicorn,precise,work,target,cargo='ca
  }
  const roots=[...(env.CARGO_HOME?[[env.CARGO_HOME,'/src/cargo']]:[]),...pathRoots];
  execFileSync(cargo,['build','--offline','--locked','--release','-j',String(jobs),
-  '--manifest-path',path.join(aim,'Cargo.toml'),'--target-dir',target,'-p','aim-linux-abi','--bin','linux-run','-p','aim-binder-host','--bin','aim-binderd'],
+  '--manifest-path',path.join(aim,'Cargo.toml'),'--target-dir',target,'-p','aim-linux-abi','--bin','linux-run','-p','aim-binder-host','--bin','aim-binderd','-p','aim-storage','--bin','aim-lock-holder','--bin','aim-pty-holder'],
  {cwd:aim,env:{...env,CARGO_NET_OFFLINE:'true',MACOSX_DEPLOYMENT_TARGET:'13.0',
   MACLAUNCHER_PRECISE_ARCHIVES:linked.join(path.delimiter),
   ...nativeRustPathEnvironment({source:aim,build:target,roots},env)},stdio:'inherit'});
@@ -39,5 +39,8 @@ export function buildArtRunner({aim,output,unicorn,precise,work,target,cargo='ca
  publishNativeBinary(path.join(target,'release/linux-run'),linuxRun);
  const binder=path.join(output,'host/aim-binderd');
  publishNativeBinary(path.join(target,'release/aim-binderd'),binder);
- return {linuxRun,binder,binderSenderIdentityVersion:1,runnerNotices:path.resolve(cpu.notices)};
+ const lockHolder=path.join(output,'host/aim-lock-holder'),ptyHolder=path.join(output,'host/aim-pty-holder');
+ publishNativeBinary(path.join(target,'release/aim-lock-holder'),lockHolder);
+ publishNativeBinary(path.join(target,'release/aim-pty-holder'),ptyHolder);
+ return {linuxRun,binder,lockHolder,ptyHolder,binderSenderIdentityVersion:1,runnerNotices:path.resolve(cpu.notices)};
 }

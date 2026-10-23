@@ -2,14 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {writeChanged} from '../native/upstream/source-files.mjs';
 
-/** procfs exposes the exact guest ELF auxiliary vector already owned by the
- * loader. Save it independently of writable stack memory, as Linux does. */
+/** Preserve the saved guest ELF auxiliary vector and process-owned descriptor
+ * views below the original procfs and authenticated process-agent interfaces. */
 export function prepareProcAuxv(aim){
  const root=path.join(aim,'crates/aim-linux-abi/src');
  const edit=(name,changes)=>{
   const file=path.join(root,name);let source=fs.readFileSync(file,'utf8');
   for(const[from,to]of changes){
-   if(source.split(from).length!==2)throw Error('AIM proc auxiliary-vector boundary changed: '+name);
+   if(source.split(from).length!==2)throw Error('AIM procfs source boundary changed: '+name+' '+from.slice(0,60));
    source=source.replace(from,to);
   }
   writeChanged(file,source);
@@ -48,6 +48,64 @@ pub(super) fn saved_auxv() -> Vec<u8> {
         "auxv" => Node::File(super::procrec::auxv(p)?),
         "cmdline" => Node::File(cmdline(p)),`],
  ]);
+ // Process-owned publication, including low native slots, is the authority for
+ // procfs and the authenticated agent's descriptor views (AIM 3136fe473714).
+ edit('sys/procfs.rs',[
+  ['pub(super) fn fd_link(fd: i32) -> Option<String> {\n    if !fdtab::is_hidden(fd) {if let Some(path)=fdtab::virtual_path(fd){return Some(path);}}\n    if fdtab::is_hidden(fd) {\n        return None;\n    }','pub(super) fn fd_link(fd: i32) -> Option<String> {\n    if !fdtab::visible(fd) { return None; }\n    if let Some(path)=fdtab::virtual_path(fd){return Some(path);}'],
+  ['            fdtab::open_fds()\n                .into_iter()\n                .filter(|&fd| !fdtab::is_hidden(fd))','            super::fd_visibility::visible()\n                .into_iter()'],
+  ['    if fd < 0 || fdtab::is_hidden(fd) { return Some(Err(ENOENT)); }','    if !fdtab::visible(fd) { return Some(Err(ENOENT)); }'],
+  ['        if fdtab::is_hidden(n) {','        if !fdtab::visible(n) {'],
+ ]);
+ edit('sys/ptrace/agent.rs',[[
+  '            let fds: Vec<i32> = fdtab::open_fds()\n                .into_iter()\n                .filter(|&fd| !fdtab::is_hidden(fd))\n                .collect();',
+  '            let fds = crate::sys::fd_visibility::visible();'
+ ]]);
+ edit('sys/procfs.rs',[[
+  '    #[test]\n    fn guest_argv_skips_linux_run_options() {',
+  `    #[test]
+    fn descriptor_views_follow_publication_and_reuse() {
+        if crate::sys::fdtab::isolated_kernel_test("sys::procfs::tests::descriptor_views_follow_publication_and_reuse") { return; }
+        use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+        let (_view, root) = crate::vfs::test_view();
+        crate::sys::fdtab::install_storage_registrar().unwrap();
+        let internal = std::fs::File::open("/dev/null").unwrap();
+        let private = internal.as_raw_fd();
+        assert!(!crate::sys::fdtab::is_hidden(private));
+        assert!(!crate::sys::fdtab::visible(private));
+        let names = || match super::pid_node(super::pid(), "fd", None).unwrap() {
+            super::Node::Dir(entries) => entries.into_iter().map(|entry| entry.name).collect::<Vec<_>>(),
+            _ => panic!("descriptor directory missing"),
+        };
+        let absent = |fd: i32| {
+            assert!(!names().contains(&fd.to_string().into_bytes()));
+            assert!(super::fd_link(fd).is_none());
+            let path = format!("/proc/self/fd/{fd}");
+            assert_eq!(super::current_fd_link(&path), Some(Err(crate::errno::ENOENT)));
+            assert_eq!(super::open(&path, 0, libc::O_RDONLY), Some(-(crate::errno::ENOENT as i64)));
+        };
+        absent(private);
+        std::fs::write(root.join("data/proc-fd-owner"), b"owned").unwrap();
+        let name = std::ffi::CString::new("/data/proc-fd-owner").unwrap();
+        let fd = crate::sys::fs::openat([crate::vfs::LINUX_AT_FDCWD as u64, name.as_ptr() as u64, 0, 0, 0, 0]);
+        assert!(fd >= 0);
+        let alias = crate::sys::fs::dup([fd as u64, 0, 0, 0, 0, 0]);
+        assert!(alias >= 0);
+        for target in [fd as i32, alias as i32] {
+            assert!(names().contains(&target.to_string().into_bytes()));
+            assert!(super::fd_link(target).is_some());
+            assert_eq!(super::current_fd_link(&format!("/proc/self/fd/{target}")), Some(Ok(target)));
+        }
+        assert_eq!(crate::sys::fs::close([fd as u64, 0, 0, 0, 0, 0]), 0);
+        assert_eq!(unsafe { libc::dup2(private, fd as i32) }, fd as i32);
+        let _reused = unsafe { OwnedFd::from_raw_fd(fd as i32) };
+        absent(fd as i32);
+        assert!(names().contains(&alias.to_string().into_bytes()));
+        assert_eq!(crate::sys::fs::close([alias as u64, 0, 0, 0, 0, 0]), 0);
+    }
+
+    #[test]
+    fn guest_argv_skips_linux_run_options() {`
+ ]]);
  edit('sys/procrec.rs',[
   ['    _pad: u64,','    auxv_len: AtomicU64,'],
   ['    let strings: &[u8] = if hi > lo {',`    // The table-to-string gap stores the immutable per-exec auxiliary vector.

@@ -686,6 +686,12 @@ ART pending-byte queries dispatch through the pinned Linux descriptor owner.
 Event and timer descriptors reject `FIONREAD` with `ENOTTY`; epoll uses the
 Android 16 kernel's `EINVAL` result for that unsupported request. Their native
 notification carriers do not expose transport bytes as application data.
+ART timer deadlines retain their selected Linux clock. Monotonic timers stop
+during Mac sleep; boottime and realtime timers count that interval. Relative
+realtime timers use monotonic deadlines, while absolute realtime timers track
+wall-clock changes and retain timerfd cancellation-on-set behavior. POSIX timer
+expiry and exec retirement share the existing timer owner; fork preserves each
+timer descriptor's clock and cancellation state.
 
 Native-thread retirement drains the original Bionic C++ thread-local destructor
 list before guest pthread storage and JVM detachment. Java-owned threads use
@@ -1001,6 +1007,14 @@ converted at that boundary; timed selection preserves Android's remaining-time
 result. ARM32 uses the existing generated signal-set and descriptor-set width
 conversion before entering the shared native implementation.
 
+The JVM uses Android BC for overlapping password-based Cipher, SecretKeyFactory
+and PKCS12 Mac services. The selected JDK retains its provider order, TLS policy
+and PBKDF2 implementations. A launch-time security supplement appends these
+algorithm preferences after configured preferences; explicit security-property
+files and disabled property overrides remain authoritative. Converted APK and
+dynamic DEX reflection preserve ordinary `Class.getDeclaredField` behavior while
+resolving Android's `FileDescriptor.descriptor` spelling to the same JDK descriptor.
+
 Process command-line reads through `/proc/self/cmdline` and the current Android
 process ID return the Android process name in NUL-terminated Linux argument
 format. Native and Java file operations share the same read-only snapshot.
@@ -1261,14 +1275,22 @@ capability bit remains clear because executable mappings are unguarded; CPU BTI
 instruction hints and other reported CPU capabilities are unchanged. Process and
 task paths share the same vector; fork inherits it and exec replaces it. Other
 guest processes read the saved bytes through the existing process record.
+Procfs descriptor directories, links and descriptor reopening use the process's
+published guest descriptors, including after fork. Host-only native descriptors
+and closed slots reused by host code remain outside those views. Authenticated
+remote descriptor inspection uses the same process-owned publication state.
 
 The supplier manifest records relative component paths and the Android image
 identity. The Android payload contract `artExecutionVersion: 1` selects a supplied
 ART entry; the declaration is independent of the JVM's conversion contracts.
-The optional `ptyHolder` component maps to `host/aim-pty-holder`, beside
-`host/linux-run`, following AIM's original host-node dependency declaration in
-`crates/aim-build/src/cargo.rs`. Original Linux terminal operations start that native owner
-through the runner's sibling path; its process records remain in private session
+The runner producer builds `linux-run`, `aim-binderd`, `aim-lock-holder` and
+`aim-pty-holder` from the same prepared source. The `lockHolder` and `ptyHolder`
+components map to their corresponding paths beside `host/linux-run`, following
+AIM's original host-node dependency declaration in `crates/aim-build/src/cargo.rs`.
+Original Linux lock and terminal operations start those native owners through
+the runner's sibling paths. Helpers close inherited descriptors above stdio
+before acquiring their own resources, so unrelated pipes and files retain their
+original final-close behavior. Their process records remain in private session
 state outside the guest filesystem.
 APK code generations include their execution format, while installation identity
 and private application data retain the same storage owners.

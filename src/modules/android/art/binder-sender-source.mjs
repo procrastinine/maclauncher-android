@@ -31,7 +31,7 @@ const sources=[
   {
     "path": "crates/aim-binder-host/src/server.rs",
     "beforeSha256": "70f140440c2b0ec454f12e90a2eefc37093a799d3404093afe855cd734ce15b7",
-    "sha256": "5ceca6ad53847567a6746ce1e89d4d46703a9ea9cca4cdbea0c12e5cbd6c568c"
+    "sha256": "341c0892fbdd568e788a4e6907fa279d525a3774d6ae7fff0791edb56d0bba4b"
   },
   {
     "path": "crates/aim-binder-host/src/bin/aim-binderd.rs",

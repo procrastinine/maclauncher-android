@@ -371,6 +371,7 @@ function auditNative(directory){for(const entry of fs.readdirSync(directory,{wit
   nativeDependencies.push({path:path.relative(output,file),dependencies});
 }}
 auditNative(native);
+fs.copyFileSync(path.join(root,'resources/java-security.properties'),path.join(output,'java-security.properties'));
 buildHostArchive({root,output,build,hostClasses,frameworkTool,frameworkInput:framework.input.file,asmClasspath,java,jar});
 const {apiHeaders}=await buildConverter({root,build,output,jdk:options.jdk,checkout:options.converter,apksig:apksig.file,asmClasspath});
 run(java,['-cp',[frameworkTool,asmClasspath].join(path.delimiter),'ConversionHeaders',path.join(output,'android-api-metadata.jar'),path.join(output,'android-host.jar'),path.join(output,'android-framework.jar'),apiHeaders]);

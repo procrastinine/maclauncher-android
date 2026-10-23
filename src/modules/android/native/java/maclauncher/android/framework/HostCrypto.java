@@ -5,7 +5,9 @@ import com.android.internal.org.bouncycastle.jce.provider.BouncyCastleProvider;
 import com.android.org.conscrypt.OpenSSLProvider;
 import com.android.org.conscrypt.JSSEProvider;
 
-/** Adds the supplied Android Java algorithms alongside the JVM's native providers. */
+/** Adds the supplied Android Java algorithms alongside the JVM's native providers.
+ * Algorithm preferences come from the launch-time java.security supplement,
+ * before the JDK constructs its provider list; registration retains its order. */
 public final class HostCrypto {
     private HostCrypto(){}
     public static synchronized void initialize(){

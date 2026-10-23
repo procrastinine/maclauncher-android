@@ -1,3 +1,4 @@
+diff --git a/crates/aim-linux-abi/src/sys/exec.rs b/crates/aim-linux-abi/src/sys/exec.rs
 --- a/crates/aim-linux-abi/src/sys/exec.rs
 +++ b/crates/aim-linux-abi/src/sys/exec.rs
 @@ -333,7 +333,6 @@
@@ -24,21 +25,43 @@
              if let Err(error)=super::fs::close_on_exec(){crate::diag!("[linux-abi] exec descriptor close: errno {error}");super::signal::die(SIGSEGV)}
              // is_live above proves this is the calling thread's bound context.
              // Its host_sp was installed when the thread first entered guest
+diff --git a/crates/aim-linux-abi/src/sys/ptimer.rs b/crates/aim-linux-abi/src/sys/ptimer.rs
 --- a/crates/aim-linux-abi/src/sys/ptimer.rs
 +++ b/crates/aim-linux-abi/src/sys/ptimer.rs
-@@ -50,16 +50,36 @@
+@@ -13,7 +13,7 @@
+
+ use std::sync::{Mutex, MutexGuard};
+
+-use super::clock::{self, Base};
++use super::clock::{self, Base, Deadline};
+ use super::park::{self, PTIMER_EXPIRY};
+ use super::sigframe::Siginfo;
+ use crate::errno::{EINVAL, ENOMEM};
+@@ -37,8 +37,10 @@
+     value: u64,
+     /// The SIGEV_THREAD_ID target.
+     tid: Option<i32>,
+-    /// Monotonic deadline of the next expiry; 0 when disarmed.
++    /// The next expiry on `clock`; 0 when disarmed.
+     next: u64,
++    /// `base` as the last setting runs it ([`Base::timer`]).
++    clock: Base,
+     interval: u64,
+     /// Expiries not signalled while the signal was queued.
+     overrun: u64,
+@@ -50,19 +52,39 @@
  }
- 
+
  static TIMERS: Mutex<Vec<Timer>> = Mutex::new(Vec::new());
 +// An expiry delivers and rearms outside TIMERS. Exec waits for that whole
 +// operation before draining its owners, so no pre-exec callback can publish
 +// another signal or kernel timer after the successful image commit.
 +static EXPIRY: Mutex<()> = Mutex::new(());
- 
+
  fn timers() -> MutexGuard<'static, Vec<Timer>> {
      TIMERS.lock().unwrap_or_else(|e| e.into_inner())
  }
- 
+
 -/// Whether the process has a timer.
 -pub fn any() -> bool {
 -    !timers().is_empty()
@@ -48,8 +71,8 @@
 +
 +pub(super) fn exec_quiesce() -> ExecTimers {
 +    ExecTimers(EXPIRY.lock().unwrap_or_else(|e| e.into_inner()))
- }
- 
++}
++
 +impl ExecTimers {
 +    /// Successful exec deletes POSIX timers before exposing the CLOEXEC commit.
 +    pub(super) fn commit(self) {
@@ -61,22 +84,114 @@
 +        }
 +        drop(self.0);
 +    }
-+}
-+
+ }
+
  /// Arm the kqueue for `id`'s deadline `next` (outside the table lock: the
  /// timer kqueue's lock is taken before this one across a fork).
- fn arm(id: i32, ident: u64, next: u64) {
-@@ -96,6 +116,9 @@
- 
+-fn arm(id: i32, ident: u64, next: u64) {
++fn arm(id: i32, ident: u64, next: Deadline) {
+     let Some(kq) = park::arm_event(ident, PTIMER_EXPIRY, next) else {
+         return;
+     };
+@@ -96,13 +118,16 @@
+
  /// The timer thread: the kqueue event `ident` fired.
  pub fn expired(ident: u64) {
+-    let now = park::monotonic();
 +    let _expiry = EXPIRY.lock().unwrap_or_else(|e| e.into_inner());
 +    #[cfg(test)]
 +    tests::pause_expiry();
-     let now = park::monotonic();
      let (info, tid, rearm) = {
          let mut t = timers();
-@@ -303,8 +326,53 @@
+         let Some(tm) = t.iter_mut().find(|t| t.armed.is_some_and(|a| a.1 == ident)) else {
+             return;
+         };
+-        // Zero leeway fires on time; the monotonic clock may lag slightly.
++        // Zero leeway fires on time; the timer's clock may lag slightly.
++        let now = tm.clock.now();
+         let (n, next) = advance(tm.next, tm.interval, now.max(tm.next));
+         tm.next = next;
+         tm.armed = None;
+@@ -123,6 +148,10 @@
+         let rearm = (next != 0).then(|| {
+             let ident = park::timer_id();
+             tm.armed = Some((-1, ident));
++            let next = Deadline {
++                base: tm.clock,
++                ns: next,
++            };
+             (tm.id, ident, next)
+         });
+         (info, tm.tid, rearm)
+@@ -200,6 +229,7 @@
+         value: value.unwrap_or(id as u64),
+         tid: target.flatten(),
+         next: 0,
++        clock: base,
+         interval: 0,
+         overrun: 0,
+         overrun_last: 0,
+@@ -211,8 +241,9 @@
+     0
+ }
+
+-/// `struct itimerspec` { it_interval, it_value } of `tm` at `now`.
+-fn itimerspec(tm: &Timer, now: u64) -> [u64; 2] {
++/// `struct itimerspec` { it_interval, it_value } of `tm` now.
++fn itimerspec(tm: &Timer) -> [u64; 2] {
++    let now = tm.clock.now();
+     let (_, next) = advance(tm.next, tm.interval, now);
+     let left = if next == 0 {
+         0
+@@ -234,27 +265,32 @@
+         (Ok(i), Ok(v)) => (i, v),
+         _ => return -(EINVAL as i64),
+     };
+-    let now = park::monotonic();
+     let (prev, rearm) = {
+         let mut t = timers();
+         let Some(tm) = t.iter_mut().find(|t| t.id == id) else {
+             return -(EINVAL as i64);
+         };
+         if old != 0 {
+-            write_itimerspec(old, itimerspec(tm, now));
+-        }
++            write_itimerspec(old, itimerspec(tm));
++        }
++        let absolute = flags & TIMER_ABSTIME != 0;
+         tm.interval = interval;
++        tm.clock = tm.base.timer(absolute);
+         tm.next = match value {
+             0 => 0,
+-            v if flags & TIMER_ABSTIME == 0 => now.saturating_add(v),
+-            v => tm.base.deadline(v).max(1),
++            v if !absolute => tm.clock.now().saturating_add(v),
++            v => v.max(1),
+         };
+         tm.overrun = 0;
+         let prev = tm.armed.take();
+         let rearm = (tm.next != 0 && tm.signo.is_some()).then(|| {
+             let ident = park::timer_id();
+             tm.armed = Some((-1, ident));
+-            (ident, tm.next)
++            let next = Deadline {
++                base: tm.clock,
++                ns: tm.next,
++            };
++            (ident, next)
+         });
+         (prev, rearm)
+     };
+@@ -273,7 +309,7 @@
+     let Some(tm) = t.iter().find(|t| t.id == a[0] as i32) else {
+         return -(EINVAL as i64);
+     };
+-    write_itimerspec(a[1], itimerspec(tm, park::monotonic()));
++    write_itimerspec(a[1], itimerspec(tm));
+     0
+ }
+
+@@ -303,6 +339,51 @@
  #[cfg(test)]
  mod tests {
      use super::*;
@@ -92,8 +207,8 @@
 +            release.recv_timeout(Duration::from_secs(2)).unwrap();
 +        }
 +    }
- 
-     #[test]
++
++    #[test]
 +    fn exec_waits_for_active_kernel_expiry_and_deletes_its_rearm() {
 +        super::super::fdtab::init();
 +        exec_quiesce().commit();
@@ -125,14 +240,13 @@
 +        std::thread::sleep(Duration::from_millis(20));
 +        assert!(timers().is_empty());
 +    }
-+
-+    #[test]
+
+     #[test]
      fn expirations_and_overruns() {
-         assert_eq!(advance(0, 10, 100), (0, 0));
-         assert_eq!(advance(100, 0, 99), (0, 100));
+diff --git a/crates/aim-linux-abi/src/sys/fdtab.rs b/crates/aim-linux-abi/src/sys/fdtab.rs
 --- a/crates/aim-linux-abi/src/sys/fdtab.rs
 +++ b/crates/aim-linux-abi/src/sys/fdtab.rs
-@@ -896,8 +896,12 @@
+@@ -900,8 +900,12 @@
              let fl = libc::fcntl(fd, libc::F_GETFL);
              libc::fcntl(fd, libc::F_SETFL, fl | libc::O_NONBLOCK);
          }
@@ -147,6 +261,7 @@
          }
      }
  }
+diff --git a/crates/aim-linux-abi/src/sys/fs.rs b/crates/aim-linux-abi/src/sys/fs.rs
 --- a/crates/aim-linux-abi/src/sys/fs.rs
 +++ b/crates/aim-linux-abi/src/sys/fs.rs
 @@ -1438,7 +1438,16 @@
@@ -167,3 +282,971 @@
      let pin=match fdtab::pin_guest(original){Ok(pin)=>pin,Err(error)=>return -(error as i64)};
      use std::os::fd::AsRawFd;let fd=pin.descriptor().as_raw_fd();
      if let Some(Kind::Path(path)) = fdtab::get(fd) {
+diff --git a/crates/aim-linux-abi/src/sys/clock.rs b/crates/aim-linux-abi/src/sys/clock.rs
+--- a/crates/aim-linux-abi/src/sys/clock.rs
++++ b/crates/aim-linux-abi/src/sys/clock.rs
+@@ -17,8 +17,8 @@
+ //! MONOTONIC, BOOTTIME and REALTIME reads without a syscall, from the same
+ //! sources and with the same arithmetic.
+ //!
+-//! Timers and sleeps keep their deadlines on the monotonic clock
+-//! ([`Base::deadline`]).
++//! Timers and sleeps keep their deadlines on their own clock
++//! ([`Deadline`]).
+
+ use aim_hostcall::clock::{boottime_ns, monotonic_ns, ticks_to_ns};
+
+@@ -71,12 +71,18 @@
+         }) as u64
+     }
+
+-    /// An absolute time on this clock as a monotonic deadline. A REALTIME
+-    /// or BOOTTIME deadline is converted once, when it is set.
+-    pub fn deadline(self, ns: u64) -> u64 {
++    /// Whether the clock runs on while the Mac sleeps.
++    pub fn counts_sleep(self) -> bool {
++        self != Base::Monotonic
++    }
++
++    /// The clock a timer set on this one runs on: `__hrtimer_init` moves a
++    /// relative REALTIME timer to MONOTONIC, so a wall-clock step does not
++    /// move it.
++    pub fn timer(self, absolute: bool) -> Base {
+         match self {
+-            Base::Monotonic => ns,
+-            _ => (monotonic_ns() as u64).saturating_add(ns.saturating_sub(self.now())),
++            Base::Realtime if !absolute => Base::Monotonic,
++            b => b,
+         }
+     }
+
+@@ -87,6 +93,34 @@
+
+     pub fn from_index(i: u32) -> Base {
+         [Base::Realtime, Base::Monotonic, Base::Boottime][i.min(2) as usize]
++    }
++}
++
++/// A time a timer or sleep waits for, kept on its own clock as an hrtimer
++/// is on its clock's base: a BOOTTIME or REALTIME deadline passes while
++/// the Mac sleeps, and a MONOTONIC one does not.
++#[derive(Clone, Copy, PartialEq, Eq, Debug)]
++pub struct Deadline {
++    pub base: Base,
++    pub ns: u64,
++}
++
++impl Deadline {
++    /// `ns` from now on `base`.
++    pub fn after(base: Base, ns: u64) -> Deadline {
++        Deadline {
++            base,
++            ns: base.now().saturating_add(ns),
++        }
++    }
++
++    /// The time left, 0 once it has passed.
++    pub fn left(self) -> u64 {
++        self.ns.saturating_sub(self.base.now())
++    }
++
++    pub fn passed(self) -> bool {
++        self.left() == 0
+     }
+ }
+
+@@ -370,3 +404,38 @@
+     }
+     0
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    /// A relative REALTIME timer runs on MONOTONIC; every other setting
++    /// keeps its clock, and only MONOTONIC stops while the Mac sleeps.
++    #[test]
++    fn timers_run_on_their_own_clock() {
++        assert_eq!(Base::Realtime.timer(false), Base::Monotonic);
++        assert_eq!(Base::Realtime.timer(true), Base::Realtime);
++        for absolute in [false, true] {
++            assert_eq!(Base::Monotonic.timer(absolute), Base::Monotonic);
++            assert_eq!(Base::Boottime.timer(absolute), Base::Boottime);
++        }
++        assert!(!Base::Monotonic.counts_sleep());
++        assert!(Base::Boottime.counts_sleep() && Base::Realtime.counts_sleep());
++    }
++
++    /// A deadline is counted down on its own clock, not converted to
++    /// another one.
++    #[test]
++    fn a_deadline_stays_on_its_clock() {
++        for base in [Base::Realtime, Base::Monotonic, Base::Boottime] {
++            let d = Deadline::after(base, 3_600_000_000_000);
++            assert!(!d.passed());
++            assert!(d.left() <= 3_600_000_000_000 && d.left() > 3_599_000_000_000);
++            let now = Deadline {
++                base,
++                ns: base.now(),
++            };
++            assert!(now.passed());
++        }
++    }
++}
+diff --git a/crates/aim-linux-abi/src/sys/event.rs b/crates/aim-linux-abi/src/sys/event.rs
+--- a/crates/aim-linux-abi/src/sys/event.rs
++++ b/crates/aim-linux-abi/src/sys/event.rs
+@@ -13,12 +13,12 @@
+ //!   the token. Timer settings are per process.
+
+ use std::sync::atomic::{AtomicI32, Ordering};
+-use std::sync::{Arc, Condvar, Mutex, Weak};
+-use std::time::Duration;
+-
+-use super::clock::{self, Base};
++use std::sync::{Arc, Mutex, OnceLock, Weak};
++
++use super::clock::{self, Base, Deadline};
+ use super::fdtab::{self, Kind};
+ use crate::errno::{self, EAGAIN, EBADF, EINVAL, EPERM};
++const ECANCELED: crate::errno::Errno = 125;
+
+ static TRACE_EVENT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+ fn trace_event(fd: i32, operation: &str, value: u64, semaphore: bool) {
+@@ -192,17 +192,19 @@
+ const TFD_TIMER_ABSTIME: u64 = 1;
+ const TFD_TIMER_CANCEL_ON_SET: u64 = 2;
+
+-fn mono() -> u64 {
+-    Base::Monotonic.now()
+-}
+-
+-#[derive(Default)]
+ struct TimerState {
+-    /// Monotonic deadline of the next expiration; 0 when disarmed.
++    /// The next expiration on `clock`; 0 when disarmed.
+     next: u64,
++    /// The timer's clock as the last setting runs it ([`Base::timer`]).
++    clock: Base,
+     interval: u64,
+     /// A token record is in the socket.
+     token: bool,
++    /// `might_cancel`: an absolute realtime timer set with
++    /// TFD_TIMER_CANCEL_ON_SET.
++    cancel_on_set: bool,
++    /// The wall clock was set since; the next read fails with ECANCELED.
++    canceled: bool,
+ }
+
+ pub struct TimerFd {
+@@ -217,65 +219,125 @@
+     }
+ }
+
+-struct Timers {
+-    list: Mutex<(bool, Vec<Weak<TimerFd>>)>,
+-    wake: Condvar,
+-}
+-
+-static TIMERS: Timers = Timers {
+-    list: Mutex::new((false, Vec::new())),
+-    wake: Condvar::new(),
+-};
+-
+-/// The timer thread: sends a token for each timer that expired and has none.
+-fn timer_thread() {
+-    let mut g = TIMERS.list.lock().unwrap();
+-    loop {
+-        g.1.retain(|w| w.strong_count() > 0);
+-        let now = mono();
+-        let mut earliest = u64::MAX;
+-        for t in g.1.iter().filter_map(Weak::upgrade) {
+-            let mut s = t.state.lock().unwrap();
+-            if s.next == 0 || s.token {
+-                continue;
++static TIMERS: Mutex<Vec<Weak<TimerFd>>> = Mutex::new(Vec::new());
++
++/// The timer kqueue's events for the earliest expiry on a clock that stops
++/// while the Mac sleeps and on one that does not.
++static WAKES: OnceLock<[u64; 2]> = OnceLock::new();
++
++/// Sends a token for each timer that expired and has none, and arms the
++/// timer kqueue for the earliest expiry yet to come on each kind of clock.
++/// An event that is no longer the earliest fires to no effect.
++fn rearm() {
++    let wakes = WAKES.get_or_init(|| [super::park::timer_id(), super::park::timer_id()]);
++    let mut g = TIMERS.lock().unwrap_or_else(|e| e.into_inner());
++    g.retain(|w| w.strong_count() > 0);
++    let mut earliest: [Option<Deadline>; 2] = [None; 2];
++    for t in g.iter().filter_map(Weak::upgrade) {
++        let s = &mut *t.state.lock().unwrap_or_else(|e| e.into_inner());
++        if s.next == 0 || s.token {
++            continue;
++        }
++        let d = Deadline {
++            base: s.clock,
++            ns: s.next,
++        };
++        if d.passed() {
++            s.token = send_record(t.peer.load(Ordering::Relaxed), 1);
++            continue;
++        }
++        let e = &mut earliest[d.base.counts_sleep() as usize];
++        if e.is_none_or(|e| d.left() < e.left()) {
++            *e = Some(d);
++        }
++    }
++    // The timer kqueue's lock is a leaf: taking it under this one is safe.
++    for (id, d) in wakes.iter().zip(earliest) {
++        if let Some(d) = d {
++            super::park::arm_event(*id, super::park::TIMERFD_EXPIRY, d);
++        }
++    }
++}
++
++/// The timer kqueue: a timerfd expiry fired.
++pub fn timerfd_expired() {
++    rearm();
++}
++
++/// `clock_was_set`: the Mac's wall clock was set. Each absolute realtime
++/// timer is armed again for its expiration, and each timer that might
++/// cancel is cancelled and made readable.
++fn clock_was_set() {
++    let g = TIMERS.lock().unwrap_or_else(|e| e.into_inner());
++    for t in g.iter().filter_map(Weak::upgrade) {
++        let mut s = t.state.lock().unwrap();
++        if s.cancel_on_set && !s.canceled {
++            s.canceled = true;
++            if !s.token {
++                s.token = send_record(t.peer.load(Ordering::Relaxed), 1);
+             }
+-            if s.next <= now {
+-                s.token = send_record(t.peer.load(Ordering::Relaxed), 1);
+-            } else {
+-                earliest = earliest.min(s.next);
++        }
++    }
++    drop(g);
++    rearm();
++}
++
++/// Whether the clock-set watcher runs in this process.
++static WATCHING: Mutex<bool> = Mutex::new(false);
++
++/// Starts following the Mac's wall clock: notifyd posts
++/// `com.apple.system.clock_set` (`kNotifyClockSet`) when it is set.
++fn watch_clock() {
++    let mut watching = WATCHING.lock().unwrap_or_else(|e| e.into_inner());
++    if *watching {
++        return;
++    }
++    unsafe extern "C" {
++        fn notify_register_file_descriptor(
++            name: *const libc::c_char,
++            notify_fd: *mut i32,
++            flags: i32,
++            out_token: *mut i32,
++        ) -> u32;
++    }
++    let (mut fd, mut token) = (-1, 0);
++    // SAFETY: a NUL-terminated name and two out-parameters on our stack.
++    let status = unsafe {
++        notify_register_file_descriptor(
++            c"com.apple.system.clock_set".as_ptr(),
++            &mut fd,
++            0,
++            &mut token,
++        )
++    };
++    if status != 0 {
++        crate::diag!("timerfd: clock_set notification: status {status}");
++        return;
++    }
++    // The pipe notifyd writes each posted token to, out of the guest's way.
++    let fd = fdtab::hide(fd);
++    *watching = std::thread::Builder::new()
++        .name("linux-abi-clock-set".into())
++        .spawn(move || {
++            let mut posted = [0u8; 4];
++            // SAFETY: reading into a buffer of its size.
++            while unsafe { libc::read(fd, posted.as_mut_ptr().cast(), posted.len()) } == 4 {
++                clock_was_set();
+             }
+-        }
+-        g = if earliest == u64::MAX {
+-            TIMERS.wake.wait(g).unwrap()
+-        } else {
+-            TIMERS
+-                .wake
+-                .wait_timeout(g, Duration::from_nanos(earliest - now))
+-                .unwrap()
+-                .0
+-        };
+-    }
++        })
++        .is_ok();
+ }
+
+ fn register(t: &Arc<TimerFd>) {
+-    let mut g = TIMERS.list.lock().unwrap();
+-    g.1.push(Arc::downgrade(t));
+-    if !g.0 {
+-        g.0 = true;
+-        std::thread::spawn(timer_thread);
+-    }
+-}
+-
+-/// Wake the timer thread to recompute its deadline. Taking the lock first
+-/// means the thread is either waiting or will see the new state.
+-fn poke() {
+-    drop(TIMERS.list.lock().unwrap());
+-    TIMERS.wake.notify_all();
++    let mut g = TIMERS.lock().unwrap();
++    g.push(Arc::downgrade(t));
+ }
+
+ /// Fork: an eventfd is its hidden peer (inherited) and its mode.
+ pub(super) fn save_event(e: &EventFd, w: &mut super::fork_state::Writer) {
+-    let peer=e.peer.load(Ordering::Relaxed);w.retain_private(peer);w.i32(peer);
++    let peer = e.peer.load(Ordering::Relaxed);
++    w.retain_private(peer);
++    w.i32(peer);
+     w.bool(e.semaphore);
+ }
+
+@@ -291,12 +353,17 @@
+ /// Fork: a timerfd is its hidden peer and its settings (Linux children
+ /// share the timer with the parent; here each process has a copy).
+ pub(super) fn save_timer(t: &TimerFd, w: &mut super::fork_state::Writer) {
+-    let peer=t.peer.load(Ordering::Relaxed);w.retain_private(peer);w.i32(peer);
++    let peer = t.peer.load(Ordering::Relaxed);
++    w.retain_private(peer);
++    w.i32(peer);
+     w.u32(t.base.index());
+     let s = t.state.lock().unwrap();
+     w.u64(s.next);
++    w.u32(s.clock.index());
+     w.u64(s.interval);
+     w.bool(s.token);
++    w.bool(s.cancel_on_set);
++    w.bool(s.canceled);
+ }
+
+ pub(super) fn load_timer(r: &mut super::fork_state::Reader) -> Arc<TimerFd> {
+@@ -304,29 +371,42 @@
+     let base = Base::from_index(r.u32());
+     let state = TimerState {
+         next: r.u64(),
++        clock: Base::from_index(r.u32()),
+         interval: r.u64(),
+         token: r.bool(),
++        cancel_on_set: r.bool(),
++        canceled: r.bool(),
+     };
+     let t = Arc::new(TimerFd {
+         peer: AtomicI32::new(peer),
+         base,
+         state: Mutex::new(state),
+     });
+-    TIMERS.list.lock().unwrap().1.push(Arc::downgrade(&t));
++    TIMERS.lock().unwrap().push(Arc::downgrade(&t));
+     t
+ }
+
+-/// Fork child: the timer thread did not survive.
++/// Fork child: the timer kqueue and the clock-set watcher did not survive.
+ pub fn after_fork_child() {
+-    let mut g = TIMERS.list.lock().unwrap_or_else(|e| e.into_inner());
+-    g.0 = !g.1.is_empty();
+-    if g.0 {
+-        std::thread::spawn(timer_thread);
++    *WATCHING.lock().unwrap_or_else(|e| e.into_inner()) = false;
++    let follows_clock = TIMERS
++        .lock()
++        .unwrap_or_else(|e| e.into_inner())
++        .iter()
++        .filter_map(Weak::upgrade)
++        .any(|t| {
++            let s = t.state.lock().unwrap_or_else(|e| e.into_inner());
++            (s.next != 0 && s.clock == Base::Realtime) || s.cancel_on_set
++        });
++    rearm();
++    if follows_clock {
++        watch_clock();
+     }
+ }
+
+ impl TimerFd {
+-    /// Expirations since the last read, advancing the deadline.
++    /// Expirations by `now` on the timer's clock since the last read,
++    /// advancing the deadline.
+     fn take_expirations(s: &mut TimerState, now: u64) -> u64 {
+         if s.next == 0 || now < s.next {
+             return 0;
+@@ -347,12 +427,24 @@
+         loop {
+             {
+                 let mut s = self.state.lock().unwrap();
+-                let n = Self::take_expirations(&mut s, mono());
++                let now = s.clock.now();
++                // `timerfd_canceled`: the cancellation is reported once,
++                // and the expirations so far go with it.
++                if s.canceled {
++                    s.canceled = false;
++                    Self::take_expirations(&mut s, now);
++                    drain(fd);
++                    s.token = false;
++                    drop(s);
++                    rearm();
++                    return -(ECANCELED as i64);
++                }
++                let n = Self::take_expirations(&mut s, now);
+                 if n > 0 {
+                     drain(fd);
+                     s.token = false;
+                     drop(s);
+-                    poke();
++                    rearm();
+                     // SAFETY: guest buffer of at least 8 bytes.
+                     unsafe { (buf as *mut u64).write_unaligned(n) };
+                     return 8;
+@@ -387,12 +479,22 @@
+     let t = Arc::new(TimerFd {
+         peer: AtomicI32::new(peer),
+         base,
+-        state: Mutex::new(TimerState::default()),
++        state: Mutex::new(TimerState {
++            next: 0,
++            clock: base,
++            interval: 0,
++            token: false,
++            cancel_on_set: false,
++            canceled: false,
++        }),
+     });
+     register(&t);
+     fdtab::insert(fd, Kind::Timer(t));
+     if let Err(error) = fdtab::publish_guest(fd) {
+-        fdtab::on_close(fd); unsafe { libc::close(fd); }
++        fdtab::on_close(fd);
++        unsafe {
++            libc::close(fd);
++        }
+         return -(error as i64);
+     }
+     fd as i64
+@@ -442,24 +544,33 @@
+     let (Some(interval), Some(value)) = (ns_of([v[0], v[1]]), ns_of([v[2], v[3]])) else {
+         return -(EINVAL as i64);
+     };
+-    let now = mono();
+     let mut s = t.state.lock().unwrap();
+     if old != 0 {
++        let now = s.clock.now();
+         // SAFETY: guest struct itimerspec.
+         unsafe { (old as *mut [i64; 4]).write_unaligned(current(&s, now)) };
+     }
++    let absolute = flags & TFD_TIMER_ABSTIME != 0;
++    let absolute_realtime = t.base == Base::Realtime && absolute;
++    // `timerfd_setup_cancel`.
++    s.cancel_on_set = absolute_realtime && flags & TFD_TIMER_CANCEL_ON_SET != 0;
++    s.canceled = false;
+     s.interval = interval;
++    s.clock = t.base.timer(absolute);
+     s.next = if value == 0 {
+         0
+-    } else if flags & TFD_TIMER_ABSTIME == 0 {
+-        now + value
++    } else if !absolute {
++        s.clock.now() + value
+     } else {
+-        t.base.deadline(value).max(1)
++        value.max(1)
+     };
+     drain(fd);
+     s.token = false;
+     drop(s);
+-    poke();
++    if absolute_realtime {
++        watch_clock();
++    }
++    rearm();
+     0
+ }
+
+@@ -470,7 +581,7 @@
+     };
+     let s = t.state.lock().unwrap();
+     // SAFETY: guest struct itimerspec.
+-    unsafe { (a[1] as *mut [i64; 4]).write_unaligned(current(&s, mono())) };
++    unsafe { (a[1] as *mut [i64; 4]).write_unaligned(current(&s, s.clock.now())) };
+     0
+ }
+
+@@ -514,26 +625,170 @@
+     use super::*;
+     #[test]
+     fn actual_typed_producers_publish_guest_ends_and_keep_peers_private() {
+-        let event=eventfd2([0,O_CLOEXEC,0,0,0,0]);assert!(event>=0,"eventfd {event}");
+-        let peer=match fdtab::get(event as i32){Some(Kind::Event(value))=>value.peer.load(Ordering::Relaxed),_=>panic!("event description missing")};
+-        assert!(fdtab::visible(event as i32));assert!(!fdtab::visible(peer));assert!(fdtab::is_hidden(peer));
+-        let timer=timerfd_create([1,O_CLOEXEC,0,0,0,0]);assert!(timer>=0,"timerfd {timer}");
+-        let timer_peer=match fdtab::get(timer as i32){Some(Kind::Timer(value))=>value.peer.load(Ordering::Relaxed),_=>panic!("timer description missing")};
+-        assert!(fdtab::visible(timer as i32));assert!(!fdtab::visible(timer_peer));
+-        let epoll=super::super::epoll::epoll_create1([O_CLOEXEC,0,0,0,0,0]);assert!(epoll>=0,"epoll {epoll}");
+-        let inotify=super::super::inotify::inotify_init1([O_CLOEXEC,0,0,0,0,0]);assert!(inotify>=0,"inotify {inotify}");
+-        let name=std::ffi::CString::new("typed-publication").unwrap();
+-        let memfd=super::super::memfd::memfd_create([name.as_ptr() as u64,1,0,0,0,0]);assert!(memfd>=0,"memfd {memfd}");
+-        let ashmem=super::super::ashmem::open("/dev/ashmem",O_CLOEXEC).unwrap();assert!(ashmem>=0,"ashmem {ashmem}");
+-        let pidfd=super::super::wait::open_pidfd(unsafe{libc::getpid()},false);assert!(pidfd>=0,"pidfd {pidfd}");
+-        let content=super::super::procfs::content_fd(b"native content",true);assert!(content>=0);
+-        let knob=super::super::knob::open(b"native knob",true,|_|Ok(None));assert!(knob>=0);
+-        assert!(matches!(fdtab::get(knob as i32),Some(Kind::Knob(_))));
+-        for fd in [event,timer,epoll,inotify,memfd,ashmem,pidfd,content,knob]{
++        // A closed number is asserted vacant, which only this process's own
++        // descriptors can keep true: tests on other threads open them too.
++        if fdtab::isolated_kernel_test(
++            "sys::event::publication_tests::actual_typed_producers_publish_guest_ends_and_keep_peers_private",
++        ) {
++            return;
++        }
++        // Publication reaches the guest's view; set it up, as the other
++        // publication tests do, instead of finding one another test made.
++        let _view = crate::vfs::test_view();
++        let event = eventfd2([0, O_CLOEXEC, 0, 0, 0, 0]);
++        assert!(event >= 0, "eventfd {event}");
++        let peer = match fdtab::get(event as i32) {
++            Some(Kind::Event(value)) => value.peer.load(Ordering::Relaxed),
++            _ => panic!("event description missing"),
++        };
++        assert!(fdtab::visible(event as i32));
++        assert!(!fdtab::visible(peer));
++        assert!(fdtab::is_hidden(peer));
++        let timer = timerfd_create([1, O_CLOEXEC, 0, 0, 0, 0]);
++        assert!(timer >= 0, "timerfd {timer}");
++        let timer_peer = match fdtab::get(timer as i32) {
++            Some(Kind::Timer(value)) => value.peer.load(Ordering::Relaxed),
++            _ => panic!("timer description missing"),
++        };
++        assert!(fdtab::visible(timer as i32));
++        assert!(!fdtab::visible(timer_peer));
++        let epoll = super::super::epoll::epoll_create1([O_CLOEXEC, 0, 0, 0, 0, 0]);
++        assert!(epoll >= 0, "epoll {epoll}");
++        let inotify = super::super::inotify::inotify_init1([O_CLOEXEC, 0, 0, 0, 0, 0]);
++        assert!(inotify >= 0, "inotify {inotify}");
++        let name = std::ffi::CString::new("typed-publication").unwrap();
++        let memfd = super::super::memfd::memfd_create([name.as_ptr() as u64, 1, 0, 0, 0, 0]);
++        assert!(memfd >= 0, "memfd {memfd}");
++        let ashmem = super::super::ashmem::open("/dev/ashmem", O_CLOEXEC).unwrap();
++        assert!(ashmem >= 0, "ashmem {ashmem}");
++        let pidfd = super::super::wait::open_pidfd(unsafe { libc::getpid() }, false);
++        assert!(pidfd >= 0, "pidfd {pidfd}");
++        let content = super::super::procfs::content_fd(b"native content", true);
++        assert!(content >= 0);
++        let knob = super::super::knob::open(b"native knob", true, |_| Ok(None));
++        assert!(knob >= 0);
++        assert!(matches!(fdtab::get(knob as i32), Some(Kind::Knob(_))));
++        for fd in [
++            event, timer, epoll, inotify, memfd, ashmem, pidfd, content, knob,
++        ] {
+             assert!(fdtab::visible(fd as i32));
+-            assert_eq!(fdtab::SLOW[fd as usize].load(Ordering::Relaxed),1);
+-            assert_eq!(super::super::fs::close([fd as u64,0,0,0,0,0]),0);
++            assert_eq!(fdtab::SLOW[fd as usize].load(Ordering::Relaxed), 1);
++            assert_eq!(super::super::fs::close([fd as u64, 0, 0, 0, 0, 0]), 0);
+             assert!(!fdtab::visible(fd as i32));
+         }
+     }
+ }
++
++#[cfg(test)]
++mod clock_set_tests {
++    use super::*;
++
++    fn set(fd: i64, flags: u64, value_ns: u64) -> i64 {
++        let spec = [
++            0i64,
++            0,
++            (value_ns / 1_000_000_000) as i64,
++            (value_ns % 1_000_000_000) as i64,
++        ];
++        timerfd_settime([fd as u64, flags, spec.as_ptr() as u64, 0, 0, 0])
++    }
++
++    fn read_once(fd: i64) -> i64 {
++        let mut n = 0u64;
++        super::read(fd as i32, &mut n as *mut u64 as u64, 8).unwrap()
++    }
++
++    /// `timerfd_clock_was_set`: only an absolute CLOCK_REALTIME timer set
++    /// with TFD_TIMER_CANCEL_ON_SET is cancelled, its next read fails with
++    /// ECANCELED once, and a later settime clears it.
++    #[test]
++    fn a_wall_clock_step_cancels_the_timers_that_might_cancel() {
++        let _view = crate::vfs::test_view();
++        const REALTIME: u64 = 0;
++        let hour = 3_600_000_000_000;
++        let later = Base::Realtime.now() + hour;
++        let cancelling = timerfd_create([REALTIME, O_NONBLOCK | O_CLOEXEC, 0, 0, 0, 0]);
++        let absolute = timerfd_create([REALTIME, O_NONBLOCK | O_CLOEXEC, 0, 0, 0, 0]);
++        let relative = timerfd_create([REALTIME, O_NONBLOCK | O_CLOEXEC, 0, 0, 0, 0]);
++        assert_eq!(
++            set(
++                cancelling,
++                TFD_TIMER_ABSTIME | TFD_TIMER_CANCEL_ON_SET,
++                later
++            ),
++            0
++        );
++        assert_eq!(set(absolute, TFD_TIMER_ABSTIME, later), 0);
++        assert_eq!(set(relative, TFD_TIMER_CANCEL_ON_SET, hour), 0);
++        clock_was_set();
++        assert_eq!(read_once(cancelling), -(ECANCELED as i64));
++        assert_eq!(read_once(cancelling), -(EAGAIN as i64));
++        assert_eq!(read_once(absolute), -(EAGAIN as i64));
++        assert_eq!(read_once(relative), -(EAGAIN as i64));
++        clock_was_set();
++        assert_eq!(
++            set(
++                cancelling,
++                TFD_TIMER_ABSTIME | TFD_TIMER_CANCEL_ON_SET,
++                later
++            ),
++            0
++        );
++        assert_eq!(read_once(cancelling), -(EAGAIN as i64));
++        for fd in [cancelling, absolute, relative] {
++            assert_eq!(super::super::fs::close([fd as u64, 0, 0, 0, 0, 0]), 0);
++        }
++    }
++
++    /// A timer keeps its expiry on its own clock: an absolute one on the
++    /// clock it was created on, a relative REALTIME one on MONOTONIC
++    /// (`__hrtimer_init`).
++    #[test]
++    fn a_timer_expires_on_its_own_clock() {
++        let _view = crate::vfs::test_view();
++        const REALTIME: u64 = 0;
++        const BOOTTIME: u64 = 7;
++        let hour = 3_600_000_000_000;
++        let boottime = timerfd_create([BOOTTIME, O_NONBLOCK | O_CLOEXEC, 0, 0, 0, 0]);
++        let realtime = timerfd_create([REALTIME, O_NONBLOCK | O_CLOEXEC, 0, 0, 0, 0]);
++        let clock = |fd: i64| timer(fd as i32).unwrap().state.lock().unwrap().clock;
++        let at = Base::Boottime.now() + hour;
++        assert_eq!(set(boottime, TFD_TIMER_ABSTIME, at), 0);
++        assert_eq!(clock(boottime), Base::Boottime);
++        assert_eq!(
++            timer(boottime as i32).unwrap().state.lock().unwrap().next,
++            at
++        );
++        assert_eq!(set(realtime, 0, hour), 0);
++        assert_eq!(clock(realtime), Base::Monotonic);
++        assert_eq!(
++            set(realtime, TFD_TIMER_ABSTIME, Base::Realtime.now() + hour),
++            0
++        );
++        assert_eq!(clock(realtime), Base::Realtime);
++        for fd in [boottime, realtime] {
++            assert_eq!(super::super::fs::close([fd as u64, 0, 0, 0, 0, 0]), 0);
++        }
++    }
++
++    /// An absolute BOOTTIME timer fires at its time on the boot clock,
++    /// through the timer kqueue.
++    #[test]
++    fn an_absolute_boottime_timer_fires() {
++        let _view = crate::vfs::test_view();
++        const BOOTTIME: u64 = 7;
++        let fd = timerfd_create([BOOTTIME, O_NONBLOCK | O_CLOEXEC, 0, 0, 0, 0]);
++        let at = Base::Boottime.now() + 20_000_000;
++        assert_eq!(set(fd, TFD_TIMER_ABSTIME, at), 0);
++        let mut pfd = libc::pollfd {
++            fd: fd as i32,
++            events: libc::POLLIN,
++            revents: 0,
++        };
++        // SAFETY: one pollfd on the stack.
++        assert_eq!(unsafe { libc::poll(&mut pfd, 1, 2_000) }, 1);
++        assert!(Base::Boottime.now() >= at);
++        assert_eq!(read_once(fd), 8);
++        assert_eq!(super::super::fs::close([fd as u64, 0, 0, 0, 0, 0]), 0);
++    }
++}
+diff --git a/crates/aim-linux-abi/src/sys/futex.rs b/crates/aim-linux-abi/src/sys/futex.rs
+--- a/crates/aim-linux-abi/src/sys/futex.rs
++++ b/crates/aim-linux-abi/src/sys/futex.rs
+@@ -20,7 +20,7 @@
+ use std::sync::Arc;
+ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::SeqCst};
+
+-use super::clock::Base;
++use super::clock::{Base, Deadline};
+ use super::park;
+ use super::signal;
+ use super::thread::{self, Thread};
+@@ -206,7 +206,7 @@
+     addr: u64,
+     bitset: u32,
+     pi: bool,
+-    deadline: Option<u64>,
++    deadline: Option<Deadline>,
+     check: impl FnOnce() -> Option<i64>,
+ ) -> i64 {
+     let Some(th) = thread::current() else {
+@@ -234,7 +234,7 @@
+         if w.woken.load(SeqCst) != 0 {
+             break 0;
+         }
+-        if deadline.is_some_and(|d| park::monotonic() >= d) {
++        if deadline.is_some_and(Deadline::passed) {
+             break -ETIMEDOUT;
+         }
+         if signal::interrupted(th) {
+@@ -398,7 +398,7 @@
+     unsafe { wakes.claim(w) };
+ }
+
+-fn lock_pi(addr: u64, deadline: Option<u64>, try_only: bool) -> i64 {
++fn lock_pi(addr: u64, deadline: Option<Deadline>, try_only: bool) -> i64 {
+     let Some(th) = thread::current() else {
+         return -(EINVAL as i64);
+     };
+@@ -484,7 +484,7 @@
+ /// the waiter checks the attention flag after arming, so a signal that
+ /// comes before the kernel wait is seen there or reaches it. The wait is
+ /// one kernel wait, so no wake is lost to a gap between waits.
+-fn shared_wait(addr: u64, val: u32, deadline: Option<u64>) -> i64 {
++fn shared_wait(addr: u64, val: u32, deadline: Option<Deadline>) -> i64 {
+     if word(addr).load(SeqCst) != val {
+         return -(EAGAIN as i64);
+     }
+@@ -513,9 +513,9 @@
+     };
+     let wait = || loop {
+         let timeout = match deadline {
+-            Some(d) => match d.checked_sub(park::monotonic()) {
+-                Some(t) if t > 0 => t,
+-                _ => return -ETIMEDOUT,
++            Some(d) => match d.left() {
++                0 => return -ETIMEDOUT,
++                t => t,
+             },
+             None => 0,
+         };
+@@ -646,7 +646,7 @@
+
+ // ---- the syscall -------------------------------------------------------------------
+
+-fn deadline(ts: u64, relative: bool, realtime: bool) -> Result<Option<u64>, i64> {
++fn deadline(ts: u64, relative: bool, realtime: bool) -> Result<Option<Deadline>, i64> {
+     if ts == 0 {
+         return Ok(None);
+     }
+@@ -654,12 +654,12 @@
+     Ok(Some(if relative {
+         park::after(ns)
+     } else {
+-        if realtime {
++        let base = if realtime {
+             Base::Realtime
+         } else {
+             Base::Monotonic
+-        }
+-        .deadline(ns)
++        };
++        Deadline { base, ns }
+     }))
+ }
+
+@@ -820,7 +820,7 @@
+             )
+         } as u64;
+         let deadline = Box::leak(Box::new([0i64; 2])).as_mut_ptr() as u64;
+-        park::write_timespec(deadline, park::after(10_000_000_000));
++        park::write_timespec(deadline, park::after(10_000_000_000).ns);
+         let (tx, rx) = std::sync::mpsc::channel();
+         let wait = move |bits: u64| {
+             let tx = tx.clone();
+diff --git a/crates/aim-linux-abi/src/sys/park.rs b/crates/aim-linux-abi/src/sys/park.rs
+--- a/crates/aim-linux-abi/src/sys/park.rs
++++ b/crates/aim-linux-abi/src/sys/park.rs
+@@ -8,14 +8,16 @@
+ //! host thread unparks the waiter when it fires, and the wait itself stays
+ //! untimed on `os_sync_wait_on_address`.
+ //!
+-//! Deadlines are guest CLOCK_MONOTONIC nanoseconds (`clock`), the clock
+-//! kqueue timers and `__ulock_wait2` count: both stop while the host
+-//! sleeps.
++//! A deadline stays on its own clock (`clock::Deadline`). kqueue timers
++//! and `__ulock_wait2` count CLOCK_MONOTONIC, which stops while the host
++//! sleeps; the timer of a deadline on a clock that does not (BOOTTIME,
++//! REALTIME) counts `mach_continuous_time` instead
++//! (NOTE_MACH_CONTINUOUS_TIME).
+
+ use std::sync::Mutex;
+ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering::SeqCst};
+
+-use super::clock::{self, Base};
++use super::clock::{self, Base, Deadline};
+ use crate::errno::{EBADF, EINTR, EINVAL};
+
+ unsafe extern "C" {
+@@ -57,9 +59,9 @@
+     unsafe { (p as *mut [i64; 2]).write_unaligned(v) };
+ }
+
+-/// A deadline `ns` from now.
+-pub fn after(ns: u64) -> u64 {
+-    monotonic().saturating_add(ns)
++/// A monotonic deadline `ns` from now.
++pub fn after(ns: u64) -> Deadline {
++    Deadline::after(Base::Monotonic, ns)
+ }
+
+ /// One per guest thread. States: 0 idle, 1 unparked (a token), 2 parked.
+@@ -84,7 +86,7 @@
+     /// the wait. Returns early and spuriously; callers re-check their
+     /// condition, pending signals and the clock after every return. `tid` is
+     /// the caller's (the timer unparks it by tid).
+-    pub fn park(&self, tid: i32, deadline: Option<u64>) {
++    pub fn park(&self, tid: i32, deadline: Option<Deadline>) {
+         if self.word.swap(0, SeqCst) == 1
+             || self.word.compare_exchange(0, 2, SeqCst, SeqCst).is_err()
+         {
+@@ -95,7 +97,7 @@
+         loop {
+             let r = match (deadline, timer) {
+                 (Some(d), None) => {
+-                    let left = d.saturating_sub(monotonic());
++                    let left = d.left();
+                     if left == 0 {
+                         break;
+                     }
+@@ -110,7 +112,7 @@
+             if self.word.load(SeqCst) != 2 || r < 0 {
+                 break;
+             }
+-            if deadline.is_some_and(|d| monotonic() >= d) {
++            if deadline.is_some_and(Deadline::passed) {
+                 break;
+             }
+         }
+@@ -177,6 +179,9 @@
+ /// unparks the tid in its `udata`.
+ pub const PTIMER_EXPIRY: u64 = 1 << 63;
+
++/// `udata` of a timerfd's expiry, handed to `event`.
++pub const TIMERFD_EXPIRY: u64 = 1 << 62;
++
+ /// A fresh identifier for [`arm_event`].
+ pub fn timer_id() -> u64 {
+     NEXT_TIMER.fetch_add(1, SeqCst)
+@@ -184,12 +189,17 @@
+
+ /// Fire timer `id` once at `deadline`, delivering `udata`. Returns the
+ /// kqueue it is armed on, for [`disarm`].
+-pub fn arm_event(id: u64, udata: u64, deadline: u64) -> Option<i32> {
+-    let rel = deadline.saturating_sub(monotonic()).max(1);
++pub fn arm_event(id: u64, udata: u64, deadline: Deadline) -> Option<i32> {
++    let rel = deadline.left().max(1);
++    let clock = if deadline.base.counts_sleep() {
++        libc::NOTE_MACH_CONTINUOUS_TIME
++    } else {
++        0
++    };
+     let ev = timer_event(
+         id,
+         libc::EV_ADD | libc::EV_ONESHOT,
+-        libc::NOTE_NSECONDS | libc::NOTE_LEEWAY | libc::NOTE_CRITICAL,
++        libc::NOTE_NSECONDS | libc::NOTE_LEEWAY | libc::NOTE_CRITICAL | clock,
+         rel.min(i64::MAX as u64) as i64,
+         udata,
+     );
+@@ -208,7 +218,7 @@
+ }
+
+ /// Unpark `tid` at `deadline`. None if no timer could be armed.
+-fn arm(tid: i32, deadline: u64) -> Option<(i32, u64)> {
++fn arm(tid: i32, deadline: Deadline) -> Option<(i32, u64)> {
+     let id = timer_id();
+     arm_event(id, tid as u32 as u64, deadline).map(|kq| (kq, id))
+ }
+@@ -252,6 +262,8 @@
+         for ev in &evs[..n as usize] {
+             if ev.udata & PTIMER_EXPIRY != 0 {
+                 super::ptimer::expired(ev.ident);
++            } else if ev.udata == TIMERFD_EXPIRY {
++                super::event::timerfd_expired();
+             } else {
+                 super::thread::unpark(ev.udata as i32);
+             }
+@@ -265,17 +277,17 @@
+
+ /// Sleep until `deadline`. Returns -EINTR (and the time left) when a guest
+ /// signal handler is to run; signals with no handler do not interrupt.
+-fn sleep_until(deadline: u64) -> Result<(), u64> {
++fn sleep_until(deadline: Deadline) -> Result<(), u64> {
+     let Some(th) = super::thread::current() else {
+         return Ok(());
+     };
+     loop {
+-        let now = monotonic();
+-        if now >= deadline {
++        let left = deadline.left();
++        if left == 0 {
+             return Ok(());
+         }
+         if super::signal::interrupted(th) {
+-            return Err(deadline - now);
++            return Err(left);
+         }
+         th.park.park(th.tid, Some(deadline));
+     }
+@@ -310,7 +322,11 @@
+         Err(e) => return e,
+     };
+     let abs = flags & TIMER_ABSTIME != 0;
+-    let deadline = if abs { base.deadline(ns) } else { after(ns) };
++    let deadline = if abs {
++        Deadline { base, ns }
++    } else {
++        Deadline::after(base.timer(false), ns)
++    };
+     match sleep_until(deadline) {
+         Ok(()) => 0,
+         Err(left) => {
+diff --git a/crates/aim-linux-abi/src/sys/signal.rs b/crates/aim-linux-abi/src/sys/signal.rs
+--- a/crates/aim-linux-abi/src/sys/signal.rs
++++ b/crates/aim-linux-abi/src/sys/signal.rs
+@@ -1207,7 +1207,7 @@
+             }
+             break i.signo as i64;
+         }
+-        if deadline.is_some_and(|d| park::monotonic() >= d) {
++        if deadline.is_some_and(super::clock::Deadline::passed) {
+             break -(EAGAIN as i64);
+         }
+         if interrupted(th) {
+diff --git a/crates/aim-linux-abi/src/sys/fork/state.rs b/crates/aim-linux-abi/src/sys/fork/state.rs
+--- a/crates/aim-linux-abi/src/sys/fork/state.rs
++++ b/crates/aim-linux-abi/src/sys/fork/state.rs
+@@ -189,7 +189,7 @@
+
+ /// Every module's state, in restore order.
+ pub fn save(w:&mut Writer,mounts:&str){
+-    w.u32(0x46444e06);
++    w.u32(0x46444e07);
+     crate::xrt::fork_save(w);
+     crate::diag::fork_save(w);
+     crate::patch::fork_save(w);
+@@ -219,7 +219,7 @@
+ pub fn restore(r: &mut Reader) -> bool {
+     r.stage("state-version");
+     let version=r.u32();
+-    if version!=0x46444e06{eprintln!("fork state version: received={version:#x} expected=0x46444e06");r.invalidate();return false;}
++    if version!=0x46444e07{eprintln!("fork state version: received={version:#x} expected=0x46444e07");r.invalidate();return false;}
+     r.stage("xrt");
+     crate::xrt::fork_restore(r);
+     r.stage("diag");

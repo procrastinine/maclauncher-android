@@ -18,11 +18,14 @@ test('ART supplier preserves runner upstream notices beside the delivered runner
  const component=path.join(original,'component');fs.writeFileSync(component,'component');
  const inputs=Object.fromEntries(Object.keys(artSupplierComponents()).map(key=>[key,['image','art','halRoot','halManifests'].includes(key)?image:component]));
  inputs.runnerNotices=notices;
+ for(const [name,bytes]of [['lockHolder','fresh lock holder'],['ptyHolder','fresh pty holder']]){inputs[name]=path.join(original,name);fs.writeFileSync(inputs[name],bytes);}
  const output=path.join(root,'runtime');
  const manifest=assembleArtSupplier({output,inputs,bootClasspath:[],sourceVersion:'0.1.0-test'});
  assert.equal(manifest.components.runnerNotices,'licenses/runner');
  assert.equal(fs.readFileSync(path.join(output,'licenses/runner/COPYING'),'utf8'),license);
  assert.equal(fs.readFileSync(path.join(output,'host/linux-run'),'utf8'),'component');
+ assert.equal(manifest.components.lockHolder,'host/aim-lock-holder');assert.equal(manifest.components.ptyHolder,'host/aim-pty-holder');
+ assert.equal(fs.readFileSync(path.join(output,manifest.components.lockHolder),'utf8'),'fresh lock holder');assert.equal(fs.readFileSync(path.join(output,manifest.components.ptyHolder),'utf8'),'fresh pty holder');
  assert(manifest.notices.some(row=>row.path==='licenses/runner/COPYING'));
  assert.equal(fs.readFileSync(path.join(notices,'COPYING'),'utf8'),license);
  const extra='licenses/extra/NOTICE';fs.mkdirSync(path.join(output,'licenses/extra'));fs.writeFileSync(path.join(output,extra),'Retained original notice\n');manifest.notices.push({name:'Original component',license:'See included license',path:extra});
@@ -36,10 +39,12 @@ test('prepared ART runner builds offline with its native continuation and static
  if(!file)return t.skip('Requires prepared AIM source and native runner inputs');
  const options=JSON.parse(fs.readFileSync(file,'utf8'));
  const result=buildArtRunner(options);
- execFileSync('codesign',['--verify','--strict',result.linuxRun],{stdio:'pipe'});
- assert.equal(execFileSync('lipo',['-archs',result.linuxRun],{encoding:'utf8'}).trim(),'arm64');
- const load=execFileSync('otool',['-l',result.linuxRun],{encoding:'utf8'});
- assert.match(load,/cmd LC_BUILD_VERSION\s+cmdsize \d+\s+platform \d+\s+minos 13\.0\b/);
+ for(const name of ['linuxRun','binder','lockHolder','ptyHolder']){
+  execFileSync('codesign',['--verify','--strict',result[name]],{stdio:'pipe'});
+  assert.equal(execFileSync('lipo',['-archs',result[name]],{encoding:'utf8'}).trim(),'arm64');
+  const load=execFileSync('otool',['-l',result[name]],{encoding:'utf8'});
+  assert.match(load,/cmd LC_BUILD_VERSION\s+cmdsize \d+\s+platform \d+\s+minos 13\.0\b/);
+ }
  execFileSync(result.linuxRun,['--help'],{timeout:10000,stdio:'pipe'});
  assert(fs.readdirSync(result.runnerNotices).some(name=>name==='unicorn-COPYING'));
 });
