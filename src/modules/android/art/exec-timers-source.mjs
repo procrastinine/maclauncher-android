@@ -5,8 +5,8 @@ import {execFileSync} from 'node:child_process';
 const sources=[
   {
     "path": "crates/aim-linux-abi/src/sys/exec.rs",
-    "beforeSha256": "807f632fc445c2ce93bbfdeb3323ed5daa27f6b3bad8c3c4c06dc8e30d893de7",
-    "sha256": "0937a4ebe80ba0516dbfe638b93a978345ad6cd98a316dea3a958d43ab06a27b"
+    "beforeSha256": "29ddd04d663d5559ce19cf400e4018bbc221a1258fee3c553ef764826dc3c991",
+    "sha256": "f1d4fb916dfcbd0bf6210ea2db97f03e611d7ab5fa4e8c0da04f337ff5372f1f"
   },
   {
     "path": "crates/aim-linux-abi/src/sys/ptimer.rs",
@@ -15,8 +15,8 @@ const sources=[
   },
   {
     "path": "crates/aim-linux-abi/src/sys/fdtab.rs",
-    "beforeSha256": "7be2efd235c8c6453cbe55673a7f20985d12f96beec758d343b946a68e6abebe",
-    "sha256": "e0e519da42445035cb71373d77b6fa0f53aea22a0ed74b6806a936db1df15cf7"
+    "beforeSha256": "86b9374b040821fd524b745eb3c8ae46654116b0edf61b56e741a1737fb5a53b",
+    "sha256": "494b04026ab2bd9cb6e350fb060050cf82599d4fcd7ab8b727f153f0eaee2d9d"
   },
   {
     "path": "crates/aim-linux-abi/src/sys/fs.rs",

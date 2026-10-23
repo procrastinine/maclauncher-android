@@ -1,5 +1,6 @@
 #pragma once
 #include <sys/types.h>
+#include <stddef.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -15,6 +16,8 @@ uid_t klj_process_uid_from_host(uid_t);
 gid_t klj_process_gid_from_host(gid_t);
 void *klj_process_identity_symbol(const char *);
 int klj_process_name(const char *);
+/* 0: unrelated path; 1: read-only snapshot published; -1: publication error. */
+int klj_process_cmdline(const char *,char *,size_t);
 #ifdef __cplusplus
 }
 #endif

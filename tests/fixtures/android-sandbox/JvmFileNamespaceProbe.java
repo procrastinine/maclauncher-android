@@ -15,6 +15,7 @@ public final class JvmFileNamespaceProbe {
         HostFilesystem.configure(runtime,data,files,cache,pkg);
         System.setProperty("klepton.bridge",Path.of(args[2]).toAbsolutePath().toString());
         System.load(System.getProperty("klepton.bridge"));
+        System.load(runtime.resolve("native/libnativebinding.dylib").toString());
         HostFilesystem.installNativeMappings(List.of(),files);
         File expansion=files.resolve("Android/obb/"+pkg+"/"+name).toFile();
         check(!expansion.exists(),"Fixture must not create physical alias copies");
@@ -22,6 +23,18 @@ public final class JvmFileNamespaceProbe {
         if(args.length>3&&args[3].equals("before")){
             check(!expansion.exists(),"Prior boundary unexpectedly maps direct JDK File calls");
             System.out.println("REPRODUCED direct JDK expansion alias is absent despite retained bytes");return;
+        }
+        HostProcessIdentity.initializeIds();
+        android.os.Process.setArgV0(pkg);
+        byte[] command=(pkg+"\0").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String processCommand="/proc/"+android.os.Process.myPid()+"/cmdline";
+        try(var input=new FileInputStream(processCommand)){
+            check(Arrays.equals(input.readAllBytes(),command),"FileInputStream cannot read the Android process cmdline");
+        }
+        check(Arrays.equals(Files.readAllBytes(Path.of("/proc/self/cmdline")),command),"NIO cmdline alias differs");
+        try(var input=new RandomAccessFile(processCommand,"r")){
+            byte[] actual=new byte[command.length];input.readFully(actual);
+            check(Arrays.equals(actual,command)&&input.read()==-1,"RandomAccessFile cmdline differs");
         }
         File memory=new File("/proc/meminfo");
         check(memory.isFile()&&memory.canRead()&&Files.isRegularFile(memory.toPath()),"Virtual process metadata differs between File and NIO");

@@ -1001,6 +1001,14 @@ converted at that boundary; timed selection preserves Android's remaining-time
 result. ARM32 uses the existing generated signal-set and descriptor-set width
 conversion before entering the shared native implementation.
 
+Process command-line reads through `/proc/self/cmdline` and the current Android
+process ID return the Android process name in NUL-terminated Linux argument
+format. Native and Java file operations share the same read-only snapshot.
+
+A failed native exec restores temporary descriptor flags before other descriptor
+operations resume. Regular-file and terminal metadata remains available until
+close-on-exec completes.
+
 Process memory maps report the current process's regions and access permissions
 in Linux format. Native mappings use the macOS region view; translated ARM32
 mappings use their original logical address space and page permissions. File

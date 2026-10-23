@@ -5,3 +5,5 @@ node_modules/
 .DS_Store
 src/modules/android/native/tools/*.jar
 AGENTS.md
+/scripts/android-test/
+/tests/android-test-*

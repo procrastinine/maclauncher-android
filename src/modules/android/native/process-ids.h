@@ -48,6 +48,8 @@ int klj_process_may_inspect(int id);
 /* Command metadata belongs to the same live process lease, never host argv or
  * an independently retained process catalog. Returned IDs are Android IDs. */
 int klj_process_publish_name(const char *name);
+/* Owned snapshot of this process's Android argv0 including its trailing NUL. */
+char *klj_process_commandline(size_t *length);
 int klj_process_find_commands(const char *const *names,size_t count,int **pids,size_t *length);
 int klj_process_publish_security(int id,const void *value,size_t length);
 ssize_t klj_process_read_security(int id,void *value,size_t length);

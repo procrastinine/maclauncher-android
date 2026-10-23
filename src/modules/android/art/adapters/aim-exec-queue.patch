@@ -1,6 +1,45 @@
 --- a/crates/aim-linux-abi/src/sys/exec.rs
 +++ b/crates/aim-linux-abi/src/sys/exec.rs
-@@ -500,8 +500,9 @@
+@@ -425,7 +425,33 @@
+ fn to_cstring(b: &[u8]) -> CString {
+     // Parsed from NUL-terminated data, so no interior NUL.
+     CString::new(b).unwrap_or_default()
++}
++
++/// Hold descriptor admission until every temporary host-exec flag is restored.
++/// A failed native exec leaves the old image live, so another descriptor owner
++/// must not close or reuse a slot while its rollback still names that number.
++pub(super) struct HostExecAdmission {
++    cloexec: Option<super::exec_fd_receipt::HostExecFlags>,
++    writers: Option<super::fdtab::ExecWriterFlags>,
++    gate: Option<super::fdtab::Lifecycle>,
++}
++impl HostExecAdmission {
++    pub(super) fn new() -> Self {
++        Self { cloexec: None, writers: None, gate: Some(super::fdtab::lifecycle()) }
++    }
++    pub(super) fn retain(&mut self, receipt: Option<&super::exec_fd_receipt::Receipt>) -> Result<(), errno::Errno> {
++        self.writers = Some(super::fdtab::prepare_regular_exec()?);
++        self.cloexec = receipt.map(super::exec_fd_receipt::Receipt::retain_for_host_exec).transpose()?;
++        Ok(())
++    }
+ }
++impl Drop for HostExecAdmission {
++    fn drop(&mut self) {
++        drop(self.cloexec.take());
++        drop(self.writers.take());
++        drop(self.gate.take());
++    }
++}
+
+ /// Resolve the program `execveat` names.
+ fn resolve(dirfd: i32, path: &[u8], flags: u64) -> Result<vfs::Resolved, i64> {
+@@ -496,12 +522,13 @@
+     trace_stage("relaunch.receipt.prepare");
+     let mut receipt=match super::exec_fd_receipt::Receipt::prepare(){Ok(receipt)=>receipt,Err(error)=>return -(error as i64)};
+     trace_stage("relaunch.lifecycle.enter");
+-    let guard=super::fdtab::lifecycle();
++    let mut guard=HostExecAdmission::new();
      trace_stage("relaunch.receipt.capture");
      if let Some(receipt)=&mut receipt{if let Err(error)=receipt.capture(){drop(guard);return -(error as i64);}}
      trace_stage("relaunch.descriptors");
@@ -11,6 +50,20 @@
      let mut options=vec![arg("--guest-fds"),arg(descriptors.join(",")),arg("--socket-receipts"),arg(super::fdtab::socket_exec_text())];
      trace_stage("relaunch.regular-fds");
      let regular=match super::fdtab::regular_exec_text(){Ok(text)=>text,Err(error)=>{drop(guard);return -(error as i64);}};if !regular.is_empty(){options.extend([arg("--regular-fds"),arg(regular)]);}
+@@ -513,11 +540,10 @@
+     henv.push(std::ptr::null());
+     // SAFETY: NULL-terminated arrays of C strings that outlive the call.
+     trace_stage("relaunch.writer-flags");
+-    let writer_flags=match super::fdtab::prepare_regular_exec(){Ok(flags)=>flags,Err(error)=>{drop(guard);return -(error as i64)}};
+-    let cloexec_flags=match &receipt{Some(receipt)=>match receipt.retain_for_host_exec(){Ok(flags)=>Some(flags),Err(error)=>{drop(guard);drop(writer_flags);return -(error as i64)}},None=>None};
++    if let Err(error)=guard.retain(receipt.as_ref()){drop(guard);return -(error as i64);}
+     trace_stage("relaunch.host-exec");
+     unsafe { libc::execve(hargv[0], hargv.as_ptr(), henv.as_ptr()) };
+-    let error=errno::last();drop(guard);drop(cloexec_flags);drop(writer_flags);drop(receipt);-(error as i64)
++    let error=errno::last();drop(guard);drop(receipt);-(error as i64)
+ }
+
+ #[cfg(test)]
 --- a/crates/aim-linux-abi/src/sys/exec_fd_receipt.rs
 +++ b/crates/aim-linux-abi/src/sys/exec_fd_receipt.rs
 @@ -4,10 +4,10 @@
@@ -80,3 +133,56 @@
    let actual=Identity::from_fd(unsafe{std::os::fd::BorrowedFd::borrow_raw(target)}).map_err(io)?;
    if actual!=identity{return Err(errno::EPERM);}
    targets.push(target);
+@@ -141,10 +154,30 @@
+   assert_eq!(super::super::fs::fcntl([fd as u64,6,(&lock as*const _)as u64,0,0,0]),0);
+   assert_eq!(super::super::fs::fcntl([fd as u64,2,libc::FD_CLOEXEC as u64,0,0,0]),0);
+   let mut receipt=Receipt::prepare().unwrap().unwrap();
+-  let guard=super::super::fdtab::lifecycle();receipt.capture().unwrap();
++  let Some(super::super::fdtab::Kind::Regular(description))=super::super::fdtab::get(fd)else{panic!("regular owner missing")};
++  let private=description.writer.as_ref().unwrap().descriptor().as_raw_fd();
++  let original=unsafe{libc::fcntl(fd,libc::F_GETFD)};
++  let private_original=unsafe{libc::fcntl(private,libc::F_GETFD)};
++  assert_ne!(private_original&libc::FD_CLOEXEC,0);
++  let mut guard=super::super::exec::HostExecAdmission::new();receipt.capture().unwrap();
++  guard.retain(Some(&receipt)).unwrap();
++  assert_eq!(unsafe{libc::fcntl(fd,libc::F_GETFD)}&libc::FD_CLOEXEC,0);
++  assert_eq!(unsafe{libc::fcntl(private,libc::F_GETFD)}&libc::FD_CLOEXEC,0);
++  let (entered_tx,entered_rx)=std::sync::mpsc::channel();
++  let (checked_tx,checked_rx)=std::sync::mpsc::channel();
++  let contender=std::thread::spawn(move||{
++   entered_tx.send(()).unwrap();
++   let _guard=super::super::fdtab::lifecycle();
++   assert_eq!(unsafe{libc::fcntl(fd,libc::F_GETFD)},original);
++   assert_eq!(unsafe{libc::fcntl(private,libc::F_GETFD)},private_original);
++   checked_tx.send(()).unwrap();
++  });
++  entered_rx.recv_timeout(Duration::from_secs(2)).unwrap();
++  assert!(matches!(checked_rx.try_recv(),Err(std::sync::mpsc::TryRecvError::Empty)));
+   let missing=std::ffi::CString::new(root.join("missing-executable").to_str().unwrap()).unwrap();let args=[missing.as_ptr(),std::ptr::null()];let env=[std::ptr::null()];
+   assert_eq!(unsafe{libc::execve(missing.as_ptr(),args.as_ptr(),env.as_ptr())},-1);assert_eq!(std::io::Error::last_os_error().raw_os_error(),Some(libc::ENOENT));
+-  drop(guard);drop(receipt);
++  drop(guard);
++  checked_rx.recv_timeout(Duration::from_secs(2)).unwrap();contender.join().unwrap();drop(receipt);
+   let mut discarded=Receipt::prepare().unwrap().unwrap();
+   let guard=super::super::fdtab::lifecycle();discarded.capture().unwrap();drop(guard);
+   let duplicate=unsafe{libc::fcntl(discarded.fd(),libc::F_DUPFD_CLOEXEC,3)};assert!(duplicate>=0);
+--- a/crates/aim-linux-abi/src/sys/fdtab.rs
++++ b/crates/aim-linux-abi/src/sys/fdtab.rs
+@@ -743,10 +743,14 @@
+     for (fd,entry) in TABLE.read().unwrap().iter(){
+         if !visible(*fd){continue;}
+         let flags=unsafe{libc::fcntl(*fd,libc::F_GETFD)};
+-        if flags<0{return Err(crate::errno::last());}if flags&libc::FD_CLOEXEC!=0{continue;}
++        if flags<0{return Err(crate::errno::last());}
+         use std::os::fd::AsRawFd;
+-        if let Some(access)=&entry.access{records.push(ashmem_access::exec_record(*fd,access));}
+-        if let Some(origin)=&entry.path{let (guest,initial)=origin.exec_fields();records.push(format!("origin\t{fd}\t{}\t{guest}\t{initial}",origin.descriptor()));}
++        // Namespace anchors survive only for retained guest descriptors. The
++        // typed close owners below also survive until the exec receipt commits.
++        if flags&libc::FD_CLOEXEC==0{
++            if let Some(access)=&entry.access{records.push(ashmem_access::exec_record(*fd,access));}
++            if let Some(origin)=&entry.path{let (guest,initial)=origin.exec_fields();records.push(format!("origin\t{fd}\t{}\t{guest}\t{initial}",origin.descriptor()));}
++        }
+         match &entry.kind{
+             Some(Kind::Regular(description))=>records.push(format!("{}\t{}\t{}",fd,description.flags,description.writer.as_ref().map(|writer|writer.descriptor().as_raw_fd()).unwrap_or(-1))),
+             Some(Kind::Pty(description))=>records.push(format!("pty\t{}\t{}",fd,description.carrier()?.as_raw_fd())),

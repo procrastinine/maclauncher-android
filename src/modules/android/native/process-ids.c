@@ -125,6 +125,7 @@ static int fork_reservation;
 static _Thread_local int planned_fork;
 static const char security_attribute[]="com.maclauncher.android.execution-context";
 static const char command_attribute[]="com.maclauncher.android.process-command";
+static char *current_command;
 static const char dumpable_attribute[]="com.maclauncher.android.dumpable";
 typedef struct {
     uint32_t version;int32_t host_pid,process_id,state;
@@ -545,8 +546,34 @@ int klj_process_publish_principal(uid_t uid){
 int klj_process_publish_name(const char *name){
     if(!name){errno=EFAULT;return -1;}
     if(klj_process_id()<0)return -1;
-    lock_ids();int result=fsetxattr(atomic_load(&leader_descriptor),command_attribute,name,strlen(name),0,0);
-    int error=errno;unlock_ids();errno=error;return result;
+    char *copy=strdup(name);
+    lock_ids();char *before=current_command;current_command=copy;
+    int result=fsetxattr(atomic_load(&leader_descriptor),command_attribute,name,strlen(name),0,0);
+    int error=errno;free(before);unlock_ids();errno=error;return result;
+}
+char *klj_process_commandline(size_t *length){
+    if(!length){errno=EFAULT;return NULL;}*length=0;
+    if(klj_process_id()<0)return NULL;
+    lock_ids();int fd=atomic_load(&leader_descriptor);
+    /* The current name follows fork's copied address space. An exec-adopted
+     * owner starts from the metadata on its inherited logical lease instead. */
+    ssize_t size=current_command?(ssize_t)strnlen(current_command,1024*1024):fgetxattr(fd,command_attribute,NULL,0,0,0);
+    char *result=NULL;int error=errno;
+    if(size>=0){
+        if(size>=1024*1024)error=E2BIG;
+        else{
+            result=malloc((size_t)size+1);
+            if(!result)error=ENOMEM;
+            else{
+                ssize_t copied=size;
+                if(current_command)memcpy(result,current_command,(size_t)size);
+                else copied=fgetxattr(fd,command_attribute,result,(size_t)size,0,0);
+                if(copied!=size){error=copied<0?errno:EIO;free(result);result=NULL;}
+                else{result[size]=0;*length=(size_t)size+1;}
+            }
+        }
+    }
+    unlock_ids();errno=error;return result;
 }
 static uint64_t query_now(void){
     struct timespec now;if(clock_gettime(CLOCK_MONOTONIC,&now))return 0;

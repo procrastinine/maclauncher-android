@@ -147,6 +147,8 @@ export function prepareAimRegisters({aim,klepton}) {
  ]);
  // Keep original component tests on the same fallible publication API.
  for(const [file,from,to]of[
+  ['src/xlate/tests.rs','assert_eq!(r.sites, [1, 1, 1, 1, 1, 1]);','assert_eq!(r.sites, [1, 1, 1, 1, 1, 1, 0]);'],
+  ['src/xlate/exec_tests.rs','assert_eq!(rep.sites, [1, 1, 1, 1, 1, 1]);','assert_eq!(rep.sites, [1, 1, 1, 1, 1, 1, 0]);'],
   ['examples/boundary_probe.rs','patch::rewrite_region_with(p as u64, len as u64, islands);','patch::rewrite_region_with(p as u64, len as u64, islands).unwrap();'],
   ['tests/hostcall.rs','patch::rewrite_region_with(p as u64, len as u64, islands);','patch::rewrite_region_with(p as u64, len as u64, islands).unwrap();'],
   ['tests/boundary.rs','patch::rewrite_region_with(p as u64, len as u64, islands);','patch::rewrite_region_with(p as u64, len as u64, islands).unwrap();'],

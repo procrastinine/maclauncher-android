@@ -11,6 +11,8 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/stat.h>
+#include "proc-maps.h"
 extern const char *kl_guest_path(const char *,char *,size_t);
 
 // One immutable Android principal, configured by the inherited supervisor
@@ -26,7 +28,54 @@ int klj_process_name(const char *name){
     // a launch failure when the metadata filesystem cannot persist a name.
     if(klj_process_publish_name(name))fprintf(stderr,"[android-host] Process command metadata: %s\n",strerror(errno));
     char *before=owned_program_name;owned_program_name=copy;
-    char *last=strrchr(copy,'/');program_name=last?last+1:copy;free(before);return 0;
+    char *last=strrchr(copy,'/');program_name=last?last+1:copy;free(before);
+    return 0;
+}
+/* Linux cmdline belongs to the Android process name, never the host JVM's
+ * executable or launch arguments. Atomic replacement keeps open readers on
+ * their existing snapshot and bounds the retained publication to one inode. */
+int klj_process_cmdline(const char *path,char *buffer,size_t capacity){
+    if(!path)return 0;
+    int process;
+    if(!strcmp(path,"/proc/self/cmdline"))process=klj_process_id();
+    else{
+        if(strncmp(path,"/proc/",6)||path[6]<'0'||path[6]>'9')return 0;
+        uint64_t id=0;const char *at=path+6;
+        while(*at>='0'&&*at<='9'){
+            unsigned digit=(unsigned)(*at++-'0');
+            if(id>(UINT64_MAX-digit)/10)return 0;
+            id=id*10+digit;
+        }
+        if(strcmp(at,"/cmdline"))return 0;
+        process=klj_process_id();if(id!=(uint64_t)process)return 0;
+    }
+    if(process<0)return -1;
+    if(!buffer||!capacity){errno=EINVAL;return -1;}
+    const char *root=klj_proc_maps_root();if(!root){errno=ENOENT;return -1;}
+    char directory[PATH_MAX];int n=snprintf(directory,sizeof directory,"%s/proc/%d",root,process);
+    if(n<0||(size_t)n>=sizeof directory){errno=ENAMETOOLONG;return -1;}
+    n=snprintf(buffer,capacity,"%s/cmdline",directory);
+    if(n<0||(size_t)n>=capacity){errno=ENAMETOOLONG;return -1;}
+    if(mkdir(directory,0700)&&errno!=EEXIST)return -1;
+    size_t length=0;char *snapshot=klj_process_commandline(&length);
+    if(!snapshot)return -1;
+    char temporary[PATH_MAX];
+    n=snprintf(temporary,sizeof temporary,"%s/.cmdline.XXXXXX",directory);
+    if(n<0||(size_t)n>=sizeof temporary){free(snapshot);errno=ENAMETOOLONG;return -1;}
+    int fd=mkstemp(temporary);if(fd<0){free(snapshot);return -1;}
+    int ok=fcntl(fd,F_SETFD,FD_CLOEXEC)==0,error=errno;
+    for(size_t at=0;ok&&at<length;){
+        ssize_t written=write(fd,snapshot+at,length-at);
+        if(written>0)at+=(size_t)written;
+        else if(written<0&&errno==EINTR)continue;
+        else{ok=0;error=written<0?errno:EIO;}
+    }
+    free(snapshot);
+    if(ok&&fchmod(fd,0444)){ok=0;error=errno;}
+    if(close(fd)&&ok){ok=0;error=errno;}
+    if(ok&&rename(temporary,buffer)){ok=0;error=errno;}
+    if(!ok){unlink(temporary);errno=error;return -1;}
+    return 1;
 }
 uid_t klj_process_uid(void) { int uid=atomic_load_explicit(&logical_uid,memory_order_acquire);return uid<0?getuid():(uid_t)uid; }
 gid_t klj_process_gid(void) { int uid=atomic_load_explicit(&logical_uid,memory_order_acquire);return uid<0?getgid():(gid_t)uid; }
