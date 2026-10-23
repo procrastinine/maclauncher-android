@@ -88,7 +88,7 @@ test('ART source export preserves locked AOSP and notices while omitting unused 
  const {exportArtSourceArchive}=await import(pathToFileURL(path.join(root,'src/modules/android/art/source-archive.mjs')));
  const options={output:path.join(root,'out/source.tar.gz'),sources:{source:path.join(root,'checkouts/aim'),klepton:path.join(root,'checkouts/klepton'),glesHeaders:path.join(root,'checkouts/android-gles-headers'),aosp:path.join(root,'aosp'),xsdc:path.join(root,'checkouts/xsdc')},unicorn:path.join(root,'checkouts/unicorn'),sourceCheckouts:{'aosp-native':path.join(root,'checkouts/aosp-native')}};
  assert.equal(exportArtSourceArchive(options),options.output);
- const first=fs.readFileSync(options.output),time=fs.statSync(options.output).mtimeMs;assert.equal(exportArtSourceArchive(options),options.output);assert.deepEqual(fs.readFileSync(options.output),first);assert.equal(fs.statSync(options.output).mtimeMs,time,'An unchanged retry retains the generated archive.');
+ const first=fs.readFileSync(options.output),time=fs.statSync(options.output).mtimeMs;await new Promise(resolve=>setTimeout(resolve,1100));assert.equal(exportArtSourceArchive(options),options.output);assert.deepEqual(fs.readFileSync(options.output),first);assert.equal(fs.statSync(options.output).mtimeMs,time,'An unchanged retry retains the generated archive.');
  const extracted=path.join(root,'extracted');fs.mkdirSync(extracted);execFileSync('/usr/bin/tar',['-xf',options.output,'-C',extracted]);
  assert.equal(fs.readFileSync(path.join(extracted,'upstream/aim-aosp/art/runtime/runtime.cc'),'utf8'),runtime['runtime.cc']);assert.equal(fs.existsSync(path.join(extracted,'upstream/aim-aosp/art/runtime/runtime_test.cc')),false);assert.equal(fs.existsSync(path.join(extracted,'upstream/aim-aosp/unselected-note.json')),false);assert.equal(fs.existsSync(path.join(extracted,'integration-notes.json')),false);assert.equal(fs.existsSync(path.join(extracted,'src/modules/android/native/original_test.c')),false);
  assert.equal(fs.readlinkSync(path.join(extracted,'upstream/aim-aosp/art/runtime/original-link.h')),'runtime.cc');
@@ -105,17 +105,35 @@ test('HWUI source export narrows legacy trees and authenticates selected registr
  execFileSync('git',['-C',checkout,'init','-q']);execFileSync('git',['-C',checkout,'add','.']);execFileSync('git',['-C',checkout,'-c','user.name=Source test','-c','user.email=test@example.invalid','commit','-qm','Pinned source']);
  const git=args=>execFileSync('git',['-C',checkout,...args],{encoding:'utf8'}).trim(),revision=git(['rev-parse','HEAD']);
  git(['sparse-checkout','set','--no-cone','/NOTICE']);assert.equal(fs.existsSync(path.join(checkout,'core/jni/include/required.h')),false);
- write('src/modules/android/native/hwui/sources.json',JSON.stringify({sources:[{key:'frameworkLegacy',project:'platform/frameworks/base',repository:'https://example.invalid/framework',revision,licensePaths:['NOTICE','ALTERNATIVE-LICENSE'],checks:[{path:'.',type:'tree',object:git(['rev-parse','HEAD^{tree}']),mode:16384}]}],includes:[{source:'frameworkLegacy',path:'core/jni/include'}]}));
+ const sourceCatalog={sources:[{key:'frameworkLegacy',project:'platform/frameworks/base',repository:'https://example.invalid/framework',revision,licensePaths:['NOTICE','ALTERNATIVE-LICENSE'],checks:[{path:'.',type:'tree',object:git(['rev-parse','HEAD^{tree}']),mode:16384}]}],includes:[{source:'frameworkLegacy',path:'core/jni/include'}]};
+ const extraSources={};
+ for(const fixture of [
+  {key:'libhardware',tree:'.',license:'NOTICE',files:{'include_all/hardware/hardware.h':'original hardware header\n'},links:{'include/hardware/hardware.h':'../../include_all/hardware/hardware.h'}},
+  {key:'native',tree:'include',license:'NOTICE',files:{'include/required.h':'original native header\n'},links:{'include/layerproto':'../services/surfaceflinger/layerproto/include/layerproto','include/private/binder':'../../libs/binder/include/private/binder'}},
+  {key:'skia',tree:'src',license:'LICENSE',files:{'src/active.cpp':'original Android Skia source\n'},links:{'src/ports/fontations/Cargo.toml':'../../../bazel/external/fontations/Cargo.toml'}}
+ ]){
+  const directory=path.join(root,'original-'+fixture.key);for(const [name,bytes]of Object.entries({...fixture.files,[fixture.license]:'original license\n'}))write(path.relative(root,path.join(directory,name)),bytes);
+  for(const [name,target]of Object.entries(fixture.links)){const file=path.join(directory,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.symlinkSync(target,file);}
+  const gitHere=args=>execFileSync('git',['-C',directory,...args],{encoding:'utf8'}).trim();gitHere(['init','-q']);gitHere(['add','.']);gitHere(['-c','user.name=Source test','-c','user.email=test@example.invalid','commit','-qm','Pinned original source']);
+  sourceCatalog.sources.push({key:fixture.key,project:fixture.key,repository:'https://example.invalid/'+fixture.key,revision:gitHere(['rev-parse','HEAD']),licensePaths:[fixture.license],checks:[{path:fixture.tree,type:'tree',object:gitHere(['rev-parse',fixture.tree==='.'?'HEAD^{tree}':'HEAD:'+fixture.tree]),mode:16384}]});
+  if(fixture.key==='libhardware')sourceCatalog.includes.push({source:'libhardware',path:'include'});extraSources[fixture.key]=directory;
+ }
+ write('src/modules/android/native/hwui/sources.json',JSON.stringify(sourceCatalog));
  write('crate/mini-1.0/src/lib.rs','pub fn original() {}\n');write('crate/mini-1.0/tests/unused.rs','unused test\n');write('crate/mini-1.0/LICENSE','original crate license\n');
  const cache=path.join(root,'cache');fs.mkdirSync(cache);const crate=path.join(cache,'mini-1.0.crate');execFileSync('/usr/bin/tar',['-czf',crate,'-C',path.join(root,'crate'),'mini-1.0']);
  const {createHash}=await import('node:crypto'),hash=bytes=>createHash('sha256').update(bytes).digest('hex'),checksum=hash(fs.readFileSync(crate)),source='registry+https://github.com/rust-lang/crates.io-index';
  write('src/modules/android/native/hwui/Cargo.lock','version = 4\n\n[[package]]\nname = "mini"\nversion = "1.0"\nsource = "'+source+'"\nchecksum = "'+checksum+'"\n');
  const {exportHwuiSources}=await import(pathToFileURL(path.join(root,'src/modules/android/art/source-hwui.mjs')));
- const options={sources:{frameworkLegacy:checkout},registry:[{name:'mini',version:'1.0',source}],registryCache:cache},output=path.join(root,'published'),before=process.env.GIT_NO_LAZY_FETCH;
+ const options={sources:{frameworkLegacy:checkout,...extraSources},registry:[{name:'mini',version:'1.0',source}],registryCache:cache},output=path.join(root,'published'),before=process.env.GIT_NO_LAZY_FETCH;
  const result=exportHwuiSources(options,output);assert.equal(process.env.GIT_NO_LAZY_FETCH,before);
  assert.equal(fs.readFileSync(path.join(output,'sources/frameworkLegacy/core/jni/include/required.h'),'utf8'),'original declaration\n');assert.equal(fs.existsSync(path.join(output,'sources/frameworkLegacy/unrelated')),false);assert.equal(fs.readFileSync(path.join(output,'sources/frameworkLegacy/NOTICE'),'utf8'),'required original notice\n');
- const dependency=result.registry[0];assert.equal(dependency.checksum,checksum);assert.equal(dependency.sha256,hash(fs.readFileSync(path.join(output,dependency.archive))));assert.equal(JSON.stringify(result).includes(root),false);
+ const hardwareHeader=path.join(output,'sources/libhardware/include/hardware/hardware.h');assert(fs.lstatSync(hardwareHeader).isSymbolicLink());assert.equal(fs.readFileSync(hardwareHeader,'utf8'),'original hardware header\n');
+ for(const name of ['native/include/layerproto','native/include/private/binder','skia/src/ports/fontations/Cargo.toml'])assert.equal(fs.lstatSync(path.join(output,'sources',name),{throwIfNoEntry:false}),undefined);
+ const dependency=result.registry[0];assert.equal(fs.readFileSync(path.join(output,dependency.archive)).readUInt32LE(4),0);assert.equal(dependency.checksum,checksum);assert.equal(dependency.sha256,hash(fs.readFileSync(path.join(output,dependency.archive))));assert.equal(JSON.stringify(result).includes(root),false);
  const names=execFileSync('/usr/bin/tar',['-tzf',path.join(output,dependency.archive)],{encoding:'utf8'});assert.match(names,/src\/lib\.rs/);assert.match(names,/LICENSE/);assert.doesNotMatch(names,/tests\//);
  const next=exportHwuiSources(options,path.join(root,'retry'));assert.deepEqual(next,result);
+ fs.symlinkSync('../tests/unused.rs',path.join(root,'crate/mini-1.0/src/dangling.rs'));execFileSync('/usr/bin/tar',['-czf',crate,'-C',path.join(root,'crate'),'mini-1.0']);
+ const nextChecksum=hash(fs.readFileSync(crate));write('src/modules/android/native/hwui/Cargo.lock',fs.readFileSync(path.join(root,'src/modules/android/native/hwui/Cargo.lock'),'utf8').replace(checksum,nextChecksum));
+ const broken=await import(pathToFileURL(path.join(root,'src/modules/android/art/source-hwui.mjs')).href+'?dangling');assert.throws(()=>broken.exportHwuiSources(options,path.join(root,'dangling')),/alias has no included target/);
  fs.writeFileSync(crate,'changed registry archive');assert.throws(()=>exportHwuiSources(options,path.join(root,'changed')),/Authenticated HWUI registry source is unavailable/);assert.equal(process.env.GIT_NO_LAZY_FETCH,before);
 });

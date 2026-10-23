@@ -36,33 +36,34 @@ function writeZipArchive(filePath, entries, { prefix = Buffer.alloc(0), comment 
     const dataBuf = Buffer.isBuffer(entry.data)
       ? entry.data
       : Buffer.from(String(entry.data || ""), "utf8");
+    const packed = entry.deflate ? require("node:zlib").deflateRawSync(dataBuf) : dataBuf;
     const crc = crc32(dataBuf);
 
     const localHeader = Buffer.alloc(30);
     localHeader.writeUInt32LE(0x04034b50, 0);
     localHeader.writeUInt16LE(20, 4);
     localHeader.writeUInt16LE(0, 6);
-    localHeader.writeUInt16LE(0, 8);
+    localHeader.writeUInt16LE(entry.deflate ? 8 : 0, 8);
     localHeader.writeUInt16LE(0, 10);
     localHeader.writeUInt16LE(0, 12);
     localHeader.writeUInt32LE(crc, 14);
-    localHeader.writeUInt32LE(dataBuf.length, 18);
+    localHeader.writeUInt32LE(packed.length, 18);
     localHeader.writeUInt32LE(dataBuf.length, 22);
     localHeader.writeUInt16LE(nameBuf.length, 26);
     localHeader.writeUInt16LE(0, 28);
 
-    localParts.push(localHeader, nameBuf, dataBuf);
+    localParts.push(localHeader, nameBuf, packed);
 
     const centralHeader = Buffer.alloc(46);
     centralHeader.writeUInt32LE(0x02014b50, 0);
     centralHeader.writeUInt16LE(20, 4);
     centralHeader.writeUInt16LE(20, 6);
     centralHeader.writeUInt16LE(0, 8);
-    centralHeader.writeUInt16LE(0, 10);
+    centralHeader.writeUInt16LE(entry.deflate ? 8 : 0, 10);
     centralHeader.writeUInt16LE(0, 12);
     centralHeader.writeUInt16LE(0, 14);
     centralHeader.writeUInt32LE(crc, 16);
-    centralHeader.writeUInt32LE(zip64Entries ? 0xffffffff : dataBuf.length, 20);
+    centralHeader.writeUInt32LE(zip64Entries ? 0xffffffff : packed.length, 20);
     centralHeader.writeUInt32LE(zip64Entries ? 0xffffffff : dataBuf.length, 24);
     centralHeader.writeUInt16LE(nameBuf.length, 28);
     centralHeader.writeUInt16LE(zip64Entries ? 28 : 0, 30);
@@ -75,11 +76,11 @@ function writeZipArchive(filePath, entries, { prefix = Buffer.alloc(0), comment 
     centralParts.push(centralHeader, nameBuf);
     if (zip64Entries) {
       const extra = Buffer.alloc(28); extra.writeUInt16LE(1, 0); extra.writeUInt16LE(24, 2);
-      extra.writeBigUInt64LE(BigInt(dataBuf.length), 4); extra.writeBigUInt64LE(BigInt(dataBuf.length), 12);
+      extra.writeBigUInt64LE(BigInt(dataBuf.length), 4); extra.writeBigUInt64LE(BigInt(packed.length), 12);
       extra.writeBigUInt64LE(BigInt(offset), 20); centralParts.push(extra);
     }
 
-    offset += localHeader.length + nameBuf.length + dataBuf.length;
+    offset += localHeader.length + nameBuf.length + packed.length;
   }
 
   const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);

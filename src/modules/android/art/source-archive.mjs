@@ -112,6 +112,7 @@ export function exportArtSourceArchive({output,sources,unicorn,sourceCheckouts={
   function normalize(directory){for(const entry of fs.readdirSync(directory,{withFileTypes:true})){const file=path.join(directory,entry.name);if(entry.isDirectory())normalize(file);if(entry.isSymbolicLink())fs.lutimesSync(file,0,0);else fs.utimesSync(file,0,0);}fs.utimesSync(directory,0,0);}
   normalize(tree);
   execFileSync('/usr/bin/tar',['--uid','0','--gid','0','--uname','root','--gname','wheel','-czf',archive,'-C',tree,...fs.readdirSync(tree).sort()],{env:{...process.env,COPYFILE_DISABLE:'1'},stdio:['ignore','ignore','pipe']});
+  const gzip=fs.readFileSync(archive);if(gzip.length<10||gzip[0]!==31||gzip[1]!==139||gzip[2]!==8)throw Error('ART source output is not a gzip archive.');gzip.writeUInt32LE(0,4);fs.writeFileSync(archive,gzip);
   if(!previous||sha(fs.readFileSync(output))!==sha(fs.readFileSync(archive)))fs.renameSync(archive,output);
   return output;
  }finally{fs.rmSync(temporary,{recursive:true,force:true});}

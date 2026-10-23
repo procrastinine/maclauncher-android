@@ -10,10 +10,15 @@ const manifest=JSON.parse(fs.readFileSync(new URL('../native/hwui/sources.json',
 const lockBytes=fs.readFileSync(new URL('../native/hwui/Cargo.lock',import.meta.url));
 const sha=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 function relative(value){if(typeof value!=='string'||!value||path.isAbsolute(value)||value.split(/[\\/]/).some(part=>part==='..'||part==='.'||!part))throw Error('Invalid HWUI source member path.');return value;}
-function copySource(from,to,logical){
- if(Content.excludedReason(logical)||['.git','.fetched','.clang-format','rustfmt.toml','.rustfmt.toml'].includes(path.basename(from)))return;
+function omittedAlias(component,logical){
+ // These original aliases describe SurfaceFlinger/private Binder and the
+ // Bazel Fontations package, outside the Android HWUI producer's inputs.
+ return component==='native'&&['include/layerproto','include/private/binder'].includes(logical)||component==='skia'&&logical==='src/ports/fontations/Cargo.toml';
+}
+function copySource(from,to,logical,component){
+ if(omittedAlias(component,logical)||Content.excludedReason(logical)||['.git','.fetched','.clang-format','rustfmt.toml','.rustfmt.toml'].includes(path.basename(from)))return;
  const stat=fs.lstatSync(from);
- if(stat.isDirectory()){fs.mkdirSync(to,{recursive:true});for(const name of fs.readdirSync(from).sort())copySource(path.join(from,name),path.join(to,name),path.posix.join(logical,name));}
+ if(stat.isDirectory()){fs.mkdirSync(to,{recursive:true});for(const name of fs.readdirSync(from).sort())copySource(path.join(from,name),path.join(to,name),path.posix.join(logical,name),component);}
  else if(stat.isFile()){fs.mkdirSync(path.dirname(to),{recursive:true});fs.copyFileSync(from,to);fs.chmodSync(to,stat.mode&0o111?0o755:0o644);}
  else if(stat.isSymbolicLink()){const target=fs.readlinkSync(from);if(path.isAbsolute(target)||path.posix.normalize(path.posix.join(path.posix.dirname(logical),target)).startsWith('../'))throw Error('HWUI source alias leaves its source root: '+logical+' ('+(path.isAbsolute(target)?'absolute target':target)+').');fs.mkdirSync(path.dirname(to),{recursive:true});fs.symlinkSync(target,to);}
  else throw Error('HWUI source inputs require regular files.');
@@ -31,12 +36,17 @@ function selection(record,verified){
  const includes=manifest.includes.flatMap(row=>row.source===record.key?[row.path]:row.work?.startsWith('module/source/'+record.key+'/')?[row.work.slice(('module/source/'+record.key+'/').length)]:[]);
  // These are the original consumers in buildStatics, buildAvif and
  // generateHeaders. Legacy framework use is limited to the catalog includes.
- const additional={hidl:['Android.bp','transport/base/1.0','transport/token/1.0','transport/manager/1.0'],frameworkLegacy:[],nativehelper:['Android.bp','libnativehelper_lazy.c','libnativehelper_lazy.h','libnativehelper.map.txt'],incfs:['incfs'],ziparchive:['Android.bp','incfs_support','zip_archive.cc','zip_archive_stream_entry.cc','zip_cd_entry_map.cc','zip_error.cpp','zip_writer.cc'],libhardware:[],boringssl:[],rustutils:['Android.bp','lib.rs','inherited_fd.rs','sockets.rs','users.rs','system_properties.rs','system_properties','bindgen']}[record.key];
+ const additional={hidl:['Android.bp','transport/base/1.0','transport/token/1.0','transport/manager/1.0'],frameworkLegacy:[],nativehelper:['Android.bp','libnativehelper_lazy.c','libnativehelper_lazy.h','libnativehelper.map.txt'],incfs:['incfs'],ziparchive:['Android.bp','incfs_support','zip_archive.cc','zip_archive_stream_entry.cc','zip_cd_entry_map.cc','zip_error.cpp','zip_writer.cc'],libhardware:['include_all/hardware'],boringssl:[],rustutils:['Android.bp','lib.rs','inherited_fd.rs','sockets.rs','users.rs','system_properties.rs','system_properties','bindgen']}[record.key];
  if(!additional)throw Error('HWUI whole-tree source has no declared production projection: '+record.key);
  if(record.key==='ziparchive')additional.push(...fs.readdirSync(verified.checks[0].file).filter(name=>/\.(?:h|hpp)$/.test(name)));
  return [...includes,...additional];
 }
+function assertSourceAliases(root){
+ root=fs.realpathSync(root);
+ function walk(directory){for(const item of fs.readdirSync(directory,{withFileTypes:true})){const file=path.join(directory,item.name);if(item.isDirectory())walk(file);else if(item.isSymbolicLink()){let target;try{target=fs.realpathSync(file);}catch{throw Error('HWUI source alias has no included target: '+path.relative(root,file));}if(target!==root&&!target.startsWith(root+path.sep))throw Error('HWUI source alias leaves the exported sources: '+path.relative(root,file));}}}walk(root);
+}
 function normalize(root){for(const item of fs.readdirSync(root,{withFileTypes:true})){const file=path.join(root,item.name);if(item.isDirectory())normalize(file);if(item.isSymbolicLink())fs.lutimesSync(file,0,0);else fs.utimesSync(file,0,0);}fs.utimesSync(root,0,0);}
+function normalizeGzip(file){const descriptor=fs.openSync(file,'r+');try{const header=Buffer.alloc(10);if(fs.readSync(descriptor,header,0,10,0)!==10||header[0]!==31||header[1]!==139||header[2]!==8||header[3]!==0)throw Error('Invalid HWUI registry gzip archive.');fs.writeSync(descriptor,Buffer.alloc(4),0,4,4);}finally{fs.closeSync(descriptor);}}
 function lockedRegistry(){
  const result=new Map();for(const block of lockBytes.toString().split(/^\[\[package\]\]\s*$/m).slice(1)){const get=name=>{const value=block.match(new RegExp('^'+name+' = ("[^"\\n]*")$','m'))?.[1];return value?JSON.parse(value):undefined;};if(get('source')?.startsWith('registry+'))result.set([get('name'),get('version'),get('source')].join('@'),get('checksum'));}return result;
 }
@@ -66,12 +76,13 @@ export function exportHwuiSources({sources,registry,registryCache}={},destinatio
      // Supplied archive parts authenticate against each original Git object;
      // sparse checkout metadata authenticates the original project root.
      const missing=[];
-     for(const member of members){const file=original(verified,member.path,true);if(!file){missing.push(member);continue;}const proof=verifyHwuiSource({...record,checks:[member]},input).checks[0];copySource(proof.file,path.join(destination,'sources',record.key,member.path),member.path);}
+     for(const member of members){const file=original(verified,member.path,true);if(!file){missing.push(member);continue;}const proof=verifyHwuiSource({...record,checks:[member]},input).checks[0];copySource(proof.file,path.join(destination,'sources',record.key,member.path),member.path,record.key);}
      if(missing.length){exported=fs.mkdtempSync(path.join(path.dirname(destination),'.hwui-source-'));exportSources(checkout,record.revision,missing.map(member=>member.path),exported,{offline:true});for(const member of missing)copySource(path.join(exported,member.path),path.join(destination,'sources',record.key,member.path),member.path);}
-    }else for(const name of selected)copySource(original(verified,name),path.join(destination,'sources',record.key,name),name);
+    }else for(const name of selected)copySource(original(verified,name),path.join(destination,'sources',record.key,name),name,record.key);
    }finally{if(exported)fs.rmSync(exported,{recursive:true,force:true});}
    projects.push({key:record.key,project:record.project,repository:record.repository,revision:record.revision,paths:selected,checks:record.checks});
   }
+  assertSourceAliases(path.join(destination,'sources'));
   const locked=lockedRegistry(),dependencies=[],seen=new Set(),cacheDirs=[registryCache,...fs.readdirSync(registryCache,{withFileTypes:true}).filter(item=>item.isDirectory()).map(item=>path.join(registryCache,item.name))];
   const temporary=fs.mkdtempSync(path.join(path.dirname(destination),'.hwui-registry-'));
   try{for(const record of [...registry].sort((a,b)=>(a.name+'@'+a.version).localeCompare(b.name+'@'+b.version))){
@@ -81,9 +92,9 @@ export function exportHwuiSources({sources,registry,registryCache}={},destinatio
    const prefix=record.name+'-'+record.version,filename=prefix+'.crate',archive=cacheDirs.map(dir=>path.join(dir,filename)).find(file=>fs.existsSync(file)&&sha(fs.readFileSync(file))===checksum);if(!archive)throw Error('Authenticated HWUI registry source is unavailable: '+filename);
    const names=execFileSync('/usr/bin/tar',['-tzf',archive],{encoding:'utf8',maxBuffer:16<<20}).split('\n').filter(Boolean);for(const name of names){const member=relative(name.replace(/\/$/,''));if(member!==prefix&&!member.startsWith(prefix+'/'))throw Error('HWUI registry archive has a different package root.');}
    const extracted=path.join(temporary,'original'),published=path.join(temporary,'published');fs.mkdirSync(extracted);fs.mkdirSync(published);
-   execFileSync('/usr/bin/tar',['-xzf',archive,'-C',extracted],{env:{...process.env,COPYFILE_DISABLE:'1'},stdio:['ignore','ignore','pipe']});copySource(path.join(extracted,prefix),path.join(published,prefix),'');normalize(published);
+   execFileSync('/usr/bin/tar',['-xzf',archive,'-C',extracted],{env:{...process.env,COPYFILE_DISABLE:'1'},stdio:['ignore','ignore','pipe']});copySource(path.join(extracted,prefix),path.join(published,prefix),'');assertSourceAliases(published);normalize(published);
    const logical='registry/'+prefix+'.tar.gz',output=path.join(destination,logical);fs.mkdirSync(path.dirname(output),{recursive:true});
-   execFileSync('/usr/bin/tar',['--uid','0','--gid','0','--uname','root','--gname','wheel','-czf',output,'-C',published,prefix],{env:{...process.env,COPYFILE_DISABLE:'1'},stdio:['ignore','ignore','pipe']});const bytes=fs.readFileSync(output);
+   execFileSync('/usr/bin/tar',['--uid','0','--gid','0','--uname','root','--gname','wheel','-czf',output,'-C',published,prefix],{env:{...process.env,COPYFILE_DISABLE:'1'},stdio:['ignore','ignore','pipe']});normalizeGzip(output);const bytes=fs.readFileSync(output);
    dependencies.push({name:record.name,version:record.version,source:record.source,checksum,archive:logical,sha256:sha(bytes),size:bytes.length});fs.rmSync(extracted,{recursive:true});fs.rmSync(published,{recursive:true});
   }}finally{fs.rmSync(temporary,{recursive:true,force:true});}
   return {projects,registry:dependencies,cargoLockSha256:sha(lockBytes)};
