@@ -9,8 +9,16 @@
 
 typedef jint (JNICALL *CreateVM)(JavaVM **, void **, void *);
 typedef void (*ExitVM)(jint);
-static _Atomic(CreateVM) create_vm;
+extern jint JNICALL JNI_CreateJavaVM(JavaVM **, void **, void *) __attribute__((weak_import));
 static _Atomic(ExitVM) previous_exit;
+
+__attribute__((constructor)) static void require_vm(void) {
+    if (!JNI_CreateJavaVM) {
+        static const char message[] = "Android Java VM process initialization failed.\n";
+        (void)write(STDERR_FILENO, message, sizeof(message) - 1);
+        _exit(78);
+    }
+}
 
 /* HotSpot invokes its Invocation API exit option after Java shutdown hooks,
  * VMDeath notifications, its final safepoint and VM-global cleanup. Native
@@ -23,7 +31,7 @@ static void terminal_exit(jint status) {
 }
 
 static jint JNICALL create(JavaVM **vm, void **env, void *arguments) {
-    CreateVM original = atomic_load_explicit(&create_vm, memory_order_acquire);
+    CreateVM original = JNI_CreateJavaVM;
     if (!original) return JNI_ERR;
     if (!arguments) return original(vm, env, arguments);
     JavaVMInitArgs *input = arguments;
@@ -57,18 +65,10 @@ static jint JNICALL create(JavaVM **vm, void **env, void *arguments) {
     return result;
 }
 
-/* JLI resolves JNI_CreateJavaVM with dlsym rather than a symbol relocation.
- * Adapt that exact Invocation API binding; every other lookup is returned
- * verbatim. dyld excludes this image's own dlsym call from interposition. */
-static void *lookup(void *handle, const char *name) {
-    void *result = dlsym(handle, name);
-    if (result && name && !strcmp(name, "JNI_CreateJavaVM")) {
-        atomic_store_explicit(&create_vm, (CreateVM)result, memory_order_release);
-        return (void *)create;
-    }
-    return result;
-}
+/* dyld applies this exact Invocation API interposition to both bindings and
+ * dlsym results. The selected JVM precedes this adapter in the preload closure;
+ * all symbol scopes and diagnostics remain owned by the original dyld API. */
 __attribute__((used, section("__DATA,__interpose")))
 static const struct { const void *replacement, *original; } mapping = {
-    (const void *)lookup, (const void *)dlsym
+    (const void *)create, (const void *)JNI_CreateJavaVM
 };

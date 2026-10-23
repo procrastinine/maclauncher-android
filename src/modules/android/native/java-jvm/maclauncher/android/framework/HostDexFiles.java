@@ -170,6 +170,9 @@ public final class HostDexFiles {
             ||supplied==HostDexFiles.class.getClassLoader()?platformParent:supplied;
     }
     public static ClassLoader bootClassLoader(Class<?> ignored){return platformParent;}
+    /** Android's system class path contains platform code. JDK system lookups
+     * separately retain the current application and instrumentation boundary. */
+    public static ClassLoader getSystemClassLoader(){return platformParent;}
     public static Object openDexFileNative(String source,String output,int flags,ClassLoader loader,Object[] elements)throws IOException{
         ApplicationSources application;synchronized(applications){application=applications.get(loader);}
         if(application!=null){Path file=Path.of(source).toRealPath();

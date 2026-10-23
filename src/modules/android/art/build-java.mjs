@@ -15,7 +15,12 @@ export function packageArtDex({classes,dex,jar,target}){
 
 /** Common adapters use the same Android core declarations as ART entry code. */
 export function compileArtSources({jdk,core,api,sharedClasses,classes,sources}){
- execFileSync(path.join(jdk,'bin/javac'),['--system',core,'-source','21','-target','21','-cp',[api,sharedClasses].join(path.delimiter),'-d',classes,...sources],{stdio:'inherit'});
+ // Android's SDK module contains public libcore declarations. The original
+ // capability structs and methods are hidden framework APIs; retain their
+ // complete original class declarations for compilation, outside program output.
+ const declarations=classes+'.platform-declarations';fs.mkdirSync(declarations,{recursive:true});
+ execFileSync(path.join(jdk,'bin/jar'),['--extract','--file',path.resolve(api),'android/system/Os.class','android/system/OsConstants.class','android/system/StructCapUserHeader.class','android/system/StructCapUserData.class'],{cwd:declarations,stdio:'inherit'});
+ execFileSync(path.join(jdk,'bin/javac'),['--system',core,'--patch-module','java.base='+declarations,'-source','21','-target','21','-cp',[api,sharedClasses].join(path.delimiter),'-d',classes,...sources],{stdio:'inherit'});
 }
 
 /** D8 handles only the launcher-owned Java hooks. ART consumes the original
@@ -54,5 +59,5 @@ export async function buildArtJava({output,jdk,api,coreSystemModules,sharedClass
   delegateDexBodies({input:imageServicesJar,bodies:serviceBodies,targets,output:servicesJar,tool:dexBodies});
   delegateDexBodies({input:imageFrameworkJar,bodies,targets,output:frameworkJar,tool:dexBodies});
  }});
- return {bootstrapDex:path.join(destination,'hooks-dex.jar'),servicesJar,frameworkJar};
+ return {bootstrapDex:path.join(destination,'hooks-dex.jar'),servicesJar,frameworkJar,frameworkResourcePreinitVersion:1};
 }

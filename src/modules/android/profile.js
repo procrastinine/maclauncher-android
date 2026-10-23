@@ -47,6 +47,10 @@ function runtimeProfile(pins) {
       throw new Error("Unsupported Android " + label + " profile.");
     profile[key] = pins[key];
   }
+  // This owned source generation compiles the JVM application/system loader
+  // together with the full framework. Older builds retain their own snapshot
+  // of this recipe and therefore their original startup capability.
+  if (profile.frameworkBaseVersion === 1) profile.applicationSystemClassLoaderVersion = 1;
   return profile;
 }
 

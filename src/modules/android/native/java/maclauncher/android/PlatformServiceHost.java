@@ -27,7 +27,8 @@ public final class PlatformServiceHost {
             try(var processes=new HostProcessServices();
                 var system=config.role().equals("system")?HostSystemServices.start(config.runtimeRoot(),config.dataRoot(),config.processName()):null;
                 var processInfo=system==null?null:new HostProcessInfo(HostApplication.applicationContext(),processes);
-                var permissions=system==null?null:HostPermissions.remote(processes)) {
+                var permissions=system==null?null:HostPermissions.remote(processes);
+                var locales=system==null?null:HostLocaleConfiguration.remote(processes)) {
                 if(config.role().equals("keystore"))HostKeyStore.start(config.runtimeRoot(),config.filesRoot());
                 try(var directory=system==null?null:new HostServiceDirectory(HostApplication.applicationContext(),true,processes);
                     var listener=HostBinderRpc.listen(config.platformSocketPath().toString(),directory==null?HostServices.publishedManager().asBinder():directory.root(),processes,4)) {

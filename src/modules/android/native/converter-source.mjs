@@ -1,3 +1,5 @@
+import {adaptArrayDataOutlining} from './converter-array-source.mjs';
+
 /** Preserve JVM receiver requirements and Dalvik result-discard semantics. */
 export function adaptTranslator(source) {
   const before='            if (u.checkCastTo != null) return;   // the analysis already cast it\n            String have = u.type.ref().name;';
@@ -12,7 +14,7 @@ export function adaptTranslator(source) {
     +'            // instruction boundary stack-neutral when no move-result follows.\n'
     +'            if (!nextIsMoveResult(insn)) out.op(CodeWriter.POP);';
   if(source.split(arrayBefore).length!==2)throw new Error('The pinned converter array-result boundary needs updating.');
-  return source.replace(before,after).replace(arrayBefore,arrayAfter);
+  return adaptArrayDataOutlining(source.replace(before,after).replace(arrayBefore,arrayAfter));
 }
 
 /** Every converter entry point shares the exact same post-conversion JVM boundary. */

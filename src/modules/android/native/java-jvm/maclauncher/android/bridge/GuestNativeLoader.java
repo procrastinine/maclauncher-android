@@ -130,17 +130,27 @@ public final class GuestNativeLoader {
             }
         }
         if(link){
+            var preparationCount=new java.util.concurrent.atomic.AtomicInteger();
+            var preparationFailure=new java.util.concurrent.atomic.AtomicReference<Throwable>();
             try{
                 var metadata=ElfNativeExports.readMetadata(file);
                 for(String dependency:metadata.dependencies()){Path sibling=file.getParent().resolve(dependency);if(!Files.exists(sibling))sibling=value.nativeRoot.resolve(dependency);if(Files.exists(sibling))load(owner,checkedFile(sibling.toString()),false);}
-                long handle=NativeBinding.loadIn(nativeEntry,value.runtime,file.toString(),file.getFileName().toString(),false);
-                if(handle==0)throw new UnsatisfiedLinkError("Android native loader returned no image");
-                synchronized(image){image.exports=metadata.exports();image.handle=handle;}
-                image.linked.complete(null);bind(image,owner);
-                // ELF constructors and JNI_OnLoad may define Java classes on other threads.
-                // Neither executes under the registry, image or native linker monitor.
-                NativeBinding.constructIn(nativeEntry,handle);image.constructed.complete(null);
-            }catch(Throwable cause){if(image.handle!=0)try{NativeBinding.rejectIn(nativeEntry,image.handle);}catch(Throwable cleanup){cause.addSuppressed(cleanup);}var error=failure("Android native library could not load: "+file.getFileName(),cause);image.linked.completeExceptionally(error);image.constructed.completeExceptionally(error);throw error;}
+                Image preparedImage=image;
+                long handle=NativeBinding.loadPreparedIn(nativeEntry,value.runtime,file.toString(),file.getFileName().toString(),prepared->{
+                    try{
+                        if(preparationCount.incrementAndGet()!=1)throw new UnsatisfiedLinkError("Android native preparation ran more than once");
+                        if(prepared==0)throw new UnsatisfiedLinkError("Android native preparation returned no image");
+                        synchronized(preparedImage){preparedImage.exports=metadata.exports();preparedImage.handle=prepared;}
+                        preparedImage.linked.complete(null);bind(preparedImage,owner);
+                    }catch(Throwable cause){preparationFailure.compareAndSet(null,cause);throw propagate(cause);}
+                });
+                if(preparationFailure.get()!=null)throw propagate(preparationFailure.get());
+                if(preparationCount.get()!=1)throw new UnsatisfiedLinkError("Android native loader omitted preparation");
+                if(handle==0||handle!=image.handle)throw new UnsatisfiedLinkError("Android native prepared image does not match its loaded image");
+                // The native entry runs constructors after successful Java publication.
+                // No registry, image or NativeBinding monitor spans that operation.
+                image.constructed.complete(null);
+            }catch(Throwable cause){Throwable first=preparationFailure.get();if(first!=null&&first!=cause){if(cause.getCause()!=first)first.addSuppressed(cause);cause=first;}if(image.handle!=0)try{NativeBinding.rejectIn(nativeEntry,image.handle);}catch(Throwable cleanup){if(cleanup!=cause)cause.addSuppressed(cleanup);}var error=failure("Android native library could not load: "+file.getFileName(),cause);image.linked.completeExceptionally(error);image.constructed.completeExceptionally(error);throw error;}
             finally{image.linkingThread=null;}
         }else{
             if(!image.linked.isDone()&&image.linkingThread==Thread.currentThread())throw new UnsatisfiedLinkError("Recursive Android native dependency: "+file.getFileName());

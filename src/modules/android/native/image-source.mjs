@@ -15,7 +15,7 @@ export function prepareImageSource(vendor,build) {
          '        if (!has_code) bits[p] &= (uint8_t)~PF_X;\n        }');
  replace(relroEnd,relroEnd+'\n        if (!(bits[p] & PF_X)) continue;\n');
  source='#include '+JSON.stringify(path.join(root,'elf-tls.h'))+'\n#include '+JSON.stringify(path.join(root,'image-constructor.h'))+'\n#include '+JSON.stringify(path.join(root,'native-invocation.h'))+'\n#include '+JSON.stringify(path.join(root,'image-format.h'))+'\n#include '+JSON.stringify(path.join(root,'inline-syscall.h'))+'\n#include '+JSON.stringify(path.join(root,'x18-pools.h'))+'\n#include '+JSON.stringify(path.join(root,'executable-memory/jvm.h'))+'\n#include <stdatomic.h>\n#define DT_INIT 12\n'+source;
- replace('struct kl_image {','#include '+JSON.stringify(path.join(root,'image-code-ranges.h'))+'\n#include '+JSON.stringify(path.join(root,'image-identity.h'))+'\n\nstruct kl_image {\n    const KlImageFormat *format;\n    void *format_payload;\n    char *soname;\n    int identity_captured;\n    struct kl_image **dependencies;\n    size_t dependency_count;\n    KlImageCodeMetadata code_metadata;');
+ replace('struct kl_image {','#include '+JSON.stringify(path.join(root,'image-code-ranges.h'))+'\n#include '+JSON.stringify(path.join(root,'image-identity.h'))+'\n#include '+JSON.stringify(path.join(root,'library-binding.h'))+'\n\nstruct kl_image {\n    const KlImageFormat *format;\n    void *format_payload;\n    char *soname;\n    int identity_captured;\n    uint64_t binding_flags_1;\n    _Atomic unsigned binding_rtld_flags;\n    unsigned binding_target_sdk;\n    struct kl_image *binding_local_group;\n    struct kl_image **dependencies;\n    size_t dependency_count;\n    KlImageCodeMetadata code_metadata;');
  replace('    size_t     span;','    uintptr_t tls_module;\n    struct klj_elf_tls_descriptor_node *tls_descriptors;\n    size_t inline_prefix_size,inline_pool_count,tls_data_words;\n    KljInlinePool *inline_pools;\n    size_t     span;');
  replace('static int apply_relocs(kl_image *img, const Elf64_Rela *r, size_t count) {',
   '#include '+JSON.stringify(path.join(root,'elf-tls-image.inc'))+'\n\nstatic int apply_relocs(kl_image *img, const Elf64_Rela *r, size_t count) {');
@@ -206,11 +206,19 @@ void klj_reject_image_initialization(kl_image *img) { klj_image_reject_new(&img-
 const char *klj_image_path(kl_image *img) { return img->path; }
 void klj_image_capture_identity(kl_image *img) {
     if(!img->identity_captured) {
-        img->soname=klj_elf_soname(img->path);
+        img->soname=klj_elf_identity(img->path,&img->binding_flags_1);
+        img->binding_flags_1|=img->needed.flags_1;
+        img->binding_target_sdk=klj_library_target_sdk();
         img->identity_captured=1;
     }
 }
-const char *klj_image_soname(kl_image *img) { return img->soname; }`);
+const char *klj_image_soname(kl_image *img) { return img->soname; }
+uint64_t klj_image_dt_flags_1(void *opaque){kl_image *image=opaque;klj_image_capture_identity(image);return image->binding_flags_1;}
+unsigned klj_image_rtld_flags(void *opaque){return atomic_load_explicit(&((kl_image *)opaque)->binding_rtld_flags,memory_order_acquire);}
+unsigned klj_image_target_sdk(void *opaque){kl_image *image=opaque;klj_image_capture_identity(image);return image->binding_target_sdk;}
+void klj_image_set_rtld_flags(void *opaque,unsigned flags){atomic_fetch_or_explicit(&((kl_image *)opaque)->binding_rtld_flags,flags,memory_order_acq_rel);}
+void *klj_image_local_group(void *opaque){kl_image *image=opaque;return image->binding_local_group?image->binding_local_group:image;}
+void klj_image_set_local_group(void *opaque,void *root){((kl_image *)opaque)->binding_local_group=root;}`);
  replace('void *kl_sym(kl_image *img, const char *name) {','void *kl_sym(kl_image *img, const char *name) {\n    if (klj_image_initialization_failed(img)) return NULL;\n    if(img->format)return img->format->symbol(img->format_payload,name);');
  replace('            return img->base + s->st_value;',
   '            return (s->st_info&15)==6 ? klj_elf_tls_address(&(KljElfTlsIndex){img->tls_module,s->st_value}) : img->base+s->st_value;');
@@ -252,5 +260,51 @@ int klj_image_gap_pool_release(KljImagePoolLease *lease,size_t used){
  replace('    if (!img->symtab || !img->strtab) { err("missing DT_SYMTAB/DT_STRTAB"); return -1; }',
   '    if (!img->symtab || !img->strtab) { err("missing DT_SYMTAB/DT_STRTAB"); return -1; }\n    for(int i=0;i<phnum;i++)if(ph[i].p_type==PT_DYNAMIC && !klj_image_dependencies_capture(&img->needed,img->base,img->span,\n        (const uint64_t *)(img->base+ph[i].p_vaddr-lo),(size_t)ph[i].p_filesz,img->strtab)) {\n        err("Unable to retain original ELF dependency metadata");return -1;\n    }');
  source+='\nvoid klj_image_visit_needed(kl_image *image,void (*visit)(void *,const char *),void *context){\n    for(size_t i=0;i<image->needed.count;i++)visit(context,image->needed.names[i]);\n}\n';
+ replace('    if (!ext) ext = kl_guest_sym_global(nm);','    if (!ext) ext = klj_guest_sym_for_image(img,nm);');
+ source='#include '+JSON.stringify(path.join(root,'image-startup.h'))+'\n'+source;
+ replace('    if(img->format)return img->format->initialize(img->format_payload);',
+  '    if(img->format)return img->format->initialize(img->format_payload);\n    const KljImageStartup *startup=klj_library_startup();\n    if(!startup){err("Android native process startup is not configured");return 0;}');
+ replace('img->init_function());','((void (*)(int,char **,char **))img->init_function)(startup->argc,startup->argv,startup->envp));');
+ replace('initializer());','((void (*)(int,char **,char **))initializer)(startup->argc,startup->argv,startup->envp));');
+ // Program-header identity belongs to the loaded image. Keep the mapped
+ // pointer and original count as Bionic's soinfo does; content stays live.
+ replace('    KlImageCodeMetadata code_metadata;',
+  '    KlImageCodeMetadata code_metadata;\n    const Elf64_Phdr *mapped_phdr;\n    unsigned mapped_phnum;');
+ replace(`    const Elf64_Ehdr *eh = (const Elf64_Ehdr *)i->base;
+    if (memcmp(eh->e_ident, "\\177ELF", 4) != 0) return NULL;
+    if (eh->e_phentsize != sizeof(Elf64_Phdr)) return NULL;
+    if (eh->e_phoff + (uint64_t)eh->e_phnum * sizeof(Elf64_Phdr) > i->span) return NULL;
+    if (count) *count = eh->e_phnum;
+    return i->base + eh->e_phoff;`,
+ `    if (count) *count = i->mapped_phnum;
+    return i->mapped_phdr;`);
+ const phdrCapture=`static void klj_retain_mapped_phdrs(kl_image *image) {
+    if(!image->base || image->span<sizeof(Elf64_Ehdr))return;
+    const Elf64_Ehdr *header=(const Elf64_Ehdr *)image->base;
+    if(memcmp(header->e_ident,"\\177ELF",4) || header->e_phentsize!=sizeof(Elf64_Phdr))return;
+    uint64_t bytes=(uint64_t)header->e_phnum*sizeof(Elf64_Phdr);
+    if(header->e_phoff>image->span || bytes>image->span-header->e_phoff)return;
+    image->mapped_phdr=(const Elf64_Phdr *)(image->base+header->e_phoff);
+    image->mapped_phnum=header->e_phnum;
+}
+`;
+ replace('const void *kl_phdrs(kl_image *i, unsigned *count) {',phdrCapture+'const void *kl_phdrs(kl_image *i, unsigned *count) {');
+ replace('    // ---- PT_DYNAMIC, then relocate ----',
+  '    klj_retain_mapped_phdrs(img);\n\n    // ---- PT_DYNAMIC, then relocate ----');
+ replace('    img->span = (size_t)(hi - lo);\n\n    if (bind_dynamic',
+  '    img->span = (size_t)(hi - lo);\n    klj_retain_mapped_phdrs(img);\n\n    if (bind_dynamic');
+ // A loaded image keeps the canonical pathname from its admitted namespace.
+ // Filesystem renames and later alias publication do not replace soinfo identity.
+ source='#include '+JSON.stringify(path.join(root,'guest-paths.h'))+'\n'+source;
+ replace('    char *soname;','    char *soname;\n    char *guest_path;');
+ replace('    free(img->soname);','    free(img->guest_path);\n    free(img->soname);');
+ replace('        img->identity_captured=1;',`        KljGuestPathView *view=klj_guest_path_view();
+        char path[4096];
+        const char *guest=klj_guest_path_view_name(view,img->path,path,sizeof path);
+        if(guest)img->guest_path=strdup(guest);
+        klj_guest_path_view_release(view);
+        img->identity_captured=1;`);
+ replace('const char *klj_image_soname(kl_image *img) { return img->soname; }',
+  'const char *klj_image_guest_path(kl_image *img) { return img->guest_path; }\nconst char *klj_image_soname(kl_image *img) { return img->soname; }');
  const file=path.join(build,'kl_image.c');fs.writeFileSync(file,source);return file;
 }

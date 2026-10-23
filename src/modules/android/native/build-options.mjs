@@ -3,7 +3,7 @@ import path from 'node:path';
 
 export const requiredInputs=['klepton','converter','jdk','sdl','vulkan-headers','sndfile-headers','codecs','codec-notices','angle','gles-headers','framework','output'];
 export const platformTools=['aidl','aconfig','rust-toolchain','python'];
-export const optionalInputs=['ndk-headers','blueprint-parser','blueprint-parser-sources','ninja','build-work','tool-inputs'];
+export const optionalInputs=['ndk-headers','blueprint-parser','blueprint-parser-sources','ninja','build-work','tool-inputs','ndk','bionic-inputs','bionic-target'];
 
 /** The snapshot builder and compiler consume the same pinned supplier catalog. */
 export function sourceOptions(root){
@@ -21,6 +21,8 @@ export function sourceOptions(root){
     suppliers[supplier.name+'-source']=supplier.checkout;
   for(const supplier of JSON.parse(fs.readFileSync(path.join(root,'keystore/sources.json'))))
     suppliers[supplier.name+'-source']=supplier.checkout;
+  for(const supplier of Object.values(JSON.parse(fs.readFileSync(path.join(root,'bionic/linker-sources.json'))).sources))
+    suppliers[supplier.id.slice('aosp-'.length)+'-source']=path.basename(supplier.path);
   return suppliers;
 }
 

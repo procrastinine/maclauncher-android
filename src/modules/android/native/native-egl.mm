@@ -28,6 +28,7 @@
 #include "composition-target.h"
 #include "egl-image-pool.hpp"
 #include "presentation.h"
+#include "angle-debug-callback.h"
 
 extern "C" void *klj_surface_begin_egl(void*,void**,int*,int*,int);
 extern "C" void klj_surface_record_egl(void*,void*);
@@ -46,10 +47,10 @@ namespace {
 JavaVM *vm;
 void *(*symbol)(const char*);
 void (*enter)(void*),(*supply)(void*);
-void *(*makeSurface)(JNIEnv*,void*,void*,int,int,bool,const int*);
-int (*current)(JNIEnv*,void*),(*present)(JNIEnv*,void*,int),(*finish)(JNIEnv*,void*),(*detach)(JNIEnv*),(*resizePresenter)(JNIEnv*,int,int);
-int (*presentRetained)(JNIEnv*,void*,int,void*,void(*)(void*),const KLMetalBufferSwap*);
-int (*replaceSurface)(JNIEnv*,void*,void*,void*,int,int);
+void *(*makeSurface)(void*,void*,int,int,bool,const int*,KLMetalError*);
+int (*current)(void*,KLMetalError*),(*present)(void*,int,KLMetalError*),(*finish)(void*,KLMetalError*),(*detach)(KLMetalError*),(*resizePresenter)(int,int,KLMetalError*);
+int (*presentRetained)(void*,int,void*,void(*)(void*),const KLMetalBufferSwap*,KLMetalError*);
+int (*replaceSurface)(void*,void*,void*,int,int,KLMetalError*);
 std::atomic<unsigned> frames{0};
 std::atomic<uint64_t> surfaceSerial{0},offscreenSwaps{0};
 std::atomic<bool> targetClockReady{false};
@@ -145,7 +146,7 @@ void *rawBuffer(WindowSurface &owner,void *storage,int width,int height){
 }
 void *bufferSurface(JNIEnv *env,WindowSurface &owner,void *storage,int width,int height){
  if(owner.texture||owner.composition)return rawBuffer(owner,storage,width,height);
- enter(owner.presenter);supply(storage);auto result=makeSurface(env,owner.display,configRaw(owner.config),width,height,bool(opaqueConfig(owner.config)),owner.attributes.data());if(!result)supply(nullptr);return result;
+ enter(owner.presenter);supply(storage);KLMetalError failure;auto result=makeSurface(owner.display,configRaw(owner.config),width,height,bool(opaqueConfig(owner.config)),owner.attributes.data(),&failure);if(!result){supply(nullptr);error=failure?unsigned(failure):EGL_BAD_ALLOC;}return result;
 }
 bool refresh(const std::shared_ptr<WindowSurface> &owner){
  if(!owner||owner->nativeLayerLease)return true;
@@ -158,26 +159,26 @@ bool refresh(const std::shared_ptr<WindowSurface> &owner){
  auto draw=fn<void*(*)(int)>("eglGetCurrentSurface")(EGL_DRAW),read=fn<void*(*)(int)>("eglGetCurrentSurface")(EGL_READ);
  void *old=owner->surface.load();bool drawBound=boundDraw.lock()==owner,readBound=boundRead.lock()==owner,bound=drawBound||readBound;
  if(owner->producer.load()!=0&&owner->producer.load()!=(uintptr_t)pthread_self()){CFRelease(storage);error=EGL_BAD_ACCESS;return false;}
- auto env=environment();if(!env){CFRelease(storage);error=EGL_BAD_ACCESS;return false;}
+ KLMetalError presenterError=KL_METAL_OK;
  auto next=rawBuffer(*owner,storage,width,height);
  if(!next){CFRelease(storage);error=EGL_BAD_ALLOC;return false;}
  if(!restoreSurfaceAttributes(*owner,next)){fn<unsigned(*)(void*,void*)>("eglDestroySurface")(owner->display,next);CFRelease(storage);return false;}
  if(bound&&!fn<unsigned(*)(void*,void*,void*,void*)>("eglMakeCurrent")(d,drawBound?next:draw,readBound?next:read,context)){
   fn<unsigned(*)(void*,void*)>("eglDestroySurface")(owner->display,next);CFRelease(storage);return false;
  }
- if(!owner->texture&&!owner->composition&&!replaceSurface(env,owner->presenter,next,storage,width,height)){
+ if(!owner->texture&&!owner->composition&&!replaceSurface(owner->presenter,next,storage,width,height,&presenterError)){
   if(bound)fn<unsigned(*)(void*,void*,void*,void*)>("eglMakeCurrent")(d,draw,read,context);
-  fn<unsigned(*)(void*,void*)>("eglDestroySurface")(owner->display,next);CFRelease(storage);error=EGL_BAD_ACCESS;return false;
+  fn<unsigned(*)(void*,void*)>("eglDestroySurface")(owner->display,next);CFRelease(storage);error=presenterError?unsigned(presenterError):EGL_BAD_ACCESS;return false;
  }
  if(owner->rawBuffers[0])retireBuffers(*owner);else fn<unsigned(*)(void*,void*)>("eglDestroySurface")(owner->display,old);
  owner->surface=next;owner->resizes.fetch_add(1,std::memory_order_relaxed);klj_surface_commit_egl(owner->window,storage);
  if(!owner->texture&&!owner->composition){owner->drawing=0;owner->rawBuffers[0]=next;owner->buffers.images[0]=std::make_shared<WindowImage>((IOSurfaceRef)storage);}
  CFRelease(storage);
- if(bound&&!owner->texture&&!owner->composition&&!current(env,next)){error=EGL_BAD_ACCESS;return false;}
+ if(bound&&!owner->texture&&!owner->composition&&!current(next,&presenterError)){error=presenterError?unsigned(presenterError):EGL_BAD_ACCESS;return false;}
  return true;
 }
 void *create(void *d,void *config,void *window,const int *attributes){
- auto env=environment();if(!env){error=EGL_BAD_ACCESS;return nullptr;}
+ auto env=environment();if(!env||env->ExceptionCheck()){error=EGL_BAD_ACCESS;return nullptr;}
  jobject remote=klj_surface_composition(env,window);bool remoteProducer=remote!=nullptr;
  if(vulkanBackend()&&remoteProducer){env->DeleteLocalRef(remote);error=EGL_BAD_MATCH;return nullptr;}
  if(vulkanBackend()){
@@ -205,7 +206,7 @@ void *create(void *d,void *config,void *window,const int *attributes){
  auto raw=bufferSurface(env,*owner,storage,width,height);
  if(raw&&!owner->texture&&!owner->composition){owner->rawBuffers[0]=raw;owner->buffers.images[0]=std::make_shared<WindowImage>((IOSurfaceRef)storage);}
  CFRelease(storage);
- if(!raw){klj_surface_end_egl(window);error=EGL_BAD_ALLOC;return nullptr;}
+ if(!raw){klj_surface_end_egl(window);if(owner->texture||owner->composition)error=EGL_BAD_ALLOC;return nullptr;}
  owner->surface=raw;void *handle=owner.get();{std::lock_guard lock(surfacesMutex);surfaces.emplace(handle,owner);}klj_surface_record_egl(window,handle);return handle;
 }
 void *createPlatform(void*d,void*c,void*w,const intptr_t*attributes){std::vector<int> values;if(attributes){for(size_t i=0;attributes[i]!=EGL_NONE;i+=2){if(attributes[i]<INT32_MIN||attributes[i]>INT32_MAX||attributes[i+1]<INT32_MIN||attributes[i+1]>INT32_MAX){error=EGL_BAD_ATTRIBUTE;return nullptr;}values.push_back(int(attributes[i]));values.push_back(int(attributes[i+1]));}values.push_back(EGL_NONE);}return create(d,c,w,values.empty()?nullptr:values.data());}
@@ -220,7 +221,7 @@ unsigned makeCurrent(void *d,void *draw,void *read,void *context){
  boundDraw=drawOwner;boundRead=readOwner;
  retireDestroyed(previousDraw);if(previousRead!=previousDraw)retireDestroyed(previousRead);
  klj_glfb_current(d,context);enter(drawOwner?drawOwner->presenter:nullptr);
- if(drawOwner&&drawOwner->presenter&&!current(environment(),drawOwner->surface)){error=EGL_BAD_ACCESS;return 0;}return 1;
+ KLMetalError presenterError;if(drawOwner&&drawOwner->presenter&&!current(drawOwner->surface,&presenterError)){error=presenterError?unsigned(presenterError):EGL_BAD_ACCESS;return 0;}return 1;
 }
 std::mutex contextConfigsMutex;
 std::unordered_map<void*,std::shared_ptr<OpaqueConfig>> contextConfigs;
@@ -278,10 +279,10 @@ unsigned swap(void *d,void *surface){
   if(!fn<unsigned(*)(void*,void*)>("eglSwapBuffers")(d,owner->surface))return failed(fn<unsigned(*)()>("eglGetError")());
   owner->submitted.fetch_add(1,std::memory_order_relaxed);return 1;
  }
- if(owner->composition){auto env=environment();auto storage=klj_surface_copy_storage(owner->window);int accepted=env&&storage?klj_composition_present(env,owner->composition,d,storage,swapIndex+1):0;if(storage)CFRelease(storage);if(!accepted)return failed(EGL_BAD_SURFACE);}
- else if(owner->texture){auto env=environment();if(!env||!klj_texture_publish(env,d,owner->window))return failed(EGL_BAD_SURFACE);}
+ if(owner->composition){auto env=environment();if(!env||env->ExceptionCheck())return failed(EGL_BAD_ACCESS);auto storage=klj_surface_copy_storage(owner->window);int accepted=env&&storage?klj_composition_present(env,owner->composition,d,storage,swapIndex+1):0;if(storage)CFRelease(storage);if(!accepted)return failed(EGL_BAD_SURFACE);}
+ else if(owner->texture){auto env=environment();if(!env||env->ExceptionCheck()||!klj_texture_publish(env,d,owner->window))return failed(EGL_BAD_SURFACE);}
  else{
-  enter(owner->presenter);auto env=environment();if(!env)return failed(EGL_BAD_ACCESS);
+  enter(owner->presenter);
   auto context=fn<void*(*)()>("eglGetCurrentContext")();auto draw=fn<void*(*)(int)>("eglGetCurrentSurface")(EGL_DRAW),read=fn<void*(*)(int)>("eglGetCurrentSurface")(EGL_READ);
   void *old=owner->surface.load();if(!context||draw!=old||owner->producer.load()!=(uintptr_t)pthread_self())return failed(EGL_BAD_ACCESS);
   const int next=owner->buffers.next(owner->drawing,[&]{
@@ -306,7 +307,7 @@ unsigned swap(void *d,void *surface){
    if(!fn<unsigned(*)(void*,void*,void*,void*)>("eglMakeCurrent")(b.display,b.draw,b.read,b.context))return 0;
    b.owner->drawing=b.next;b.owner->surface=b.draw;klj_surface_rotate_egl(b.owner->window,b.image);return 1;
   },owner->preserved};
-  if(!presentRetained(env,owner->presenter,frames.fetch_add(1),lease,[](void *value){delete static_cast<std::shared_ptr<void>*>(value);},&handoff))return failed(EGL_BAD_ACCESS);
+  KLMetalError presenterError;if(!presentRetained(owner->presenter,frames.fetch_add(1),lease,[](void *value){delete static_cast<std::shared_ptr<void>*>(value);},&handoff,&presenterError))return failed(presenterError?unsigned(presenterError):EGL_BAD_ACCESS);
  }
  owner->submitted.fetch_add(1,std::memory_order_relaxed);
  return refresh(owner)?1:failed(error);
@@ -341,9 +342,15 @@ unsigned destroy(void *d,void *surface){
  auto retire=[&]{reportSurface(stderr,*owner,"retired");owner->destroyed=true;retireDestroyed(owner);if(owner->nativeLayerLease){klj_surface_record_egl(owner->window,nullptr);klj_surface_release_native_layer(owner->nativeLayerLease);owner->nativeLayerLease=nullptr;}else klj_surface_end_egl(owner->window);};
  if(owner->nativeLayerLease){unsigned okay=fn<unsigned(*)(void*,void*)>("eglDestroySurface")(d,owner->surface);if(okay)retire();return okay;}
  if(owner->texture||owner->composition){unsigned okay=fn<unsigned(*)(void*,void*)>("eglDestroySurface")(d,owner->surface);if(okay)retire();return okay;}
- enter(owner->presenter);auto env=environment();if(!env)return 0;
- std::lock_guard backing(owner->buffersMutex);
- return egl_cleanup::surface(env,[&]{finish(env,owner->presenter);},[&]{return detach(env);},[&]{auto okay=fn<unsigned(*)(void*,void*)>("eglDestroySurface")(d,owner->surface);if(okay){if(owner->producer)owner->destroyedCurrentImage=owner->buffers.images[owner->drawing];for(auto &raw:owner->rawBuffers)if(raw==owner->surface.load())raw=nullptr;retireBuffers(*owner);}return okay;},retire);
+ enter(owner->presenter);std::lock_guard backing(owner->buffersMutex);
+ KLMetalError first=KL_METAL_OK,next=KL_METAL_OK;
+ if(!finish(owner->presenter,&first)){error=first?unsigned(first):EGL_BAD_ACCESS;return 0;}
+ auto okay=fn<unsigned(*)(void*,void*)>("eglDestroySurface")(d,owner->surface);
+ if(!okay){if(first)error=unsigned(first);return 0;}
+ if(owner->producer)owner->destroyedCurrentImage=owner->buffers.images[owner->drawing];
+ for(auto &raw:owner->rawBuffers)if(raw==owner->surface.load())raw=nullptr;retireBuffers(*owner);
+ if(!detach(&next)){error=first?unsigned(first):next?unsigned(next):EGL_BAD_ACCESS;return 0;}
+ retire();if(first||next){error=unsigned(first?first:next);return 0;}return 1;
 }
 #include "egl-surface-forward.h"
 const char* queryString(void*d,int name){const char*value=fn<const char*(*)(void*,int)>("eglQueryString")(d,name);if(!value||name!=0x3055)return value;return klj_target::withoutExtension(value,error);}
@@ -368,7 +375,7 @@ extern "C" JNIEXPORT void JNICALL Java_maclauncher_android_bridge_NativeSurface_
 extern "C" JNIEXPORT void JNICALL Java_maclauncher_android_bridge_NativeSurface_configureGraphics(JNIEnv *env,jclass,jstring file){
  const char *path=env->GetStringUTFChars(file,nullptr);if(!path)return;void *library=dlopen(path,RTLD_NOW|RTLD_LOCAL);env->ReleaseStringUTFChars(file,path);
  const char *failure=nullptr;if(!library)failure=dlerror();
- if(library){symbol=(decltype(symbol))dlsym(library,"klj_graphics_symbol");enter=(decltype(enter))dlsym(library,"klj_metal_enter");supply=(decltype(supply))dlsym(library,"klj_metal_supply_storage");makeSurface=(decltype(makeSurface))dlsym(library,"klj_metal_surface");current=(decltype(current))dlsym(library,"klj_metal_current");present=(decltype(present))dlsym(library,"klj_metal_present");presentRetained=(decltype(presentRetained))dlsym(library,"klj_metal_present_retained");replaceSurface=(decltype(replaceSurface))dlsym(library,"klj_metal_replace_surface");finish=(decltype(finish))dlsym(library,"klj_metal_finish");detach=(decltype(detach))dlsym(library,"klj_metal_detach_surface");setTarget=(decltype(setTarget))dlsym(library,"klj_metal_target");resizePresenter=(decltype(resizePresenter))dlsym(library,"klj_metal_resize");if(!symbol||!enter||!supply||!makeSurface||!current||!present||!presentRetained||!replaceSurface||!finish||!detach||!resizePresenter)failure="Native EGL presenter exports are incomplete";}
+ if(library){symbol=(decltype(symbol))dlsym(library,"klj_graphics_symbol");enter=(decltype(enter))dlsym(library,"klj_metal_enter");supply=(decltype(supply))dlsym(library,"klj_metal_supply_storage");makeSurface=(decltype(makeSurface))dlsym(library,"klj_metal_surface_c");current=(decltype(current))dlsym(library,"klj_metal_current_c");present=(decltype(present))dlsym(library,"klj_metal_present_c");presentRetained=(decltype(presentRetained))dlsym(library,"klj_metal_present_retained_c");replaceSurface=(decltype(replaceSurface))dlsym(library,"klj_metal_replace_surface_c");finish=(decltype(finish))dlsym(library,"klj_metal_finish_c");detach=(decltype(detach))dlsym(library,"klj_metal_detach_surface_c");setTarget=(decltype(setTarget))dlsym(library,"klj_metal_target");resizePresenter=(decltype(resizePresenter))dlsym(library,"klj_metal_resize_c");if(!symbol||!enter||!supply||!makeSurface||!current||!present||!presentRetained||!replaceSurface||!finish||!detach||!resizePresenter)failure="Native EGL presenter exports are incomplete";}
  if(failure){auto type=env->FindClass("java/lang/IllegalStateException");if(type)env->ThrowNew(type,failure);}
 }
 extern "C" const char *klj_native_egl_install(void *runtime,void *(*resolve)(const char*)){
@@ -381,6 +388,7 @@ extern "C" const char *klj_native_egl_install(void *runtime,void *(*resolve)(con
 }
 extern "C" void *klj_native_egl_lookup(const char *name){
  if(!symbol)return nullptr;
+ if(!strcmp(name,"maclauncher_angle_blob_callback_owner_v1"))return symbol(name);
  if(!strcmp(name,"dlsym"))return guestSymbol?(void*)findPlatformSymbol:nullptr;
  if(!strcmp(name,"dlerror"))return guestError?(void*)findPlatformError:nullptr;
  struct Entry{const char *name;void *address;};const Entry entries[]={
@@ -406,6 +414,10 @@ extern "C" void *klj_native_egl_guest_lookup(const char *name){
 
 extern "C" int klj_native_egl_init_count(void*display){std::lock_guard lock(initializeMutex);auto i=initializeCounts.find(display);return i==initializeCounts.end()?0:(int)i->second.references;}
 extern "C" void klj_native_egl_error(unsigned value){error=value;}
+extern "C" KljAngleDebugOwnerInstall klj_native_egl_debug_owner(){
+ if(!symbol)return nullptr;void *entry=symbol("maclauncher_angle_debug_callback_owner_v1");
+ KljAngleDebugOwnerInstall result=nullptr;static_assert(sizeof(result)==sizeof(entry));std::memcpy(&result,&entry,sizeof(result));return result;
+}
 
 extern "C" void klj_native_egl_report(FILE *out){
  if(!out)return;std::lock_guard lock(surfacesMutex);

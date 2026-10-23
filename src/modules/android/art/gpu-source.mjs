@@ -3,6 +3,7 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {copyChanged,writeChanged} from '../native/upstream/source-files.mjs';
 import {verifyGlesHeaders} from '../native/gles-headers.mjs';
+import {prepareNativeFenceAllocationErrors} from './fence-source.mjs';
 
 /** The caller may supply its existing pinned checkout; standalone builds use
  * the registered nested source by default. Verify before publishing headers. */
@@ -133,6 +134,7 @@ fn es1_gl(core: &Gl) -> Option<&'static Gl> {
   patch('hal/gles/src/configs.rs',[
     ['    let maximum = native.iter()', '    // Vulkan supplies real RGB/RGBA configurations; Metal alone needs the\n    // IOSurface-backed opaque alias. Keep the selected provider\'s formats.\n    if std::env::var("KL_ANGLE_BACKEND").as_deref() == Ok("vulkan") { return Some(native); }\n    let maximum = native.iter()'],
   ]);
+  prepareNativeFenceAllocationErrors(aim);
   patch('crates/aim-host-gpu/src/fence.rs',[
     ['pub fn fence(display: usize) -> Result<OwnedFd, i64> {', 'pub fn fence(display: usize) -> Result<OwnedFd, i64> {\n    if crate::vulkan::selected() { return crate::vulkan::fence(display); }'],
   ]);

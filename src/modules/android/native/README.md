@@ -14,6 +14,7 @@ platform services as ARM64.
 | `framework`, `converter`, `portability` | Framework assembly and exact JVM/native dependency adaptations |
 | `nativebinding.c`, `loader-*.c`, `nativeabi.*`, `ndk-jni` | Native loading, original JNI declarations and Android/Darwin calling conventions |
 | `arm32` | ARM/Thumb execution, ELF32 records, AAPCS32 and JNI width conversion |
+| `bionic-provider.*`, `bionic-provider-guest.c` | Synchronous original Bionic linker operations through the existing guest callback |
 | `binder-rpc`, `activity-thread`, `keystore` | Shared Binder transport, application lifecycle and profile service implementations |
 | `native-*.mm`, `window*`, `presentation.mm`, `clock` | AppKit, input, display, surfaces and frame scheduling |
 | `gles-guest-abi.*` | Original GLES declaration types and AAPCS64-to-Darwin stack adapters |
@@ -38,7 +39,10 @@ Presentation cleanup uses the shared task owner across Activity navigation and
 configuration relaunches. It retires the current Activity stack on its owner thread
 before releasing view roots, display callbacks and the native output.
 SurfaceControl transaction completion follows the existing output's consumed
-frame. Native output uses the common presenter's observed display retirement;
+frame. ART output requires observed presentation API 1 and submits without a
+presentation target, retaining the source timestamp, producer token and display
+retirement callback through configured frame generation. Native output uses
+the common presenter's observed display retirement;
 dropped or merely encoded images do not report completion. TransactionStats
 retains the original latch timestamp API and an empty present fence when no
 Android fence descriptor is exported by that output.
@@ -52,6 +56,35 @@ Android native libraries receive a JNI environment facade while real Java object
 remain owned by the JVM. Android and Darwin argument layouts are selected from
 the calling code's registered image. Per-thread JNI state and attachments retire
 at the corresponding thread exit boundary, including host-created callbacks.
+The Bionic linker component runs `dlopen`, `dlsym` and `dlclose` on an already
+initialized Bionic thread through the existing host-call callback. The caller
+retains the callback frame, linker namespace and thread lifetime. Handles and
+symbol addresses remain with the original ELF linker. Its flags use Android's
+`RTLD_*` values; Darwin loader flags have different numeric values.
+The Bionic graphics carrier preserves the complete original native-window API
+family. Java Surface conversion, native reference counts, geometry and EGL
+producers share the same host-owned window; opaque host handles never enter the
+image Android Surface implementation. The window owner supports identity buffer
+transforms and the default unknown dataspace. Other buffer transforms, display
+refresh selection and native Parcel transfer return Android native errors.
+Clearing a refresh preference retains the system default, and preallocation is
+a best-effort hint. Pending JNI exceptions and borrowed Parcel ownership remain
+with the caller.
+Raw ARM64 imports search images marked `DF_1_GLOBAL` and the requesting
+image's retained `DT_NEEDED` closure. Explicit `RTLD_GLOBAL` controls dynamic
+symbol visibility separately; reopening an existing image retains its original
+flags. Named handles traverse dependencies in breadth-first order. Default and
+next lookups retain the native caller and original target-SDK compatibility.
+The application target is fixed before native image publication. Raw ARM64
+lookup uses each mapped image as its local root; format adapters retain the
+roots assigned by their group loader.
+
+The selected Java VM image precedes the JVM process adapter in the native
+preload closure. The adapter interposes the Invocation API directly, retaining
+shutdown hooks, VM-death notifications and an existing exit callback before
+process retirement. Original dyld symbol scopes, dependency search, interposed
+providers and lookup errors remain unchanged. A missing VM image stops native
+process initialization.
 Private futexes retain exact waiter selection and requeue ownership while Darwin
 kernel address waits handle sleeping and waking outside native metadata locks.
 Short metadata critical sections defer asynchronous signals through the original
@@ -61,6 +94,35 @@ Own-process native diagnostics can copy a bounded snapshot of private futex
 waiters from that same queue. The snapshot retains the original address,
 operation, expected value, timeout and pthread owner, including address changes
 from requeue. It never reads the guest futex word or waits for the metadata lock.
+Metal synchronization requires an allocated event and command buffer before
+creating a queued sync. Allocation failure returns `EGL_BAD_ALLOC`; it does not
+publish a native fence backed only by a queue serial. ART carries that allocation
+error through its host-call boundary without changing it to a context mismatch.
+Imported shared events that do not enqueue a signal retain their original
+synchronization behavior. The ART native-fence producer observes its actual
+Metal command buffer. Failed completion retires the original sync-file writer
+with an I/O error; successful completion remains owned by the shared-event
+listener. Guest native-fence client waits, server waits and status queries inspect
+the original sync-file status after descriptor readiness. Negative status returns
+an EGL error; successful fences and timeouts keep their existing results.
+Descriptor duplication, waits and closure retain the original ABI.
+The C EGL presenter reports typed EGL errors without creating Java exceptions.
+Allocation failure returns `EGL_BAD_ALLOC`; a failed GPU completion returns
+`EGL_CONTEXT_LOST`. JNI presenter entrypoints keep their Java exception contract
+and preserve an exception already pending on the calling thread. Surface teardown
+releases terminally completed work and retains dependencies while GPU work is
+still in flight.
+Failed context bindings restore their prior context and surfaces before
+returning the original EGL error. If a device failure also prevents restoration,
+that context is marked lost before later GL calls.
+
+DEX array-data payloads retain their primitive element type and raw values.
+When an ordinary method translation exceeds the JVM bytecode limit, conversion
+can move its array stores into bounded private static helpers. The original
+method keeps its declaration, array allocation, store order, exception handlers
+and monitor ownership. Null and bounds failures preserve preceding element
+writes. Methods that fit retain their ordinary bytecode.
+
 Native library state and class references retain their library's load lifetime.
 JVM `Process.getTotalMemory` and `getFreeMemory` share the existing native
 memory owner with `ActivityManager` and `Bridge.memoryInfo`: the configured

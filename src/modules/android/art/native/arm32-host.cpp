@@ -1,4 +1,5 @@
 #include "arm32-bridge.h"
+#include "host-packets.h"
 #include "../../native/arm32/arm32.h"
 #include <cstring>
 #include <map>
@@ -40,6 +41,7 @@ uint64_t continuation(KljArtCallback callback,uint64_t function,uint64_t cookie,
 
 extern "C" int64_t maclauncher_art_arm32(uint64_t address,uint64_t size,KljArtCallback callback){
  if(!address||size!=sizeof(KljArtArm32))return -22;
+ int64_t packet_error=klj_art_resolve_packet(address,size,KLJ_ART_PACKET_ALIGN(KljArtArm32),KLJ_ART_PACKET_READ_WRITE,&address);if(packet_error)return packet_error;
  auto &packet=*reinterpret_cast<KljArtArm32*>(address);
  packet.error[0]=0;
  try{

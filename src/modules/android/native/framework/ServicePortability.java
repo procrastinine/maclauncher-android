@@ -17,11 +17,12 @@ final class ServicePortability {
         // nested service/session classes. Call-site owners are not an API allowlist.
         boolean packages=new String(original,java.nio.charset.StandardCharsets.ISO_8859_1).contains("android/content/pm/PackageManagerInternal");
         boolean activity=new String(original,java.nio.charset.StandardCharsets.ISO_8859_1).contains("android/app/ActivityManagerInternal");
+        boolean packageConfiguration=new String(original,java.nio.charset.StandardCharsets.ISO_8859_1).contains("com/android/server/wm/ActivityTaskManagerInternal");
         boolean users=new String(original,java.nio.charset.StandardCharsets.ISO_8859_1).contains("com/android/server/pm/UserManagerInternal");
         boolean appOps=new String(original,java.nio.charset.StandardCharsets.ISO_8859_1).contains("android/app/AppOpsManagerInternal");
         String caller=name.substring(0,name.length()-6);
         boolean pending=PendingIntentCalls.applies(caller);
-        if(!registry&&!observers&&!packages&&!activity&&!users&&!appOps&&!pending&&!name.equals("com/android/server/accounts/AccountManagerService$Session.class"))return original;
+        if(!registry&&!observers&&!packages&&!activity&&!packageConfiguration&&!users&&!appOps&&!pending&&!name.equals("com/android/server/accounts/AccountManagerService$Session.class"))return original;
         ClassNode node=new ClassNode();new ClassReader(original).accept(node,0);
         for(MethodNode method:node.methods){
             if(name.equals("com/android/server/accounts/AccountManagerService$Session.class"))accountSession(method);
@@ -58,12 +59,20 @@ final class ServicePortability {
                 if(call.name.equals("handleIncomingUser")&&call.desc.equals("(IIIZILjava/lang/String;Ljava/lang/String;)I"))target="hostHandleIncomingUser";
                 if(call.name.equals("enforceCallingPermission")&&call.desc.equals("(Ljava/lang/String;Ljava/lang/String;)V"))target="hostEnforceCallingPermission";
                 if(call.name.equals("checkContentProviderUriPermission")&&call.desc.equals("(Landroid/net/Uri;III)I"))target="hostCheckContentProviderUriPermission";
+                if(call.name.equals("isAppForeground")&&call.desc.equals("(I)Z"))target="hostIsAppForeground";
                 if(call.name.equals("getUidCapability")&&call.desc.equals("(I)I"))target="hostUidCapability";
                 if(target==null)continue;
                 call.setOpcode(Opcodes.INVOKESTATIC);call.owner="maclauncher/android/framework/HostActivityManager";call.name=target;
                 call.desc="(Ljava/lang/Object;"+call.desc.substring(1);call.itf=false;
             }
 
+            if(packageConfiguration)for(AbstractInsnNode instruction:method.instructions){
+                if(!(instruction instanceof MethodInsnNode call)||!call.owner.equals("com/android/server/wm/ActivityTaskManagerInternal"))continue;
+                String target=call.name.equals("getApplicationConfig")&&call.desc.equals("(Ljava/lang/String;I)Lcom/android/server/wm/ActivityTaskManagerInternal$PackageConfig;")?"get":call.name.equals("createPackageConfigurationUpdater")&&call.desc.equals("(Ljava/lang/String;I)Lcom/android/server/wm/ActivityTaskManagerInternal$PackageConfigurationUpdater;")?"create":null;
+                if(target==null)continue;
+                call.setOpcode(Opcodes.INVOKESTATIC);call.owner="com/android/server/wm/HostPackageConfiguration";call.name=target;
+                call.desc="(Ljava/lang/Object;"+call.desc.substring(1);call.itf=false;
+            }
             if(users)for(AbstractInsnNode instruction:method.instructions){
                 if(!(instruction instanceof MethodInsnNode call)||!call.owner.equals("com/android/server/pm/UserManagerInternal"))continue;
                 boolean host=switch(call.name+call.desc){

@@ -172,7 +172,7 @@ static jint guest_vm_environment(JavaVM *vm,void **out,void *argument,int attach
  // passing the guest pthread entry. Establish the existing native lifetime
  // before the VM attaches; doing this afterwards mistakes them for Java owners.
  if(atomic_load_explicit(&lifetime_state,memory_order_acquire)==3){if(out)*out=NULL;return JNI_ERR;}
- if(attach)klj_enter_guest_thread();
+ if(attach){int owned=klj_jni_attach_prepare();if(owned<0){if(out)*out=NULL;return JNI_ERR;}if(!owned)klj_enter_guest_thread();}
  JavaVM *host=((GuestVM*)vm)->host;void *real=NULL;jint result=attach?(daemon?(*host)->AttachCurrentThreadAsDaemon(host,&real,argument):(*host)->AttachCurrentThread(host,&real,argument)):(*host)->GetEnv(host,&real,(jint)(intptr_t)argument);
  if(result==JNI_OK){int jni=attach||((uint32_t)(uintptr_t)argument&0x70000000u)==0;*out=jni?(void*)klj_guest_env(real):real;if(!*out)return JNI_ENOMEM;}else if(out)*out=NULL;return result;
 }

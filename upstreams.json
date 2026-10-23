@@ -1572,6 +1572,28 @@
       "referenceOnly": true
     },
     {
+      "id": "unicorn",
+      "repository": "https://github.com/unicorn-engine/unicorn.git",
+      "path": "src/external/unicorn",
+      "revision": "8028ec436f2d9376525352dd38ed9ed6b9f6be10",
+      "licensePaths": [
+        "COPYING",
+        "COPYING.LGPL2",
+        "COPYING_GLIB",
+        "qemu/COPYING",
+        "qemu/COPYING.LIB",
+        "qemu/LICENSE"
+      ],
+      "usage": "AArch64 instruction execution for mutable executable mappings, with original QEMU parallel atomics.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/arm64/unicorn-source.json",
+          "property": "revision"
+        }
+      ]
+    },
+    {
       "id": "aosp-hwui-av",
       "repository": "https://android.googlesource.com/platform/frameworks/av",
       "path": "src/external/aosp-hwui/av",
@@ -2010,6 +2032,40 @@
           "kind": "json",
           "path": "src/modules/android/native/hwui/sources.json",
           "property": "sources.41.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-arm-optimized-routines",
+      "repository": "https://android.googlesource.com/platform/external/arm-optimized-routines",
+      "path": "src/external/aosp-arm-optimized-routines",
+      "revision": "43049f685bc5dae7182a8800e673cab6471f3ac1",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Original Arm memory and string routines used by the static Bionic linker dependency closure.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/bionic/linker-sources.json",
+          "property": "sources.armOptimizedRoutines.revision"
+        }
+      ]
+    },
+    {
+      "id": "aosp-llvm-libc",
+      "repository": "https://android.googlesource.com/platform/external/llvm-libc",
+      "path": "src/external/aosp-llvm-libc",
+      "revision": "549bb629f8325dc9f5221bb16a3de908a753c304",
+      "licensePaths": [
+        "LICENSE"
+      ],
+      "usage": "Original static string and search routines used by the Android linker.",
+      "pinRefs": [
+        {
+          "kind": "json",
+          "path": "src/modules/android/native/bionic/linker-sources.json",
+          "property": "sources.llvmLibc.revision"
         }
       ]
     }

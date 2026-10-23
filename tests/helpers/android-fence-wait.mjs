@@ -1,0 +1,25 @@
+import fs from 'node:fs';import path from 'node:path';import {execFileSync,spawnSync} from 'node:child_process';import {pathToFileURL,fileURLToPath} from 'node:url';
+const [original,adapterFile,waitHelper,output]=process.argv.slice(2).map(value=>path.resolve(value)),adapter=await import(pathToFileURL(path.resolve(adapterFile)));
+const sync=fs.readFileSync(path.join(original,'hal/gles/src/sync.rs'),'utf8'),ioctl=fs.readFileSync(path.join(original,'crates/aim-linux-abi/src/sys/sync_file.rs'),'utf8');
+function method(text,marker){const start=text.indexOf(marker);if(start<0)throw Error(marker);let end=text.indexOf('{',start)+1,depth=1;while(depth&&end<text.length){if(text[end]==='{')depth++;if(text[end]==='}')depth--;end++;}if(depth)throw Error(marker);return text.slice(start,end);}
+const source=path.join(output,'crate/src');fs.mkdirSync(source,{recursive:true});
+for(const name of ['lib.rs','metal.rs'])fs.copyFileSync(path.join(original,'crates/aim-sync-file/src',name),path.join(source,name));
+fs.copyFileSync(path.join(original,'hal/gles/src/types.rs'),path.join(source,'types.rs'));
+fs.copyFileSync(waitHelper,path.join(source,'maclauncher-fence-wait.rs'));
+fs.writeFileSync(path.join(source,'../Cargo.toml'),'[package]\nname="maclauncher-fence-completion-control"\nversion="0.1.0"\nedition="2024"\n[dependencies]\naim-hostcall={path='+JSON.stringify(path.join(original,'crates/aim-hostcall'))+'}\nlibc={path='+JSON.stringify(process.env.ANDROID_RUST_LIBC_SOURCE)+'}\n');
+const actualIoctl='mod linux_sync{use super::*;use maclauncher_fence_completion_control::State;const EINVAL:i32=22;const EFAULT:i32=14;const NAME:&[u8]=b"aim";const DRIVER:&[u8]=b"aim";'+'#[repr(C)]'+method(ioctl,'struct FileInfo {').replace('struct FileInfo','pub struct FileInfo')+'#[repr(C)]'+method(ioctl,'struct FenceInfo {')+method(ioctl,'fn name32(')+'fn state(fd:i32)->State{super::state(unsafe{std::os::fd::BorrowedFd::borrow_raw(fd)})}'+method(ioctl,'fn file_info(').replace('fn file_info','pub fn file_info')+'}';
+const head='mod guest{#![allow(dead_code,non_snake_case)]\nuse super::fail;use std::collections::HashMap;use std::os::fd::{AsRawFd,OwnedFd};use std::sync::{Mutex,MutexGuard,OnceLock};use super::types::*;mod libc{pub use ::libc::*;pub use crate::syscall::{poll,ioctl};}\n'+sync.slice(sync.indexOf('const EGL_FALSE:'),sync.indexOf('/// A native fence sync:'))+method(sync,'struct NativeSync(').split('fn natives')[0];
+// NativeSync is a tuple struct, so copy its declaration separately.
+const guestHead=head.slice(0,head.indexOf('struct NativeSync('))+'struct NativeSync(OwnedFd);\n'+method(sync,'fn natives(')+method(sync,'fn native(');
+const host='mod host{use super::*;pub unsafe fn eglGetCurrentContext()->EGLContext{1usize as EGLContext}pub unsafe fn eglGetSyncAttribKHR(_:EGLDisplay,_:EGLSyncKHR,_:EGLint,_:*mut EGLint)->EGLBoolean{0}pub unsafe fn eglGetSyncAttrib(_:EGLDisplay,_:EGLSync,_:EGLint,_:*mut EGLAttrib)->EGLBoolean{0}pub unsafe fn eglWaitSyncKHR(_:EGLDisplay,_:EGLSyncKHR,_:EGLint)->EGLint{1}pub unsafe fn eglWaitSync(_:EGLDisplay,_:EGLSync,_:EGLint)->EGLBoolean{1}pub unsafe fn eglDestroySyncKHR(_:EGLDisplay,_:EGLSyncKHR)->EGLBoolean{1}}';
+const template=fs.readFileSync(new URL('./android-fence-wait.rs',import.meta.url),'utf8');const results=[];
+for(const [name,text]of [['baseline',sync],['fixed',adapter.adaptGuestFenceAllocationErrors(sync)]]){
+ const poll=name==='baseline'?method(text,'fn poll('):fs.readFileSync(waitHelper,'utf8');
+ const functions=['fn native_attrib(','pub unsafe extern "C" fn eglGetSyncAttribKHR(','pub unsafe extern "C" fn eglGetSyncAttrib(','pub unsafe extern "C" fn eglWaitSyncKHR(','pub unsafe extern "C" fn eglWaitSync(','pub unsafe extern "C" fn eglDupNativeFenceFDANDROID(','pub unsafe extern "C" fn eglDestroySyncKHR(','pub unsafe extern "C" fn eglDestroySync(','unsafe fn client_wait('].map(marker=>method(text,marker).replace('unsafe fn client_wait(', 'pub unsafe fn client_wait(')).join('\n');
+ const insert='pub fn insert(file:OwnedFd)->EGLSync{let sync=Box::new(NativeSync(file));let handle=&*sync as *const NativeSync as usize;natives().insert(handle,sync);handle as EGLSync}';
+ fs.writeFileSync(path.join(source,'main.rs'),'#![allow(dead_code,unused_imports)]\nmod types;\n'+template.replace('// ACTUAL_IOCTL',actualIoctl).replace('// ACTUAL_GUEST',guestHead+poll+functions+'\nconst POLL:std::time::Duration=std::time::Duration::from_micros(100);'+host+insert+'}'));
+ execFileSync(process.env.CARGO||'cargo',['build','--offline','--manifest-path',path.join(source,'../Cargo.toml'),'--target-dir',path.join(output,'target')],{stdio:'inherit'});
+ const result=spawnSync(path.join(output,'target/debug/maclauncher-fence-completion-control'),[],{encoding:'utf8'});results.push({name,status:result.status,stdout:result.stdout,stderr:result.stderr});console.log(name+': '+result.stdout.trim());
+}
+fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({original,adapterFile,waitHelper,actualIoctl:true,realNativeFds:true,results},null,2)+'\n');
+if(results[0].status!==1||results[1].status!==0)throw Error('Expected original RED and fixed GREEN');

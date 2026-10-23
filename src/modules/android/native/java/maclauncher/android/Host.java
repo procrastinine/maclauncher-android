@@ -59,7 +59,8 @@ public final class Host {
             maclauncher.android.framework.HostActivityManager.hostExitHistory(config.optional("processExitHistoryJson"));
             loader=accountService?Host.class.getClassLoader():maclauncher.android.framework.HostDexFiles.application(config.file("convertedJar"),sourceApks,config.directory("nativeRoot"),Host.class.getClassLoader(),applicationInfo.requestsIsolatedSplitLoading());
             Thread.currentThread().setContextClassLoader(loader);maclauncher.android.framework.HostContext.hostClassLoader(loader);
-            if(!accountService){GuestNativeLoader.configure(System.getProperty("klepton.bridge"),config.directory("nativeRoot").toString(),config.file("convertedJar").toString(),loader);
+            if(!accountService){BionicNativeRuntime.prepare(config,authority);
+            GuestNativeLoader.configure(System.getProperty("klepton.bridge"),config.directory("nativeRoot").toString(),config.file("convertedJar").toString(),loader);
             DynamicDex.configure(config.directory("runtimeRoot"),config.directory("cacheRoot"),config.file("convertedJar"),loader);}
             composition=authority==null?null:authority.composition();
             if(composition!=null){if(serviceProcess)throw new SecurityException("Native activity output was supplied to a service process");NativeCompositionWindow.install(composition,config.descriptor("nativeInputFd"),config.descriptor("nativeControlFd"));}
@@ -119,6 +120,7 @@ public final class Host {
             // archives beneath live threads. Embedded callers of finish retain
             // explicit loader cleanup when they supply one.
             Throwable result=finish(cleanup,task,providers,null,mainLooper,previous,windowSession);
+            try{BionicNativeRuntime.retire();}catch(Throwable error){result=keep(result,error);}
             if(windowSession==null&&composition!=null)try{composition.close();}catch(Throwable error){result=keep(result,error);}
             if(failure==null&&result!=null)throw result;
         }

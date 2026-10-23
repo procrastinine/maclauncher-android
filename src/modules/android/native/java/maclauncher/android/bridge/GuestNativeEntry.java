@@ -3,6 +3,8 @@ package maclauncher.android.bridge;
 public final class GuestNativeEntry {
     private GuestNativeEntry(){}
     public static native long load(String runtime,String file,String soname,boolean initializeJni);
+    /** Publishes the prepared image to its Java owner before ELF constructors run. */
+    public static native long loadPrepared(String runtime,String file,String soname,java.util.function.LongConsumer preparation);
     public static native void initialize(long image);
     public static native void construct(long image);
     public static native void reject(long image);

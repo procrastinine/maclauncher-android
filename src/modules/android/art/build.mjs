@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import {writeChanged,copyChanged} from '../native/upstream/source-files.mjs';
 import {supplier} from './source.mjs';
 import {buildArtHost} from './build-host.mjs';
+import {buildArtRunner} from './build-runner.mjs';
 import {buildArtJava} from './build-java.mjs';
 import {buildArtGuest} from './build-guest.mjs';
 import {buildArtSensors} from './sensors/build.mjs';
@@ -20,7 +21,7 @@ import components from './components.json' with {type:'json'};
 /** Component destinations are shared by producers and explicit reassembly. */
 export function artSupplierComponents(inputs={}){
  const surfaces=inputs.compositionSurface?{compositionSurface:'guest/libmaclauncher-composition-surface.so'}:{};
- return {...components,...surfaces,...(inputs.hwuiLibrary?{hwuiLibrary:'guest/libhwui.so',hwuiNotices:'licenses/hwui'}:{}),...(inputs.platformPackages?{platformPackages:'config/platform-packages.json'}:{}),...(inputs.serviceWaiter?{serviceWaiter:'guest/android-art-service-wait'}:{}),...(inputs.bootImage?{bootImage:'boot-image'}:{}),...(inputs.linuxTranslate?{linuxTranslate:'host/linux-translate'}:{}),...(inputs.ptyHolder?{ptyHolder:'host/aim-pty-holder'}:{}),...(inputs.glesLibrary?{glesLibrary:'hal/libgles.so'}:{}),...(inputs.nativeBridge?{nativeBridge:'guest/'+arm32Components.bindings.art,nativeBridgeNotices:'licenses/native-bridge',...Object.fromEntries(arm32Components.preloads.map(item=>[item.name,'guest/'+item.file]))}:{})};
+ return {...components,...surfaces,...(inputs.runnerNotices?{runnerNotices:'licenses/runner'}:{}),...(inputs.hwuiLibrary?{hwuiLibrary:'guest/libhwui.so',hwuiNotices:'licenses/hwui'}:{}),...(inputs.platformPackages?{platformPackages:'config/platform-packages.json'}:{}),...(inputs.serviceWaiter?{serviceWaiter:'guest/android-art-service-wait'}:{}),...(inputs.bootImage?{bootImage:'boot-image'}:{}),...(inputs.linuxTranslate?{linuxTranslate:'host/linux-translate'}:{}),...(inputs.ptyHolder?{ptyHolder:'host/aim-pty-holder'}:{}),...(inputs.glesLibrary?{glesLibrary:'hal/libgles.so'}:{}),...(inputs.nativeBridge?{nativeBridge:'guest/'+arm32Components.bindings.art,nativeBridgeNotices:'licenses/native-bridge',...Object.fromEntries(arm32Components.preloads.map(item=>[item.name,'guest/'+item.file]))}:{})};
 }
 
 /** Complete delivered image identity. This runs when producing a supplier,
@@ -47,13 +48,15 @@ export function imageContentIdentity(root){
 /** Assemble a versioned supplier from explicit producer outputs. No live
  * checkout paths survive in the delivered manifest; app/profile data is never
  * a supplier input. This is separate from publishing the Android declaration. */
-export function assembleArtSupplier({output,inputs,bootClasspath,sourceVersion,baseSupplier}){
+export function assembleArtSupplier({output,inputs,bootClasspath,sourceVersion,baseSupplier,includeImage=true,originalImage}){
  output=path.resolve(output);
  if(fs.existsSync(output))throw Error('ART supplier output already exists');
  const parent=path.dirname(output);fs.mkdirSync(parent,{recursive:true});const temporary=fs.mkdtempSync(path.join(parent,'.art-supplier-'));
  try{
-  const delivered=artSupplierComponents(inputs);
+  const delivered=artSupplierComponents(inputs),previous=baseSupplier?.manifest;
+  if(!includeImage&&(originalImage?.archiveSha256!==supplier.android.imageSha256||!/^[a-f0-9]{64}$/.test(originalImage?.content?.sha256||'')||!Number.isSafeInteger(originalImage.content.records)||originalImage.content.records<1||!Number.isSafeInteger(originalImage.content.bytes)||originalImage.content.bytes<1))throw Error('Image-free ART assembly requires the verified original image identity.');
   for(const [name,relative]of Object.entries(delivered)){
+   if(name==='image'&&!includeImage)continue;
    const source=path.resolve(inputs[name]||'');if(!inputs[name]||!fs.existsSync(source))throw Error('Missing ART producer output: '+name);
    const destination=path.join(temporary,relative);fs.mkdirSync(path.dirname(destination),{recursive:true});
    fs.cpSync(source,destination,{recursive:true,mode:fs.constants.COPYFILE_FICLONE,dereference:false,verbatimSymlinks:true});
@@ -65,6 +68,12 @@ export function assembleArtSupplier({output,inputs,bootClasspath,sourceVersion,b
     notices.push({name:'Android runtime — '+member.replace(/^licenses\//,'').replaceAll('/',' — '),license:'See included license',path:member});
    }
   }
+  for(const notice of previous?.notices||[])if(!notices.some(row=>row.path===notice.path)){
+   if(typeof notice.path!=='string'||path.isAbsolute(notice.path)||notice.path.split(/[\\/]/).some(part=>!part||part==='.'||part==='..'))throw Error('Original ART notice path is invalid.');
+   const root=fs.realpathSync(baseSupplier.root),source=fs.realpathSync(path.join(root,notice.path));
+   if(!source.startsWith(root+path.sep))throw Error('Original ART notice leaves its supplier.');
+   copyChanged(source,path.join(temporary,notice.path));notices.push({...notice});
+  }
   const license=supplier.imageAcquisition.license;
   copyChanged(path.join(import.meta.dirname,license.path),path.join(temporary,license.path));
   const android={...supplier.android,architectures:[...supplier.android.architectures,...(inputs.nativeBridge?['armeabi-v7a','armeabi']:[])]};
@@ -72,13 +81,13 @@ export function assembleArtSupplier({output,inputs,bootClasspath,sourceVersion,b
   // An explicitly selected immutable supplier can lend its complete image
   // identity only when this assembly retains that exact image component.
   // Native/Java replacements then copy the image without reading it again.
-  const previous=baseSupplier?.manifest,retained=previous?.platformSupplier;
-  const sameImage=retained?.schemaVersion===1&&/^[a-f0-9]{64}$/.test(retained.image?.sha256||'')&&
+  const retained=previous?.platformSupplier;
+  const sameImage=includeImage&&retained?.schemaVersion===1&&/^[a-f0-9]{64}$/.test(retained.image?.sha256||'')&&
    fs.realpathSync(inputs.image)===fs.realpathSync(path.join(baseSupplier.root,previous.components.image));
-  const image=sameImage?retained.image:imageContentIdentity(path.join(temporary,delivered.image));
+  const image=!includeImage?Object.fromEntries(['sha256','records','bytes'].map(key=>[key,originalImage.content[key]])):sameImage?retained.image:imageContentIdentity(path.join(temporary,delivered.image));
   const catalog=inputs.platformPackages?(()=>{const file=path.join(temporary,delivered.platformPackages),stat=fs.statSync(file);return {sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'),size:stat.size,mode:stat.mode&0o7777};})():null;
   const platformSupplier={schemaVersion:1,image,catalog};
-  const manifest={schemaVersion:1,execution:'art',supplier:supplier.id,version:sourceVersion,android,imageAcquisition:supplier.imageAcquisition,hostcallVersion:supplier.hostcallVersion,components:delivered,platformSupplier,bootClasspath,...(notices.length?{notices}:{}),...(bootImage?{bootImage}:{})};
+  const manifest={schemaVersion:1,execution:'art',supplier:supplier.id,version:sourceVersion,android,imageAcquisition:supplier.imageAcquisition,hostcallVersion:supplier.hostcallVersion,components:delivered,platformSupplier,bootClasspath,...(inputs.frameworkResourcePreinitVersion===1?{frameworkResourcePreinitVersion:1}:{}),...(inputs.binderSenderIdentityVersion===1?{binderSenderIdentityVersion:1}:{}),...(notices.length?{notices}:{}),...(bootImage?{bootImage}:{})};
   writeChanged(path.join(temporary,'runtime.json'),JSON.stringify(manifest,null,2)+'\n');
   fs.renameSync(temporary,output);return manifest;
  }finally{fs.rmSync(temporary,{recursive:true,force:true});}
@@ -86,8 +95,9 @@ export function assembleArtSupplier({output,inputs,bootClasspath,sourceVersion,b
 
 /** The producer may reuse original AIM build outputs. Optional complete HWUI
  * compilation is requested explicitly and preserves the original image ABI. */
-export async function buildArt({output,host,java,guest,sensors,composer,graphics,nativeBridge,hwui,inputs,bootClasspath,baseSupplier}){
+export async function buildArt({output,host,runner,java,guest,sensors,composer,graphics,nativeBridge,hwui,inputs,bootClasspath,baseSupplier}){
  if(nativeBridge)host={...host,arm32:nativeBridge.arm32.cpu};
+ const runnerProducts=runner?buildArtRunner({...runner,output:path.join(output,'build/runner')}):{};
  const guestProducts=guest?buildArtGuest({...guest,output:path.join(output,'build/guest')}):{};
  const sensorProducts=sensors?buildArtSensors({...sensors,output:path.join(output,'build/sensors')}):{};
  const composerProducts=composer?buildArtComposer({...composer,output:path.join(output,'build/composer')}):{};
@@ -96,14 +106,14 @@ export async function buildArt({output,host,java,guest,sensors,composer,graphics
  const hwuiProducts=hwui?await (await import('../native/hwui/supplier.mjs')).buildHwuiSupplier({hwui,output}):{};
  const native=buildArtHost({...host,output:path.join(output,'build/host')});
  const bootstrap=await buildArtJava({...java,output:path.join(output,'build/java')});
- const products={...inputs,...guestProducts,...sensorProducts,...composerProducts,...graphicsProducts,...bridgeProducts,...hwuiProducts,...native,...bootstrap};
+ const products={...inputs,...runnerProducts,...guestProducts,...sensorProducts,...composerProducts,...graphicsProducts,...bridgeProducts,...hwuiProducts,...native,...bootstrap};
  const platformPackages=path.join(output,'build/platform-packages.json');
  buildPlatformPackageCatalog({image:products.image,output:platformPackages});
  products.platformPackages=platformPackages;
  const boot=await buildBootImage({output:path.join(output,'boot-image-cache'),aim:host.aim,components:products,bootClasspath});
  const identity=crypto.createHash('sha256');
  identity.update(boot.identity);
- for(const input of [...originalTreeFiles(import.meta.dirname),native.hostLibrary,bootstrap.bootstrapDex,...Object.values(guestProducts),...Object.values(sensorProducts),...Object.values(composerProducts),...Object.values(graphicsProducts),...Object.values(bridgeProducts),...Object.values(hwuiProducts)])
+ for(const input of [...originalTreeFiles(import.meta.dirname),native.hostLibrary,bootstrap.bootstrapDex,...Object.values(runnerProducts).filter(value=>typeof value==='string'),...Object.values(guestProducts),...Object.values(sensorProducts),...Object.values(composerProducts),...Object.values(graphicsProducts),...Object.values(bridgeProducts),...Object.values(hwuiProducts)])
   for(const file of fs.statSync(input).isDirectory()?originalTreeFiles(input):[input])identity.update(fs.readFileSync(file));
  return assembleArtSupplier({output:path.join(output,'runtime'),inputs:{...products,bootImage:boot.root},bootClasspath,baseSupplier,sourceVersion:'0.1.0-'+identity.digest('hex').slice(0,16)});
 }

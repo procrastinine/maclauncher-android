@@ -1,0 +1,132 @@
+--- a/linker/linker.cpp
++++ b/linker/linker.cpp
+@@ -332,11 +332,30 @@
+   return si;
+ }
+ 
++// Configured once by the explicit process image owner, under g_dl_mutex.
++#include "dlopen-observer.h"
++static MaclauncherDlopenObserverV1 dlopen_observer{};
++extern "C" int install_dlopen_observer(const MaclauncherDlopenObserverV1* observer) {
++  if (observer == nullptr || observer->size != sizeof(*observer) ||
++      observer->abi != MACLAUNCHER_DLOPEN_OBSERVER_ABI || observer->event == nullptr) return -EINVAL;
++  if (dlopen_observer.event != nullptr) return dlopen_observer.context == observer->context &&
++      dlopen_observer.event == observer->event ? 0 : -EBUSY;
++  dlopen_observer = *observer;
++  return 0;
++}
+ static void soinfo_free(soinfo* si) {
+   if (si == nullptr) {
+     return;
+   }
+ 
++  // Retire immutable host range/classloader metadata before original unmap.
++  // No callback changes original references, TLS, destructors or mapping policy.
++  if (dlopen_observer.event != nullptr) {
++    const int saved_errno = errno;
++    dlopen_observer.event(dlopen_observer.context, MACLAUNCHER_DLOPEN_RETIRE, nullptr,
++        nullptr, si->to_handle(), si->load_bias, nullptr, 0);
++    errno = saved_errno;
++  }
+   if (si->base != 0 && si->size != 0) {
+     if (!si->is_mapped_by_caller()) {
+       munmap(reinterpret_cast<void*>(si->base), si->size);
+@@ -2116,7 +2135,8 @@
+ 
+ // This opt-in snapshot is taken only after original find_library has linked
+ // the complete graph. All constructors and their ordering remain original.
+-static bool prepare_linked_image(soinfo* root, const MaclauncherDlopenPrepareV1& preparation) {
++static bool prepare_linked_image(soinfo* root, const MaclauncherDlopenPrepareV1& preparation,
++    const void* observed_caller = nullptr) {
+   std::vector<soinfo*> nodes{root};
+   for (size_t i = 0; i < nodes.size(); ++i) {
+     nodes[i]->get_children().for_each([&](soinfo* child) {
+@@ -2153,7 +2173,18 @@
+   const int saved_errno = errno;
+   const int accepted = preparation.prepare(preparation.context, &graph, error, sizeof(error));
+   errno = saved_errno;
+-  if (accepted == 1) return true;
++  if (accepted == 1) {
++    if (observed_caller != nullptr) {
++      root->call_constructors();
++      for (size_t i = 0; i < nodes.size(); ++i) if (nodes[i]->constructors_called)
++        images[i].flags |= MACLAUNCHER_DLOPEN_IMAGE_CONSTRUCTED;
++      const int constructor_errno = errno;
++      dlopen_observer.event(dlopen_observer.context, MACLAUNCHER_DLOPEN_COMPLETE,
++          observed_caller, &graph, root->to_handle(), root->load_bias, nullptr, 0);
++      errno = constructor_errno;
++    }
++    return true;
++  }
+   error[sizeof(error) - 1] = '\0';
+   // Callback-owned registrations are already rolled back before rejection.
+   // Keep original NODELETE, dependency refcounts, TLS and destructor behavior.
+@@ -2162,6 +2193,12 @@
+   return false;
+ }
+ 
++static int observe_preparation(void* raw, const MaclauncherDlopenGraphV1* graph,
++    char* error, size_t capacity) {
++  const auto* root = &graph->images[graph->root_index];
++  return dlopen_observer.event(dlopen_observer.context, MACLAUNCHER_DLOPEN_PREPARE,
++      raw, graph, root->handle, root->load_bias, error, capacity);
++}
+ static void* do_dlopen_impl(const char* name, int flags,
+                 const android_dlextinfo* extinfo, const void* caller_addr,
+                 const MaclauncherDlopenPrepareV1* preparation) {
+@@ -2288,8 +2325,20 @@
+     LD_LOG(kLogDlopen,
+            "... dlopen calling constructors: realpath=\"%s\", soname=\"%s\", handle=%p",
+            si->get_realpath(), si->get_soname(), handle);
+-    if (preparation != nullptr && !prepare_linked_image(si, *preparation)) return nullptr;
+-    si->call_constructors();
++    if (preparation != nullptr) {
++      if (!prepare_linked_image(si, *preparation)) return nullptr;
++      si->call_constructors();
++    } else if (dlopen_observer.event != nullptr) {
++      // caller_addr remains the original libdl caller used for namespace selection.
++      if (caller_addr == nullptr) {
++        soinfo_unload(si); DL_OPEN_ERR("native dlopen has no original caller"); return nullptr;
++      }
++      const MaclauncherDlopenPrepareV1 observed{sizeof(observed), MACLAUNCHER_DLOPEN_PREPARE_ABI,
++          const_cast<void*>(caller_addr), observe_preparation};
++      if (!prepare_linked_image(si, observed, caller_addr)) return nullptr;
++    } else {
++      si->call_constructors();
++    }
+     failure_guard.Disable();
+     LD_LOG(kLogDlopen,
+            "... dlopen successful: realpath=\"%s\", soname=\"%s\", handle=%p",
+--- a/linker/dlfcn.cpp
++++ b/linker/dlfcn.cpp
+@@ -81,6 +81,9 @@
+ int __loader_dladdr(const void* addr, Dl_info* info) __LINKER_PUBLIC__;
+ int __loader_dlclose(void* handle) __LINKER_PUBLIC__;
+ char* __loader_dlerror() __LINKER_PUBLIC__;
++#include "dlopen-observer.h"
++int install_dlopen_observer(const MaclauncherDlopenObserverV1*);
++int __loader_maclauncher_install_dlopen_observer_v1(const MaclauncherDlopenObserverV1*) __LINKER_PUBLIC__;
+ void* __loader_dlopen(const char* filename, int flags, const void* caller_addr) __LINKER_PUBLIC__;
+ void* __loader_maclauncher_dlopen_prepared_v1(const char* filename, int flags,
+     const android_dlextinfo* extinfo, const void* caller_addr,
+@@ -168,6 +171,10 @@
+   return result;
+ }
+ 
++int __loader_maclauncher_install_dlopen_observer_v1(const MaclauncherDlopenObserverV1* observer) {
++  ScopedPthreadMutexLocker locker(&g_dl_mutex);
++  return install_dlopen_observer(observer);
++}
+ void* __loader_dlopen(const char* filename, int flags, const void* caller_addr) {
+   return dlopen_ext(filename, flags, nullptr, caller_addr);
+ }
+--- a/linker/linker.generic.map
++++ b/linker/linker.generic.map
+@@ -2,6 +2,7 @@
+   global:
+     __loader_dlopen;
+     __loader_maclauncher_dlopen_prepared_v1;
++    __loader_maclauncher_install_dlopen_observer_v1;
+     __loader_dlclose;
+     __loader_dlsym;
+     __loader_dlerror;

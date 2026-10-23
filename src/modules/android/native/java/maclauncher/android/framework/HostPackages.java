@@ -23,6 +23,8 @@ public final class HostPackages {
  private static volatile Context context;
  private static volatile Installation current;
  private static volatile Map<String,Installation> catalog=Map.of();
+ private static com.android.server.pm.dex.HostDexReports dexManager;
+ private static Map<String,Installation> dexCatalog=Map.of();
  private static final Set<String> persistentInstallations=new HashSet<>();
  private static final Map<HostBinderRpc.Peer,Set<String>> peerInstallations=new HashMap<>();
  private static final Map<HostBinderRpc.Peer,String> peerAndroidIds=new HashMap<>();
@@ -248,10 +250,11 @@ public final class HostPackages {
   Installation pkg=catalog.get(packageName);return pkg==null?null:pkg.packageState;
  }
  /** Native alignment inspection feeds the original package-state policy;
-  * manifest overrides remain authoritative for this installed application. */
+  * original manifest and settings overrides remain authoritative. */
  public static synchronized boolean hostPageSizeCompatibility(int alignmentFlags){
   Installation value=Objects.requireNonNull(current,"Android application package is not inspected");
-  int flags=value.parsedPackage.getPageSizeAppCompatFlags();
+  int overrides=value.packageState.getPageSizeAppCompatFlags()&(ApplicationInfo.PAGE_SIZE_APP_COMPAT_FLAG_SETTINGS_OVERRIDE_ENABLED|ApplicationInfo.PAGE_SIZE_APP_COMPAT_FLAG_SETTINGS_OVERRIDE_DISABLED);
+  int flags=value.parsedPackage.getPageSizeAppCompatFlags()|overrides;
   if(alignmentFlags!=ApplicationInfo.PAGE_SIZE_APP_COMPAT_FLAG_ERROR)flags|=alignmentFlags;
   value.packageState.setPageSizeAppCompatFlags(flags);
   return value.packageState.isPageSizeAppCompatEnabled();
@@ -288,7 +291,38 @@ public final class HostPackages {
   return state.getUserStateOrDefault(user).isStopped();
  }
  public static boolean hostNativeCode(Path file){for(Installation value:catalog.values())if(file.startsWith(Path.of(value.parsedPackage.getNativeLibraryDir())))return true;return false;}
- public static synchronized void hostClearProviders(){catalog=Map.of();persistentInstallations.clear();peerInstallations.clear();peerAndroidIds.clear();current=null;context=null;HostPermissions.clear();HostDexFiles.clearInstalled();}
+ public static synchronized void hostClearProviders(){if(dexManager!=null){dexManager.writeNow();dexManager=null;dexCatalog=Map.of();}catalog=Map.of();persistentInstallations.clear();peerInstallations.clear();peerAndroidIds.clear();current=null;context=null;HostPermissions.clear();HostDexFiles.clearInstalled();}
+ /** Original dex ownership, context validation and usage records share the same
+  * installed rows as package queries. Android's normal stats files live under
+  * the installation's private data directory; no application load is synthesized. */
+ private static synchronized com.android.server.pm.dex.HostDexReports dexManager()throws Exception{
+  int user=UserHandle.myUserId();
+  if(dexManager==null){
+   dexManager=new com.android.server.pm.dex.HostDexReports(HostFilesystem.dataRoot().resolve("system/dex"),endpoint);
+   var packages=new ArrayList<PackageInfo>();for(var pkg:catalog.values())packages.add(pkg.packageInfo(0,user));
+   dexManager.load(Map.of(user,packages));dexCatalog=catalog;
+  }else if(dexCatalog!=catalog){
+   // DexManager normally retains code locations across package-data removal.
+   // The supervisor also retires whole peer installations: remove that exact
+   // original cache row before admitting another report against the catalog.
+   for(String pkg:dexCatalog.keySet())if(!catalog.containsKey(pkg)){
+    dexManager.retirePackage(pkg);
+   }
+   for(var entry:catalog.entrySet())if(dexCatalog.get(entry.getKey())!=entry.getValue()){
+    PackageInfo info=entry.getValue().packageInfo(0,user);
+    if(dexCatalog.containsKey(entry.getKey()))dexManager.notifyPackageUpdated(info.packageName,info.applicationInfo.sourceDir,info.applicationInfo.splitSourceDirs);
+    dexManager.notifyPackageInstalled(info,user);
+   }
+   dexCatalog=catalog;
+  }
+  return dexManager;
+ }
+ private static synchronized void notifyDexLoad(String loadingPackage,Map<String,String> contexts,String loaderIsa)throws Exception{
+  var peer=HostBinderRpc.callingPeer();int uid=peer==null?Binder.getCallingUid():peer.uid();
+  Installation pkg=find(loadingPackage,UserHandle.getUserId(uid));
+  if(pkg==null||pkg.parsedPackage.getUid()!=uid)throw new SecurityException("Dex load package differs from the calling UID");
+  dexManager().notifyDexLoad(pkg.app(0,UserHandle.getUserId(uid)),contexts,loaderIsa,UserHandle.getUserId(uid),android.os.Process.isIsolated(uid));
+ }
  private static final class Installation {
   final String name;final ParsedPackage parsedPackage;final PackageSetting packageState;final PackageProperty properties;final Path dataRoot;final long firstInstallTime,lastUpdateTime;
   final Map<ComponentName,ParsedProvider> providers;final Map<ComponentName,ParsedService> services;final Map<ComponentName,ParsedActivity> activities;final Map<String,ParsedProvider> authorities;private volatile IntentIndex intentIndex;private volatile SigningDetails verifiedIdentity;
@@ -417,6 +451,7 @@ public final class HostPackages {
    case "registerPackageMonitorCallback" -> {monitors.registerPackageMonitorCallback((IRemoteCallback)a[0],(int)a[1],Binder.getCallingUid());yield null;}
    case "unregisterPackageMonitorCallback" -> {monitors.unregisterPackageMonitorCallback((IRemoteCallback)a[0]);yield null;}
    case "getApplicationInfo" -> {Installation pkg=find((String)a[0],(int)a[2]);yield pkg==null?null:pkg.app((long)a[1],(int)a[2]);}
+   case "notifyDexLoad" -> {@SuppressWarnings("unchecked") Map<String,String> contexts=(Map<String,String>)a[1];notifyDexLoad((String)a[0],contexts,(String)a[2]);yield null;}
    case "notifyPackageUse" -> {Installation pkg=find((String)a[0],UserHandle.getUserId(Binder.getCallingUid()));if(pkg!=null)synchronized(pkg.packageState){pkg.packageState.getTransientState().setLastPackageUsageTimeInMills((int)a[1],System.currentTimeMillis());}yield null;}
    case "getPackageInfo" -> describe(find((String)a[0],(int)a[2]),(long)a[1],(int)a[2]);
    case "getPackageInfoVersioned" -> {VersionedPackage p=(VersionedPackage)a[0];Installation pkg=find(p.getPackageName(),(int)a[2]);yield pkg!=null&&(p.getLongVersionCode()==PackageManager.VERSION_CODE_HIGHEST||p.getLongVersionCode()==pkg.parsedPackage.getLongVersionCode())?describe(pkg,(long)a[1],(int)a[2]):null;}

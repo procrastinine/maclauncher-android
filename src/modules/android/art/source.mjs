@@ -3,6 +3,7 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {exportSources} from '../native/binder-rpc/build.mjs';
 import {prepareSourceTree,copyChanged,writeChanged} from '../native/upstream/source-files.mjs';
+import {prepareArtCompilerPaths} from './compiler-paths-source.mjs';
 import {prepareAimRegisters} from './x18-source.mjs';
 import {prepareRegisterContexts} from './register-context-source.mjs';
 import {prepareElfCopies} from './elf-copy-source.mjs';
@@ -26,20 +27,27 @@ import {prepareA64Execution} from './a64-execution-source.mjs';
 import {prepareOpenedOrigins} from './opened-origin-source.mjs';
 import {prepareHardwareCapabilities} from './hwcap-source.mjs';
 import {prepareResourceLimits} from './resource-limits-source.mjs';
+import {prepareDescriptorGenerations} from './descriptor-generation-source.mjs';
+import {prepareExecQueueRetirement} from './exec-queue-source.mjs';
+import {prepareTimerExec} from './exec-timers-source.mjs';
+import {prepareBinderSenderIdentity} from './binder-sender-source.mjs';
 import {prepareJitUserCopy} from './jit-user-copy-source.mjs';
 import {prepareUserOutput} from './user-output-source.mjs';
 import {prepareDatagramReceive} from './datagram-receive-source.mjs';
 import {prepareFarVeneers} from './far-veneer-source.mjs';
 import {prepareProcessPolicy} from './process-policy-source.mjs';
 import {prepareMemoryBudget} from './memory-budget-source.mjs';
+import {prepareOriginalFiles} from './original-file-source.mjs';
+import {prepareMutableCode} from './mutable-code-source.mjs';
 const root=import.meta.dirname;
 export const supplier=JSON.parse(fs.readFileSync(path.join(root,'supplier.json'),'utf8'));
 
 /** Read pinned sources; adapt only an owned projection. Cargo retains the
  * upstream workspace and dependency graph, including its original lockfile. */
-export function prepareAimSource({source,output,klepton,glesHeaders}){
+export function prepareAimSource({source,output,klepton,glesHeaders,mutableCode=false}){
  prepareSourceTree(output,temporary=>{
   exportSources(source,supplier.sources.aim.commit,['.'],temporary);
+  prepareArtCompilerPaths(temporary,{source});
   for(const name of ['aim-hostcall.patch','aim-platform.patch','aim-opened-path.patch','aim-display-modes.patch','aim-identities.patch','aim-process-liveness.patch','aim-create-mode.patch','aim-stream-sockets.patch'])
    execFileSync('git',['apply','--unsafe-paths',path.join(root,'adapters',name)],{cwd:temporary,stdio:'inherit',env:{...process.env,GIT_CEILING_DIRECTORIES:path.dirname(temporary)}});
   copyChanged(path.join(root,'native/opened-path.rs'),path.join(temporary,'crates/aim-linux-abi/src/sys/opened-path.rs'));
@@ -55,6 +63,7 @@ export function prepareAimSource({source,output,klepton,glesHeaders}){
   prepareElfCopies(temporary);
   prepareAshmemAccess(temporary);
   prepareResourceLimits(temporary);
+  prepareDescriptorGenerations(temporary);
   prepareCodePublication(temporary);
   prepareIslandPlacement(temporary);
   prepareRelro(temporary);
@@ -74,6 +83,10 @@ export function prepareAimSource({source,output,klepton,glesHeaders}){
   prepareFarVeneers(temporary);
   prepareProcessPolicy(temporary);
   prepareMemoryBudget(temporary);
+  if(mutableCode){prepareOriginalFiles(temporary);prepareMutableCode(temporary);}
+  prepareExecQueueRetirement(temporary);
+  prepareTimerExec(temporary);
+  prepareBinderSenderIdentity(temporary);
  });
  return output;
 }

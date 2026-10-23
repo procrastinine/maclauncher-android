@@ -82,6 +82,10 @@ The caller supplies shared package inventory, Mach-O inspection and verification
 services; the producer does not read a launcher catalog or selected version.
 Optional `hwuiLibrary` and `hwuiNotices` supplier inputs deliver a complete
 Android graphics library and its source notices beside the original image.
+`assembleArtSupplier` accepts `includeImage: false` with a verified
+`originalImage` identity for packaging an adapter from existing components.
+The image remains separately acquired; it is neither copied nor read during
+that assembly. Unchanged supplier notice records remain with their components.
 Component notice directories become supplier-relative records; packaging keeps
 those records alongside the matching common runtime notices.
 
@@ -90,7 +94,75 @@ and Klepton inputs. Header bytes and the original Git revision are verified
 before use. Without that input, standalone builds use the registered nested
 GLES-header source checkout.
 
+ART suppliers build through the standalone producer:
+
+```sh
+node tools/build-art.mjs --inputs /absolute/path/to/art-inputs.json
+```
+
+The input object supplies the existing `buildArt` options, including `host`,
+`java`, `inputs` and `bootClasspath` producer groups. Its `sources.source`,
+`sources.klepton` and `sources.glesHeaders` naming the original pinned checkouts.
+Without `sourceArchive`, `sources.aosp` supplies the original AOSP tree used by
+AIM's `patches/art-android/sources.lock`. The exporter checks those original
+ART, bionic, libcore and dependency subsets against the recorded content hashes.
+The pinned Binder source checkout is also included; `sourceCheckouts` can map
+registered upstream identifiers to alternate source checkout paths or add
+source inputs used by separately supplied components. Source export performs no
+downloads. Source inputs remain separate from compiler outputs.
+
+If `inputs.art` is absent, `artBuild.sdk` supplies the Android SDK with AIM's
+pinned NDK, and `artBuild.fetched` supplies AIM's original fetched-input directory
+(defaulting to the parent of `sources.aosp`). The ordinary producer runs the
+original AIM ART build graph, including its source locks, patches, compiler
+commands and stripping. `buildWork` selects a reusable absolute workspace;
+`artBuild.work` can select its ART compiler target directory separately.
+`artBuild.jobs` bounds compiler parallelism (default 4).
+`artBuild.jdk` selects a JDK home and `artBuild.python` selects the Python
+executable directory used by the original graph. An
+explicit `inputs.art` retains a separately produced ART root.
+
+The result includes the supplier `root` and `sourceArchive`. The default archive
+contains the owned producer sources, the selected upstream source inputs and
+license notices. Test sources and generated build files are omitted. An explicit
+absolute `sourceArchive` preserves an existing complete corresponding-source
+archive unchanged. Separately supplied HWUI and native bridge components require
+their corresponding original inputs or a complete explicit archive.
+
+The ordinary producer reuses its `hwui.sources`, Cargo cache and prepared or
+generated component notices. Bridge sources reuse its declared Bionic/ART
+checkouts and original import-header input. Top-level source options can supply
+original inputs for retained components.
+
+`hwuiSources` contains the public HWUI `sources` mapping, the active Cargo
+`registry` records from its component notices (or the notice `SOURCES.json` path),
+and an absolute `registryCache` directory. The exporter verifies the pinned
+source catalog and Cargo.lock checksums, then includes consumed original source
+projections, notices and registry packages. `nativeBridgeSources.ndkHeaders`
+selects the pinned original ARM32 NDK headers. `nativeBridgeSources.arm32Notices`
+selects the ARM32 component notice directory that records its consumed Bionic
+units; the ordinary producer reuses `nativeBridge.arm32.notices`. `sourceCheckouts` supplies
+`libffi`, `dynarmic`, `aosp-bionic` and `aosp-art`. The source archive retains the
+selected original headers, their case-sensitive variants, NDK notices and
+compiler-runtime artifact identity. Android system images, complete SDK/NDK
+installations and compiler products are supplied separately.
+
+The ART runner producer, `src/modules/android/art/build-runner.mjs`, accepts a
+prepared AIM source tree and statically links its ARM64 execution and native
+continuation components into `host/linux-run`. A supplied `buildPrecise` result
+reuses existing CPU archives; otherwise the producer builds the pinned Unicorn
+source. `buildArt` accepts this component through its optional `runner` input
+and includes the returned upstream notices in `licenses/runner`.
+
+The ART loader keeps the initial argument table and writable stack below the
+shared argument-string pages. Process command-line records continue to reflect
+changes to the original argument strings.
+
 Named ELF library handles resolve symbols in the owning image and its original
 `DT_NEEDED` dependency closure, in breadth-first order. Platform dependencies use
 the existing Android ABI adapters. Unrelated loaded images remain outside that
 handle scope; missing symbols retain the normal `dlerror` result.
+
+Internet stream sockets retain Linux connection retry results across interrupted
+and nonblocking connects. Inherited sockets without a socket inode receipt
+travel as their original descriptor; allocated sockets retain receipt validation.

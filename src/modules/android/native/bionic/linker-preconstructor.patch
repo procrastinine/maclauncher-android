@@ -1,0 +1,178 @@
+--- /dev/null
++++ b/linker/maclauncher_preconstructor.h
+@@ -0,0 +1,14 @@
++/* Android linker entry; the shared graph ABI also supports native host consumers. */
++#pragma once
++#include <android/dlext.h>
++#include "preconstructor-abi.h"
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++void* __loader_maclauncher_dlopen_prepared_v1(const char* filename, int flags,
++    const android_dlextinfo* extinfo, const void* caller_addr,
++    const MaclauncherDlopenPrepareV1* preparation);
++#ifdef __cplusplus
++}
++#endif
+--- a/linker/linker.cpp
++++ b/linker/linker.cpp
+@@ -41,6 +41,7 @@
+ #include <sys/vfs.h>
+ #include <unistd.h>
+ 
++#include <algorithm>
+ #include <iterator>
+ #include <new>
+ #include <string>
+@@ -2113,9 +2114,57 @@
+                                         info->library_namespace : nullptr);
+ }
+ 
+-void* do_dlopen(const char* name, int flags,
+-                const android_dlextinfo* extinfo,
+-                const void* caller_addr) {
++// This opt-in snapshot is taken only after original find_library has linked
++// the complete graph. All constructors and their ordering remain original.
++static bool prepare_linked_image(soinfo* root, const MaclauncherDlopenPrepareV1& preparation) {
++  std::vector<soinfo*> nodes{root};
++  for (size_t i = 0; i < nodes.size(); ++i) {
++    nodes[i]->get_children().for_each([&](soinfo* child) {
++      if (std::find(nodes.begin(), nodes.end(), child) == nodes.end()) nodes.push_back(child);
++    });
++  }
++  std::vector<MaclauncherDlopenImageV1> images(nodes.size());
++  std::vector<std::vector<size_t>> dependencies(nodes.size());
++  for (size_t i = 0; i < nodes.size(); ++i) {
++    soinfo* image = nodes[i];
++    image->get_children().for_each([&](soinfo* child) {
++      dependencies[i].push_back(std::find(nodes.begin(), nodes.end(), child) - nodes.begin());
++    });
++    // The original synthetic ld-android.so descriptor borrows the real linker
++    // phdr/load_bias but has no file mapping extent. Derive that extent from
++    // its original program headers; file identity remains genuinely absent.
++    ElfW(Addr) first_vaddr = 0;
++    const size_t mapped_size = image->size != 0 ? image->size :
++        phdr_table_get_load_size(image->phdr, image->phnum, &first_vaddr);
++    const uintptr_t mapped_base = image->size != 0 ? image->base :
++        image->load_bias + first_vaddr;
++    images[i] = {sizeof(MaclauncherDlopenImageV1),
++        (i == 0 ? MACLAUNCHER_DLOPEN_IMAGE_ROOT : 0u) |
++        (image->constructors_called ? MACLAUNCHER_DLOPEN_IMAGE_CONSTRUCTED : 0u),
++        image->to_handle(), mapped_base, mapped_size, image->load_bias,
++        image->get_realpath(), image->phdr, image->phnum,
++        dependencies[i].data(), dependencies[i].size(),
++        static_cast<uint64_t>(image->get_st_dev()),
++        static_cast<uint64_t>(image->get_st_ino()), image->get_file_offset()};
++  }
++  const MaclauncherDlopenGraphV1 graph{sizeof(graph), MACLAUNCHER_DLOPEN_PREPARE_ABI,
++      images.size(), images.data(), 0};
++  char error[512] = {};
++  const int saved_errno = errno;
++  const int accepted = preparation.prepare(preparation.context, &graph, error, sizeof(error));
++  errno = saved_errno;
++  if (accepted == 1) return true;
++  error[sizeof(error) - 1] = '\0';
++  // Callback-owned registrations are already rolled back before rejection.
++  // Keep original NODELETE, dependency refcounts, TLS and destructor behavior.
++  soinfo_unload(root);
++  DL_OPEN_ERR("native image preparation rejected: %s", error[0] ? error : "callback rejected");
++  return false;
++}
++
++static void* do_dlopen_impl(const char* name, int flags,
++                const android_dlextinfo* extinfo, const void* caller_addr,
++                const MaclauncherDlopenPrepareV1* preparation) {
+   std::string trace_prefix = std::string("dlopen: ") + (name == nullptr ? "(nullptr)" : name);
+   ScopedTrace trace(trace_prefix.c_str());
+   ScopedTrace loading_trace((trace_prefix + " - loading and linking").c_str());
+@@ -2239,6 +2288,7 @@
+     LD_LOG(kLogDlopen,
+            "... dlopen calling constructors: realpath=\"%s\", soname=\"%s\", handle=%p",
+            si->get_realpath(), si->get_soname(), handle);
++    if (preparation != nullptr && !prepare_linked_image(si, *preparation)) return nullptr;
+     si->call_constructors();
+     failure_guard.Disable();
+     LD_LOG(kLogDlopen,
+@@ -2250,6 +2300,21 @@
+   return nullptr;
+ }
+ 
++void* do_dlopen(const char* name, int flags, const android_dlextinfo* extinfo,
++                const void* caller_addr) {
++  return do_dlopen_impl(name, flags, extinfo, caller_addr, nullptr);
++}
++
++void* do_dlopen_prepared(const char* name, int flags, const android_dlextinfo* extinfo,
++                        const void* caller_addr, const MaclauncherDlopenPrepareV1* preparation) {
++  if (preparation == nullptr || preparation->size != sizeof(MaclauncherDlopenPrepareV1) ||
++      preparation->abi != MACLAUNCHER_DLOPEN_PREPARE_ABI || preparation->prepare == nullptr) {
++    DL_OPEN_ERR("invalid native image preparation interface");
++    return nullptr;
++  }
++  return do_dlopen_impl(name, flags, extinfo, caller_addr, preparation);
++}
++
+ int do_dladdr(const void* addr, Dl_info* info) {
+   // Determine if this address can be found in any library currently mapped.
+   soinfo* si = find_containing_library(addr);
+--- a/linker/linker.h
++++ b/linker/linker.h
+@@ -42,6 +42,8 @@
+ #include "linker_logger.h"
+ #include "linker_soinfo.h"
+ 
++#include "maclauncher_preconstructor.h"
++
+ #include <string>
+ #include <vector>
+ 
+@@ -73,6 +75,9 @@
+ 
+ soinfo* get_libdl_info(const soinfo& linker_si);
+ 
++void* do_dlopen_prepared(const char* name, int flags, const android_dlextinfo* extinfo,
++                        const void* caller_addr, const MaclauncherDlopenPrepareV1* preparation);
++
+ soinfo* find_containing_library(const void* p);
+ 
+ int open_executable(const char* path, off64_t* file_offset, std::string* realpath);
+--- a/linker/dlfcn.cpp
++++ b/linker/dlfcn.cpp
+@@ -82,6 +82,9 @@
+ int __loader_dlclose(void* handle) __LINKER_PUBLIC__;
+ char* __loader_dlerror() __LINKER_PUBLIC__;
+ void* __loader_dlopen(const char* filename, int flags, const void* caller_addr) __LINKER_PUBLIC__;
++void* __loader_maclauncher_dlopen_prepared_v1(const char* filename, int flags,
++    const android_dlextinfo* extinfo, const void* caller_addr,
++    const MaclauncherDlopenPrepareV1* preparation) __LINKER_PUBLIC__;
+ void* __loader_dlsym(void* handle, const char* symbol, const void* caller_addr) __LINKER_PUBLIC__;
+ void* __loader_dlvsym(void* handle,
+                       const char* symbol,
+@@ -155,6 +158,16 @@
+   return dlopen_ext(filename, flags, extinfo, caller_addr);
+ }
+ 
++void* __loader_maclauncher_dlopen_prepared_v1(const char* filename, int flags,
++    const android_dlextinfo* extinfo, const void* caller_addr,
++    const MaclauncherDlopenPrepareV1* preparation) {
++  ScopedPthreadMutexLocker locker(&g_dl_mutex);
++  g_linker_logger.ResetState();
++  void* result = do_dlopen_prepared(filename, flags, extinfo, caller_addr, preparation);
++  if (result == nullptr) __bionic_format_dlerror("dlopen failed", linker_get_error_buffer());
++  return result;
++}
++
+ void* __loader_dlopen(const char* filename, int flags, const void* caller_addr) {
+   return dlopen_ext(filename, flags, nullptr, caller_addr);
+ }
+--- a/linker/linker.generic.map
++++ b/linker/linker.generic.map
+@@ -1,6 +1,7 @@
+ {
+   global:
+     __loader_dlopen;
++    __loader_maclauncher_dlopen_prepared_v1;
+     __loader_dlclose;
+     __loader_dlsym;
+     __loader_dlerror;

@@ -9,6 +9,7 @@ import {prepareAngleFramebufferFlip} from './angle-flip-source.mjs';
 import {prepareAngleVulkan} from './angle-vulkan-source.mjs';
 import {prepareAngleIdentity} from './angle-identity-source.mjs';
 import {prepareSourceTree,writeChanged} from './upstream/source-files.mjs';
+import {nativePathFlags} from './upstream/native-paths.mjs';
 
 const root=path.dirname(fileURLToPath(import.meta.url));
 const pins=JSON.parse(fs.readFileSync(path.join(root,'angle-source.json')));
@@ -36,6 +37,15 @@ prepareSourceTree(source,temporary=>{
   prepareAngleFramebufferFlip(options.source,temporary);
   if(backend==='metal-vulkan')prepareAngleVulkan(options.source,temporary);
   writeChanged(path.join(temporary,'build/config/gclient_args.gni'),'checkout_angle_internal=false\ncheckout_angle_mesa=false\ncheckout_angle_restricted_traces=false\ngenerate_location_tags=false\n');
+  // Apply the same path contract to original and adapted compilation units.
+  // GN's relative source arguments alone do not cover absolute header paths.
+  const compiler=path.join(temporary,'build/config/compiler/BUILD.gn');
+  const original=fs.readFileSync(compiler,'utf8');
+  const before='config("compiler") {\n  asmflags = []\n  cflags = []';
+  if(original.split(before).length!==2)throw Error('ANGLE compiler configuration source changed');
+  const portable=nativePathFlags({source,build:options.output,roots:[
+    [options.source,'/src/angle'],[options.dependencies,'/src/angle-dependencies']]});
+  writeChanged(compiler,original.replace(before,'config("compiler") {\n  asmflags = []\n  cflags = '+JSON.stringify(portable)));
 });
 fs.mkdirSync(output,{recursive:true});
 const clangVersion=path.basename(read(path.join(options.clang,'bin/clang'),['--print-resource-dir']));
@@ -71,7 +81,7 @@ prepareSourceTree(path.join(options.output,'notices'),temporary=>{
   }
   for(const [name,file,url] of suppliers){const data=fs.readFileSync(path.join(source,file)),notice={name,url,file:name+'.txt',size:data.length,sha256:digest(data)};notices.push(notice);writeChanged(path.join(temporary,notice.file),data);}
 });
-const adaptations=['angle-source.mjs','angle-flip-source.mjs','angle-flip-source.json','angle-identity-source.mjs','angle-sync-source.mjs','angle-dither-source.mjs',...(backend==='metal-vulkan'?['angle-vulkan-source.mjs','angle-vulkan-image-source.mjs']:[])].map(file=>({file,sha256:digest(fs.readFileSync(path.join(root,file)))}));
+const adaptations=['angle-source.mjs','angle-flip-source.mjs','angle-flip-source.json','angle-identity-source.mjs','angle-sync-source.mjs','angle-fence-completion.h','angle-current-source.mjs','angle-debug-source.mjs','angle-debug-callback.h','angle-blob-source.mjs','angle-blob-callback.h','angle-dither-source.mjs',...(backend==='metal-vulkan'?['angle-vulkan-source.mjs','angle-vulkan-image-source.mjs']:[])].map(file=>({file,sha256:digest(fs.readFileSync(path.join(root,file)))}));
 const internalShaders=fs.readFileSync(path.join(output,'obj/src/libANGLE/renderer/metal/angle_metal_backend.ninja'),'utf8').includes('-DANGLE_METAL_HAS_PREBUILT_INTERNAL_SHADERS')?'embedded-metallib':'runtime-source';
 const programBinaryVersion=fs.readFileSync(path.join(output,'gen/angle/ANGLEShaderProgramVersion.h'),'utf8').match(/^#define ANGLE_PROGRAM_VERSION "([a-f0-9]+)"$/m)?.[1];
 if(!programBinaryVersion)throw Error('Missing generated ANGLE program binary version');

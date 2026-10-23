@@ -11,14 +11,15 @@
 #include <unistd.h>
 #include <stdio.h>
 #include "native-clock/clock-domain.h"
+#include "bionic/choreographer/callback-owner.h"
 
 typedef struct AChoreographer AChoreographer;
 typedef struct AChoreographerFrameCallbackData {int64_t frame,sequence,output,deadline;} AChoreographerFrameCallbackData;
 typedef void (*FrameCallback)(int64_t,void*);
 typedef void (*VsyncCallback)(const AChoreographerFrameCallbackData*,void*);
 typedef void (*RefreshCallback)(int64_t,void*);
-typedef struct Frame {struct Frame *next;int64_t due;FrameCallback frame;VsyncCallback vsync;void *data;int ready;AChoreographerFrameCallbackData timing;} Frame;
-typedef struct Refresh {struct Refresh *next;RefreshCallback call;void *data;int pending,active,removed,references;} Refresh;
+typedef struct Frame {struct Frame *next;int64_t due;FrameCallback frame;VsyncCallback vsync;void *data;int ready;AChoreographerFrameCallbackData timing;KljChoreographerCallback owner;} Frame;
+typedef struct Refresh {struct Refresh *next;RefreshCallback call;void *data;int pending,active,removed,references;KljChoreographerCallback owner;} Refresh;
 struct AChoreographer {AChoreographer *next;void *looper;pthread_t thread;int pipe[2],closed;Frame *frames,**tail;Refresh *refresh;};
 static pthread_mutex_t lock=PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t changed=PTHREAD_COND_INITIALIZER;
@@ -94,28 +95,50 @@ AChoreographer *AChoreographer_getInstance(void){
  if(addFd(looper,owner->pipe[0],-1,1,dispatch,owner)<0||pthread_setspecific(key,owner)){removeFd(looper,owner->pipe[0]);close(owner->pipe[0]);close(owner->pipe[1]);release(looper);free(owner);return NULL;}
  pthread_mutex_lock(&lock);owner->closed=stopped;owner->next=owners;owners=owner;pthread_mutex_unlock(&lock);return owner;
 }
-static void post(AChoreographer *owner,FrameCallback frame,VsyncCallback vsync,void *data,int64_t delay){
- if(!owner||(!frame&&!vsync))return;Frame *entry=calloc(1,sizeof *entry);if(!entry){fputs("Android native display callback allocation failed\n",stderr);return;}
+static int post(AChoreographer *owner,FrameCallback frame,VsyncCallback vsync,void *data,int64_t delay,const KljChoreographerCallback *callbackOwner){
+ if(!owner||(!frame&&!vsync))return 0;Frame *entry=calloc(1,sizeof *entry);if(!entry){fputs("Android native display callback allocation failed\n",stderr);return 0;}
  int64_t current=now();entry->due=delay>0&&delay>(INT64_MAX-current)/1000000?INT64_MAX:current+(delay>0?delay:0)*1000000;entry->frame=frame;entry->vsync=vsync;entry->data=data;
- pthread_mutex_lock(&lock);if(stopped||owner->closed)free(entry);else{*owner->tail=entry;owner->tail=&entry->next;if(trace_enabled){trace_posts++;trace_last_due=entry->due;}signal_display();}pthread_mutex_unlock(&lock);
+ if(callbackOwner){entry->owner=*callbackOwner;entry->data=&entry->owner;}
+ int installed=0;pthread_mutex_lock(&lock);if(stopped||owner->closed)free(entry);else{*owner->tail=entry;owner->tail=&entry->next;installed=1;if(trace_enabled){trace_posts++;trace_last_due=entry->due;}signal_display();}pthread_mutex_unlock(&lock);return installed;
 }
-void AChoreographer_postFrameCallback(AChoreographer *owner,void(*callback)(long,void*),void *data){post(owner,(FrameCallback)callback,NULL,data,0);}
-void AChoreographer_postFrameCallbackDelayed(AChoreographer *owner,void(*callback)(long,void*),void *data,long delay){post(owner,(FrameCallback)callback,NULL,data,delay);}
-void AChoreographer_postFrameCallback64(AChoreographer *owner,FrameCallback callback,void *data){post(owner,callback,NULL,data,0);}
-void AChoreographer_postFrameCallbackDelayed64(AChoreographer *owner,FrameCallback callback,void *data,uint32_t delay){post(owner,callback,NULL,data,delay);}
-void AChoreographer_postVsyncCallback(AChoreographer *owner,VsyncCallback callback,void *data){post(owner,NULL,callback,data,0);}
-void AChoreographer_registerRefreshRateCallback(AChoreographer *owner,RefreshCallback callback,void *data){
- if(!owner||!callback)return;pthread_mutex_lock(&lock);if(stopped||owner->closed){pthread_mutex_unlock(&lock);return;}
- Refresh *entry;for(entry=owner->refresh;entry;entry=entry->next)if(entry->call==callback&&entry->data==data)break;
- if(!entry){entry=calloc(1,sizeof *entry);if(entry){entry->references=1;entry->call=callback;entry->data=data;entry->next=owner->refresh;owner->refresh=entry;}}
- if(entry){entry->removed=0;entry->pending=interval>0;if(entry->pending)signal_owner(owner);signal_display();}pthread_mutex_unlock(&lock);
+void AChoreographer_postFrameCallback(AChoreographer *owner,void(*callback)(long,void*),void *data){post(owner,(FrameCallback)callback,NULL,data,0,NULL);}
+void AChoreographer_postFrameCallbackDelayed(AChoreographer *owner,void(*callback)(long,void*),void *data,long delay){post(owner,(FrameCallback)callback,NULL,data,delay,NULL);}
+void AChoreographer_postFrameCallback64(AChoreographer *owner,FrameCallback callback,void *data){post(owner,callback,NULL,data,0,NULL);}
+void AChoreographer_postFrameCallbackDelayed64(AChoreographer *owner,FrameCallback callback,void *data,uint32_t delay){post(owner,callback,NULL,data,delay,NULL);}
+void AChoreographer_postVsyncCallback(AChoreographer *owner,VsyncCallback callback,void *data){post(owner,NULL,callback,data,0,NULL);}
+static int same_refresh(const Refresh *entry,RefreshCallback callback,void *data,const KljChoreographerCallback *callbackOwner){
+ if(callbackOwner)return entry->owner.function==callbackOwner->function&&entry->owner.user==callbackOwner->user;
+ return !entry->owner.function&&entry->call==callback&&entry->data==data;
 }
-void AChoreographer_unregisterRefreshRateCallback(AChoreographer *owner,RefreshCallback callback,void *data){
- if(!owner||!callback)return;pthread_mutex_lock(&lock);Refresh **link=&owner->refresh;while(*link&&((*link)->call!=callback||(*link)->data!=data))link=&(*link)->next;
+static int register_refresh(AChoreographer *owner,RefreshCallback callback,void *data,const KljChoreographerCallback *callbackOwner){
+ if(!owner||!callback)return 0;pthread_mutex_lock(&lock);if(stopped||owner->closed){pthread_mutex_unlock(&lock);return 0;}
+ Refresh *entry;for(entry=owner->refresh;entry;entry=entry->next)if(same_refresh(entry,callback,data,callbackOwner))break;
+ if(entry){pthread_mutex_unlock(&lock);return 1;}
+ if(!entry){entry=calloc(1,sizeof *entry);if(entry){entry->references=1;entry->call=callback;entry->data=data;if(callbackOwner){entry->owner=*callbackOwner;entry->data=&entry->owner;}entry->next=owner->refresh;owner->refresh=entry;}}
+ if(entry){entry->removed=0;entry->pending=interval>0;if(entry->pending)signal_owner(owner);signal_display();}pthread_mutex_unlock(&lock);return entry!=NULL;
+}
+void AChoreographer_registerRefreshRateCallback(AChoreographer *owner,RefreshCallback callback,void *data){register_refresh(owner,callback,data,NULL);}
+static void unregister_refresh(AChoreographer *owner,RefreshCallback callback,void *data,const KljChoreographerCallback *callbackOwner){
+ if(!owner||(!callback&&!callbackOwner))return;pthread_mutex_lock(&lock);Refresh **link=&owner->refresh;while(*link&&!same_refresh(*link,callback,data,callbackOwner))link=&(*link)->next;
  Refresh *entry=*link;if(entry){*link=entry->next;entry->removed=1;entry->pending=0;while(entry->active&&!pthread_equal(owner->thread,pthread_self()))pthread_cond_wait(&changed,&lock);
   /* The removed registry reference keeps concurrent dispatch alive. */
   if(!--entry->references)free(entry);}
  pthread_mutex_unlock(&lock);
+}
+void AChoreographer_unregisterRefreshRateCallback(AChoreographer *owner,RefreshCallback callback,void *data){unregister_refresh(owner,callback,data,NULL);}
+static int klj_choreographer_callback_owner_v1(void *owner,unsigned kind,void *nativeCallback,const KljChoreographerCallback *callback,int64_t delay){
+ if(!owner||!callback||!callback->function)return 0;
+ switch(kind){
+  case KLJ_CHOREOGRAPHER_FRAME_LONG:case KLJ_CHOREOGRAPHER_FRAME64:
+   return post(owner,(FrameCallback)nativeCallback,NULL,NULL,delay,callback);
+  case KLJ_CHOREOGRAPHER_VSYNC:
+   return post(owner,NULL,(VsyncCallback)nativeCallback,NULL,0,callback);
+  case KLJ_CHOREOGRAPHER_REFRESH:
+   return register_refresh(owner,(RefreshCallback)nativeCallback,NULL,callback);
+  case KLJ_CHOREOGRAPHER_UNREGISTER_REFRESH:
+   unregister_refresh(owner,NULL,NULL,callback);return 1;
+  default:return 0;
+ }
 }
 int64_t AChoreographerFrameCallbackData_getFrameTimeNanos(const AChoreographerFrameCallbackData *data){return data->frame;}
 size_t AChoreographerFrameCallbackData_getFrameTimelinesLength(const AChoreographerFrameCallbackData *data){(void)data;return 1;}
@@ -149,7 +172,7 @@ void klj_ndk_choreographer_detach(void){pthread_mutex_lock(&lock);wakeup=NULL;wa
 void klj_ndk_choreographer_shutdown(void){pthread_mutex_lock(&lock);stopped=1;wakeup=NULL;wakeContext=NULL;for(AChoreographer *owner=owners;owner;owner=owner->next){owner->closed=1;clear_frames(owner);for(Refresh *entry=owner->refresh;entry;entry=entry->next)entry->pending=0;signal_owner(owner);}pthread_mutex_unlock(&lock);}
 void *klj_ndk_choreographer_lookup(const char *name){
 #define ENTRY(function) if(!strcmp(name,#function))return (void*)function
- ENTRY(AChoreographer_getInstance);ENTRY(AChoreographer_postFrameCallback);ENTRY(AChoreographer_postFrameCallbackDelayed);ENTRY(AChoreographer_postFrameCallback64);ENTRY(AChoreographer_postFrameCallbackDelayed64);ENTRY(AChoreographer_postVsyncCallback);ENTRY(AChoreographer_registerRefreshRateCallback);ENTRY(AChoreographer_unregisterRefreshRateCallback);ENTRY(AChoreographerFrameCallbackData_getFrameTimeNanos);ENTRY(AChoreographerFrameCallbackData_getFrameTimelinesLength);ENTRY(AChoreographerFrameCallbackData_getPreferredFrameTimelineIndex);ENTRY(AChoreographerFrameCallbackData_getFrameTimelineVsyncId);ENTRY(AChoreographerFrameCallbackData_getFrameTimelineExpectedPresentationTimeNanos);ENTRY(AChoreographerFrameCallbackData_getFrameTimelineDeadlineNanos);
+ ENTRY(AChoreographer_getInstance);ENTRY(AChoreographer_postFrameCallback);ENTRY(AChoreographer_postFrameCallbackDelayed);ENTRY(AChoreographer_postFrameCallback64);ENTRY(AChoreographer_postFrameCallbackDelayed64);ENTRY(AChoreographer_postVsyncCallback);ENTRY(AChoreographer_registerRefreshRateCallback);ENTRY(AChoreographer_unregisterRefreshRateCallback);ENTRY(AChoreographerFrameCallbackData_getFrameTimeNanos);ENTRY(AChoreographerFrameCallbackData_getFrameTimelinesLength);ENTRY(AChoreographerFrameCallbackData_getPreferredFrameTimelineIndex);ENTRY(AChoreographerFrameCallbackData_getFrameTimelineVsyncId);ENTRY(AChoreographerFrameCallbackData_getFrameTimelineExpectedPresentationTimeNanos);ENTRY(AChoreographerFrameCallbackData_getFrameTimelineDeadlineNanos);ENTRY(klj_choreographer_callback_owner_v1);
 #undef ENTRY
  return NULL;
 }

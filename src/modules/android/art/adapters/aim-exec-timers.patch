@@ -1,0 +1,169 @@
+--- a/crates/aim-linux-abi/src/sys/exec.rs
++++ b/crates/aim-linux-abi/src/sys/exec.rs
+@@ -333,7 +333,6 @@
+         || !super::thread::alone()
+         || crate::hostcall::used()
+         || super::memfd::has_exec_copies()
+-        || super::ptimer::any()
+     {
+         return None;
+     }
+@@ -354,6 +353,7 @@
+     trace_stage("in-place.handovers.enter");
+     super::fork::spawn::wait_handovers();
+     trace_stage("in-place.reset");
++    let timer_exec = super::ptimer::exec_quiesce();
+     super::fdtab::adopt_plain();
+     super::binder::exec_reset();
+     super::mem::exec_reset();
+@@ -378,6 +378,7 @@
+             // woken by CLOEXEC must not observe the old image still resetting
+             // or loading after the close.
+             trace_stage("in-place.close-on-exec");
++            timer_exec.commit();
+             if let Err(error)=super::fs::close_on_exec(){crate::diag!("[linux-abi] exec descriptor close: errno {error}");super::signal::die(SIGSEGV)}
+             // is_live above proves this is the calling thread's bound context.
+             // Its host_sp was installed when the thread first entered guest
+--- a/crates/aim-linux-abi/src/sys/ptimer.rs
++++ b/crates/aim-linux-abi/src/sys/ptimer.rs
+@@ -50,16 +50,36 @@
+ }
+ 
+ static TIMERS: Mutex<Vec<Timer>> = Mutex::new(Vec::new());
++// An expiry delivers and rearms outside TIMERS. Exec waits for that whole
++// operation before draining its owners, so no pre-exec callback can publish
++// another signal or kernel timer after the successful image commit.
++static EXPIRY: Mutex<()> = Mutex::new(());
+ 
+ fn timers() -> MutexGuard<'static, Vec<Timer>> {
+     TIMERS.lock().unwrap_or_else(|e| e.into_inner())
+ }
+ 
+-/// Whether the process has a timer.
+-pub fn any() -> bool {
+-    !timers().is_empty()
++/// Prevent old callbacks from publishing into the image being replaced. No
++/// timer is deleted until commit; dropping this guard leaves its state intact.
++pub(super) struct ExecTimers(MutexGuard<'static, ()>);
++
++pub(super) fn exec_quiesce() -> ExecTimers {
++    ExecTimers(EXPIRY.lock().unwrap_or_else(|e| e.into_inner()))
+ }
+ 
++impl ExecTimers {
++    /// Successful exec deletes POSIX timers before exposing the CLOEXEC commit.
++    pub(super) fn commit(self) {
++        let old = std::mem::take(&mut *timers());
++        for timer in old {
++            if let Some(armed) = timer.armed.filter(|p| p.0 >= 0) {
++                park::disarm(armed);
++            }
++        }
++        drop(self.0);
++    }
++}
++
+ /// Arm the kqueue for `id`'s deadline `next` (outside the table lock: the
+ /// timer kqueue's lock is taken before this one across a fork).
+ fn arm(id: i32, ident: u64, next: u64) {
+@@ -96,6 +116,9 @@
+ 
+ /// The timer thread: the kqueue event `ident` fired.
+ pub fn expired(ident: u64) {
++    let _expiry = EXPIRY.lock().unwrap_or_else(|e| e.into_inner());
++    #[cfg(test)]
++    tests::pause_expiry();
+     let now = park::monotonic();
+     let (info, tid, rearm) = {
+         let mut t = timers();
+@@ -303,8 +326,53 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++    use std::sync::mpsc::{self, Receiver, Sender};
++    use std::time::Duration;
++
++    static EXPIRY_PAUSE: Mutex<Option<(Sender<()>, Receiver<()>)>> = Mutex::new(None);
++
++    pub(super) fn pause_expiry() {
++        let pause = EXPIRY_PAUSE.lock().unwrap().take();
++        if let Some((entered, release)) = pause {
++            entered.send(()).unwrap();
++            release.recv_timeout(Duration::from_secs(2)).unwrap();
++        }
++    }
+ 
+     #[test]
++    fn exec_waits_for_active_kernel_expiry_and_deletes_its_rearm() {
++        super::super::fdtab::init();
++        exec_quiesce().commit();
++        let mut id = -1i32;
++        let ev: [u64; 8] = [0, 34, 0, 0, 0, 0, 0, 0];
++        assert_eq!(timer_create([1, ev.as_ptr() as u64, &mut id as *mut i32 as u64, 0, 0, 0]), 0);
++        let (entered_tx, entered_rx) = mpsc::channel();
++        let (release_tx, release_rx) = mpsc::channel();
++        *EXPIRY_PAUSE.lock().unwrap() = Some((entered_tx, release_rx));
++        // A real kernel expiry enters the original timer thread and pauses
++        // before it can deliver/rearm. No substitute timer owner is involved.
++        let spec: [i64; 4] = [0, 5_000_000, 0, 5_000_000];
++        assert_eq!(timer_settime([id as u64, 0, spec.as_ptr() as u64, 0, 0, 0]), 0);
++        entered_rx.recv_timeout(Duration::from_secs(2)).unwrap();
++        let (started_tx, started_rx) = mpsc::channel();
++        let (done_tx, done_rx) = mpsc::channel();
++        let commit = std::thread::spawn(move || {
++            started_tx.send(()).unwrap();
++            exec_quiesce().commit();
++            done_tx.send(()).unwrap();
++        });
++        started_rx.recv().unwrap();
++        assert_eq!(done_rx.recv_timeout(Duration::from_millis(20)), Err(mpsc::RecvTimeoutError::Timeout));
++        release_tx.send(()).unwrap();
++        done_rx.recv_timeout(Duration::from_secs(2)).unwrap();
++        commit.join().unwrap();
++        let mut current = [0i64; 4];
++        assert_eq!(timer_gettime([id as u64, current.as_mut_ptr() as u64, 0, 0, 0, 0]), -(EINVAL as i64));
++        std::thread::sleep(Duration::from_millis(20));
++        assert!(timers().is_empty());
++    }
++
++    #[test]
+     fn expirations_and_overruns() {
+         assert_eq!(advance(0, 10, 100), (0, 0));
+         assert_eq!(advance(100, 0, 99), (0, 100));
+--- a/crates/aim-linux-abi/src/sys/fdtab.rs
++++ b/crates/aim-linux-abi/src/sys/fdtab.rs
+@@ -896,8 +896,12 @@
+             let fl = libc::fcntl(fd, libc::F_GETFL);
+             libc::fcntl(fd, libc::F_SETFL, fl | libc::O_NONBLOCK);
+         }
+-        if cloexec {
+-            libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC);
++        let descriptor_flags = libc::fcntl(fd, libc::F_GETFD);
++        if descriptor_flags >= 0 {
++            // Darwin kqueues start close-on-exec. Apply both requested states
++            // rather than inheriting the host creator's descriptor default.
++            let requested = if cloexec { libc::FD_CLOEXEC } else { 0 };
++            libc::fcntl(fd, libc::F_SETFD, (descriptor_flags & !libc::FD_CLOEXEC) | requested);
+         }
+     }
+ }
+--- a/crates/aim-linux-abi/src/sys/fs.rs
++++ b/crates/aim-linux-abi/src/sys/fs.rs
+@@ -1438,7 +1438,16 @@
+ pub fn fcntl(a: [u64; 6]) -> i64 {
+     let(original,cmd,arg)=(a[0]as i32,a[1],a[2]);
+     if matches!(cmd,F_DUPFD|F_DUPFD_CLOEXEC){return dup_from(original,arg as i32,cmd==F_DUPFD_CLOEXEC);}
+-    if matches!(cmd,F_GETFD|F_SETFD){let _guard=fdtab::lifecycle();if let Err(error)=fdtab::require_guest_visible(original){return -(error as i64);}return errno::check(unsafe{if cmd==F_GETFD{libc::fcntl(original,libc::F_GETFD)}else{libc::fcntl(original,libc::F_SETFD,arg as i32&libc::FD_CLOEXEC)}}as i64);}
++    if matches!(cmd,F_GETFD|F_SETFD){
++        let _guard=fdtab::lifecycle();
++        if let Err(error)=fdtab::require_guest_visible(original){return -(error as i64);}
++        let native=unsafe{libc::fcntl(original,libc::F_GETFD)};
++        if native<0{return -(errno::last() as i64);}
++        // FD_CLOFORK is a Darwin ownership flag, not a Linux descriptor flag.
++        if cmd==F_GETFD{return (native&libc::FD_CLOEXEC)as i64;}
++        let flags=(native&!libc::FD_CLOEXEC)|(arg as i32&libc::FD_CLOEXEC);
++        return errno::check(unsafe{libc::fcntl(original,libc::F_SETFD,flags)}as i64);
++    }
+     let pin=match fdtab::pin_guest(original){Ok(pin)=>pin,Err(error)=>return -(error as i64)};
+     use std::os::fd::AsRawFd;let fd=pin.descriptor().as_raw_fd();
+     if let Some(Kind::Path(path)) = fdtab::get(fd) {

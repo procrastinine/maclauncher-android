@@ -1,6 +1,7 @@
 import fs from 'node:fs';import path from 'node:path';
 import {prepareMutexOwnership} from './pthread-mutex-sources.mjs';
 import {prepareAudioCaptureSources,adaptAudioCapture} from './audio-capture-sources.mjs';
+import {adaptAAudioOwnership} from './aaudio-sources.mjs';
 import {writeChanged} from './upstream/source-files.mjs';
 /** Observe the existing native state transitions; retain their locks and algorithms. */
 export function audioActivity(source, receiver, active, output='1'){
@@ -41,7 +42,7 @@ export function prepareNativeSurfaceSources(klepton,build){
  pthread=replace(pthread,'static void *thread_tramp(void *p) {','static void klj_guest_thread_cleanup(void *unused) {\n    (void)unused;\n    klj_finish_guest_thread();\n    thread_unregister(pthread_self());\n}\nstatic void *thread_tramp(void *p) {');
  pthread=replace(pthread,'    void *r = t.fn(t.arg);\n    thread_unregister(pthread_self());\n    return r;','    void *r;\n    pthread_cleanup_push(klj_guest_thread_cleanup,NULL);\n    r = t.fn(t.arg);\n    pthread_cleanup_pop(1);\n    return r;');
  pthread=replace(pthread,'{ thread_unregister(pthread_self()); pthread_exit(r); }','{ if(klj_jni_request_thread_exit())return; klj_finish_guest_thread(); thread_unregister(pthread_self()); pthread_exit(r); }');
- let aaudio=adaptAudioCapture(fs.readFileSync(path.join(klepton,'runtime/media/kl_aaudio.c'),'utf8'));
+ let aaudio=adaptAAudioOwnership(adaptAudioCapture(fs.readFileSync(path.join(klepton,'runtime/media/kl_aaudio.c'),'utf8')));
  if(aaudio.split('kl_thread_init();').length!==3||aaudio.split('    return NULL;\n}').length!==3)throw Error('Pinned AAudio feeder source changed');
  aaudio=aaudio.replaceAll('kl_thread_init();','owned_feeding=s; kl_thread_init();');
  aaudio=audioActivity(aaudio,'s|is','AAUDIO_STREAM_STATE_STARTED','$->direction == AAUDIO_DIRECTION_OUTPUT');

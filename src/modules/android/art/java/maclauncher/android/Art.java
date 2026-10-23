@@ -18,6 +18,7 @@ public final class Art {
   System.exit(status);
  }
  static void run(JSONObject launch)throws Exception{
+  ArtResourceInitialization.prepare(launch.getInt("runtimeUid"));
   System.setProperty("klepton.bridge","/system/lib64/libart-platform.so");
   System.setProperty("klepton.graphics","/system/lib64/libart-platform.so");
   System.setProperty("klepton.audio","/system/lib64/libart-platform.so");

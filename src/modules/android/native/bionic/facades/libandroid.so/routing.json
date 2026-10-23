@@ -1,0 +1,2621 @@
+{
+  "schemaVersion": 1,
+  "original": {
+    "name": "libandroid.so",
+    "sha256": "31427d75865af3ecfff484ef76354f5813dc33dd28697593e47fac65f7e00f1f"
+  },
+  "versions": [
+    "LIBANDROID",
+    "LIBANDROID_PLATFORM"
+  ],
+  "suppliers": [
+    {
+      "library": "libmaclauncher-ndk-host.so",
+      "exportedFunctions": 108,
+      "routedFunctions": 73
+    },
+    {
+      "library": "libmaclauncher-graphics-ndk.so",
+      "exportedFunctions": 43,
+      "routedFunctions": 24
+    },
+    {
+      "library": "libmaclauncher-looper.so",
+      "exportedFunctions": 10,
+      "routedFunctions": 9
+    },
+    {
+      "library": "libmaclauncher-choreographer.so",
+      "exportedFunctions": 15,
+      "routedFunctions": 14
+    }
+  ],
+  "functions": [
+    {
+      "name": "AActivityManager_addUidImportanceListener",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AActivityManager_getUidImportance",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AActivityManager_isUidActive",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AActivityManager_removeUidImportanceListener",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AAssetDir_close",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAssetDir_getNextFileName",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAssetDir_rewind",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAssetManager_fromJava",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAssetManager_open",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAssetManager_openDir",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAsset_close",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAsset_getBuffer",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAsset_getLength",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAsset_getLength64",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAsset_getRemainingLength",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAsset_getRemainingLength64",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAsset_isAllocated",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAsset_openFileDescriptor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAsset_openFileDescriptor64",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAsset_read",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAsset_seek",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AAsset_seek64",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AChoreographerFrameCallbackData_getFrameTimeNanos",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AChoreographerFrameCallbackData_getFrameTimelineDeadlineNanos",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AChoreographerFrameCallbackData_getFrameTimelineExpectedPresentationTimeNanos",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AChoreographerFrameCallbackData_getFrameTimelineVsyncId",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AChoreographerFrameCallbackData_getFrameTimelinesLength",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AChoreographerFrameCallbackData_getPreferredFrameTimelineIndex",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AChoreographer_getInstance",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AChoreographer_postFrameCallback",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AChoreographer_postFrameCallback64",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AChoreographer_postFrameCallbackDelayed",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AChoreographer_postFrameCallbackDelayed64",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AChoreographer_postVsyncCallback",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AChoreographer_registerRefreshRateCallback",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AChoreographer_unregisterRefreshRateCallback",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-choreographer.so"
+    },
+    {
+      "name": "AConfiguration_copy",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_delete",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_diff",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_fromAssetManager",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getCountry",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getDensity",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getGrammaticalGender",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getKeyboard",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getKeysHidden",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getLanguage",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getLayoutDirection",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getMcc",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getMnc",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getNavHidden",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getNavigation",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getOrientation",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getScreenHeightDp",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getScreenLong",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getScreenRound",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getScreenSize",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getScreenWidthDp",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getSdkVersion",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getSmallestScreenWidthDp",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getTouchscreen",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getUiModeNight",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_getUiModeType",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_isBetterThan",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_match",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_new",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setCountry",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setDensity",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setGrammaticalGender",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setKeyboard",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setKeysHidden",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setLanguage",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setLayoutDirection",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setMcc",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setMnc",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setNavHidden",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setNavigation",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setOrientation",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setScreenHeightDp",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setScreenLong",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setScreenSize",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setScreenWidthDp",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setSdkVersion",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setSmallestScreenWidthDp",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setTouchscreen",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setUiModeNight",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "AConfiguration_setUiModeType",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "ACpuHeadroomParams_create",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ACpuHeadroomParams_destroy",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ACpuHeadroomParams_getCalculationType",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ACpuHeadroomParams_getCalculationWindowMillis",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ACpuHeadroomParams_setCalculationType",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ACpuHeadroomParams_setCalculationWindowMillis",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ACpuHeadroomParams_setTids",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADisplayLutsEntry_createEntry",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADisplayLutsEntry_destroy",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADisplayLutsEntry_getBuffer",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADisplayLutsEntry_getDimension",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADisplayLutsEntry_getSamplingKey",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADisplayLutsEntry_getSize",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADisplayLuts_create",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADisplayLuts_destroy",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADisplayLuts_setEntries",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADynamicInstrumentationManager_ExecutableMethodFileOffsets_destroy",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADynamicInstrumentationManager_ExecutableMethodFileOffsets_getContainerOffset",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADynamicInstrumentationManager_ExecutableMethodFileOffsets_getContainerPath",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADynamicInstrumentationManager_ExecutableMethodFileOffsets_getMethodOffset",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADynamicInstrumentationManager_MethodDescriptor_create",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADynamicInstrumentationManager_MethodDescriptor_destroy",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADynamicInstrumentationManager_TargetProcess_create",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADynamicInstrumentationManager_TargetProcess_destroy",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ADynamicInstrumentationManager_getExecutableMethodFileOffsets",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFontMatcher_create",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFontMatcher_destroy",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFontMatcher_match",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFontMatcher_setFamilyVariant",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFontMatcher_setLocales",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFontMatcher_setStyle",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFont_close",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFont_getAxisCount",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFont_getAxisTag",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFont_getAxisValue",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFont_getCollectionIndex",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFont_getFontFilePath",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFont_getLocale",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFont_getWeight",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AFont_isItalic",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AGpuHeadroomParams_create",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AGpuHeadroomParams_destroy",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AGpuHeadroomParams_getCalculationType",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AGpuHeadroomParams_getCalculationWindowMillis",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AGpuHeadroomParams_setCalculationType",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AGpuHeadroomParams_setCalculationWindowMillis",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AHardwareBuffer_acquire",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AHardwareBuffer_allocate",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AHardwareBuffer_describe",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AHardwareBuffer_fromHardwareBuffer",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AHardwareBuffer_getId",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AHardwareBuffer_getNativeHandle",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AHardwareBuffer_isSupported",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AHardwareBuffer_lock",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AHardwareBuffer_lockAndGetInfo",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AHardwareBuffer_lockPlanes",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AHardwareBuffer_recvHandleFromUnixSocket",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AHardwareBuffer_release",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AHardwareBuffer_sendHandleToUnixSocket",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AHardwareBuffer_toHardwareBuffer",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AHardwareBuffer_unlock",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AInputEvent_getDeviceId",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputEvent_getSource",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputEvent_getType",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputEvent_release",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputEvent_toJava",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputQueue_attachLooper",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputQueue_detachLooper",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputQueue_finishEvent",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputQueue_fromJava",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputQueue_getEvent",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputQueue_hasEvents",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputQueue_preDispatchEvent",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputReceiverCallbacks_create",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputReceiverCallbacks_release",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputReceiverCallbacks_setKeyEventCallback",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputReceiverCallbacks_setMotionEventCallback",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputReceiver_createBatchedInputReceiver",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputReceiver_createUnbatchedInputReceiver",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputReceiver_getInputTransferToken",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputReceiver_release",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputTransferToken_fromJava",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputTransferToken_release",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AInputTransferToken_toJava",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AKeyEvent_fromJava",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AKeyEvent_getAction",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AKeyEvent_getDownTime",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AKeyEvent_getEventTime",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AKeyEvent_getFlags",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AKeyEvent_getKeyCode",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AKeyEvent_getMetaState",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AKeyEvent_getRepeatCount",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AKeyEvent_getScanCode",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ALooper_acquire",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-looper.so"
+    },
+    {
+      "name": "ALooper_addFd",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-looper.so"
+    },
+    {
+      "name": "ALooper_forThread",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-looper.so"
+    },
+    {
+      "name": "ALooper_pollAll",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-looper.so"
+    },
+    {
+      "name": "ALooper_pollOnce",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-looper.so"
+    },
+    {
+      "name": "ALooper_prepare",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-looper.so"
+    },
+    {
+      "name": "ALooper_release",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-looper.so"
+    },
+    {
+      "name": "ALooper_removeFd",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-looper.so"
+    },
+    {
+      "name": "ALooper_wake",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-looper.so"
+    },
+    {
+      "name": "AMotionEvent_fromJava",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getAction",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getActionButton",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getAxisValue",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getButtonState",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getClassification",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getDownTime",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getEdgeFlags",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getEventTime",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getFlags",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistoricalAxisValue",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistoricalEventTime",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistoricalOrientation",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistoricalPressure",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistoricalRawX",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistoricalRawY",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistoricalSize",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistoricalToolMajor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistoricalToolMinor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistoricalTouchMajor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistoricalTouchMinor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistoricalX",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistoricalY",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getHistorySize",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getMetaState",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getOrientation",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getPointerCount",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getPointerId",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getPressure",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getRawX",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getRawY",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getSize",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getToolMajor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getToolMinor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getToolType",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getTouchMajor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getTouchMinor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getX",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getXOffset",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getXPrecision",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getY",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getYOffset",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AMotionEvent_getYPrecision",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ANativeActivity_finish",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "ANativeActivity_hideSoftInput",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "ANativeActivity_setWindowFlags",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "ANativeActivity_setWindowFormat",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "ANativeActivity_showSoftInput",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-ndk-host.so"
+    },
+    {
+      "name": "ANativeWindow_acquire",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "ANativeWindow_fromSurface",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "ANativeWindow_getFormat",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "ANativeWindow_getHeight",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "ANativeWindow_getWidth",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "ANativeWindow_lock",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "ANativeWindow_release",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "ANativeWindow_setBuffersGeometry",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "ANativeWindow_toSurface",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "ANativeWindow_unlockAndPost",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libmaclauncher-graphics-ndk.so"
+    },
+    {
+      "name": "AObbInfo_delete",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AObbInfo_getFlags",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AObbInfo_getPackageName",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AObbInfo_getVersion",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AObbScanner_getObbInfo",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_borrowSessionFromJava",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_closeSession",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_closeSessionFromJava",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_createSession",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_createSessionFromJava",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_createSessionInternal",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_createSessionUsingConfig",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_createSessionUsingConfigInternal",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_getManager",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_getMaxGraphicsPipelineThreadsCount",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_getPreferredUpdateRateNanos",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_getRateLimiterPropertiesForTesting",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_getThreadIds",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_isFeatureSupported",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_notifyWorkloadIncrease",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_notifyWorkloadReset",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_notifyWorkloadSpike",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_reportActualWorkDuration",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_reportActualWorkDuration2",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_sendHint",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_setIHintManagerForTesting",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_setNativeSurfaces",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_setPreferPowerEfficiency",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_setThreads",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_setUseFMQForTesting",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_setUseNewLoadHintBehaviorForTesting",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APerformanceHint_updateTargetWorkDuration",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "APermissionManager_checkPermission",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorEventQueue_disableSensor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorEventQueue_enableSensor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorEventQueue_getEvents",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorEventQueue_hasEvents",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorEventQueue_registerSensor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorEventQueue_requestAdditionalInfoEvents",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorEventQueue_setEventRate",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorManager_configureDirectReport",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorManager_createEventQueue",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorManager_createHardwareBufferDirectChannel",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorManager_createSharedMemoryDirectChannel",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorManager_destroyDirectChannel",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorManager_destroyEventQueue",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorManager_getDefaultSensor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorManager_getDefaultSensorEx",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorManager_getDynamicSensorList",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorManager_getInstance",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorManager_getInstanceForPackage",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensorManager_getSensorList",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensor_getFifoMaxEventCount",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensor_getFifoReservedEventCount",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensor_getHandle",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensor_getHighestDirectReportRateLevel",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensor_getMinDelay",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensor_getName",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensor_getReportingMode",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensor_getResolution",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensor_getStringType",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensor_getType",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensor_getVendor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensor_isDirectChannelTypeSupported",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASensor_isWakeUpSensor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASessionCreationConfig_create",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASessionCreationConfig_release",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASessionCreationConfig_setGraphicsPipeline",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASessionCreationConfig_setNativeSurfaces",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASessionCreationConfig_setPreferPowerEfficiency",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASessionCreationConfig_setTargetWorkDurationNanos",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASessionCreationConfig_setTids",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASessionCreationConfig_setUseAutoTiming",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASharedMemory_create",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASharedMemory_dupFromJava",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASharedMemory_getSize",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASharedMemory_setProt",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AStorageManager_delete",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AStorageManager_getMountedObbPath",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AStorageManager_isObbMounted",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AStorageManager_mountObb",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AStorageManager_new",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AStorageManager_unmountObb",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceControlStats_getAcquireTime",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceControlStats_getFrameNumber",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceControl_acquire",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceControl_create",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceControl_createFromWindow",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceControl_fromJava",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceControl_getChoreographer",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceControl_registerSurfaceStatsListener",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceControl_release",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceControl_unregisterSurfaceStatsListener",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTexture_acquireANativeWindow",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTexture_attachToGLContext",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTexture_detachFromGLContext",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTexture_fromSurfaceTexture",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTexture_getTimestamp",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTexture_getTransformMatrix",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTexture_release",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTexture_updateTexImage",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransactionStats_getASurfaceControls",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransactionStats_getAcquireTime",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransactionStats_getLatchTime",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransactionStats_getPresentFenceFd",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransactionStats_getPreviousReleaseFenceFd",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransactionStats_releaseASurfaceControls",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_apply",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_clearFrameRate",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_create",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_delete",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_fromJava",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_reparent",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setBuffer",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setBufferAlpha",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setBufferDataSpace",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setBufferTransform",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setBufferTransparency",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setBufferWithRelease",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setColor",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setCrop",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setDamageRegion",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setDesiredHdrHeadroom",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setDesiredPresentTime",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setEnableBackPressure",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setExtendedRangeBrightness",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setFrameRate",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setFrameRateWithChangeStrategy",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setFrameTimeline",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setGeometry",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setHdrMetadata_cta861_3",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setHdrMetadata_smpte2086",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setLuts",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setOnCommit",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setOnComplete",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setPosition",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setScale",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setVisibility",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASurfaceTransaction_setZOrder",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASystemFontIterator_close",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASystemFontIterator_next",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASystemFontIterator_open",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASystemHealth_getCpuHeadroom",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASystemHealth_getCpuHeadroomCalculationWindowRange",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASystemHealth_getCpuHeadroomMinIntervalMillis",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASystemHealth_getGpuHeadroom",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASystemHealth_getGpuHeadroomCalculationWindowRange",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASystemHealth_getGpuHeadroomMinIntervalMillis",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASystemHealth_getMaxCpuHeadroomTidsSize",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ASystemHealth_setIHintManagerForTesting",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AThermal_acquireManager",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AThermal_getCurrentThermalStatus",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AThermal_getThermalHeadroom",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AThermal_getThermalHeadroomThresholds",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AThermal_registerThermalHeadroomListener",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AThermal_registerThermalStatusListener",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AThermal_releaseManager",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AThermal_setIThermalServiceForTesting",
+      "version": "LIBANDROID_PLATFORM",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AThermal_unregisterThermalHeadroomListener",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AThermal_unregisterThermalStatusListener",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ATrace_beginAsyncSection",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ATrace_beginSection",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ATrace_endAsyncSection",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ATrace_endSection",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ATrace_isEnabled",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "ATrace_setCounter",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AWorkDuration_create",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AWorkDuration_release",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AWorkDuration_setActualCpuDurationNanos",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AWorkDuration_setActualGpuDurationNanos",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AWorkDuration_setActualTotalDurationNanos",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "AWorkDuration_setWorkPeriodStartTimestampNanos",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "android_getaddrinfofornetwork",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "android_getprocdns",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "android_getprocnetwork",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "android_res_cancel",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "android_res_nquery",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "android_res_nresult",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "android_res_nsend",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "android_setprocdns",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "android_setprocnetwork",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "android_setsocknetwork",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "android_tag_socket",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "android_tag_socket_with_uid",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    },
+    {
+      "name": "android_untag_socket",
+      "version": "LIBANDROID",
+      "binding": "GLOBAL",
+      "library": "libandroid-platform.so"
+    }
+  ]
+}

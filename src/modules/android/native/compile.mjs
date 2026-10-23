@@ -81,6 +81,7 @@ import {components as arm32Components,prepareArm32Components} from './arm32/comp
 import {prepareNdkJni} from './ndk-jni/build.mjs';
 import {prepareAllocator} from './allocator/build.mjs';
 import {buildExecutableMemory} from './executable-memory/build.mjs';
+import {buildBionic} from './bionic/build.mjs';
 
 const root=path.dirname(fileURLToPath(import.meta.url));
 const pins=JSON.parse(fs.readFileSync(path.join(root,'source-pins.json')));
@@ -154,7 +155,7 @@ const compile=(name,inputs,extra=[])=>{ownedNativeProducts.add(name);return comp
 const object=(name,input,extra=[],compiler='clang++')=>compileHostObject({name:name.replaceAll('/','_')+'.o',inputs:[input],flags:[...flags,...extra],directory:path.join(build,'host-objects'),cwd:options.klepton,ninja:options.ninja,python:options.python,compiler,pathRoots:nativePathRoots}).output;
 const executable=(name,inputs,flags,extra=[],compiler='clang')=>{ownedNativeProducts.add(name);return compileHostExecutable({name,inputs,flags,extra,directory:path.join(build,'host-objects'),output:path.join(native,name),cwd:options.klepton,ninja:options.ninja,python:options.python,compiler,pathRoots:nativePathRoots});};
 compile('libandroid-storage.dylib',[path.join(root,'native-storage.c')]);
-compile('libandroid-jvm-process.dylib',[path.join(root,'jvm-process.c')]);
+compile('libandroid-jvm-process.dylib',[path.join(root,'jvm-process.c')],['-Wl,-U,_JNI_CreateJavaVM']);
 const executableMemory=buildExecutableMemory({source:options['aim-source'],revision:pins.aim,
   output:path.join(build,'executable-memory'),rustToolchain:options['rust-toolchain']});
 fs.cpSync(executableMemory.notices,path.join(output,'notices/executable-memory'),{recursive:true});
@@ -273,7 +274,9 @@ const activityThread=prepareActivityThread({frameworkSource:options['framework-s
 const activityObject=object('activity-thread',activityThread.unit,['-std=c++20','-Wno-writable-strings']);
 fs.cpSync(activityThread.notices,path.join(output,'notices/activity-thread'),{recursive:true});
 ownedNativeProducts.add('libnativebinding.dylib');
-buildNativeBinding({root,build,native,keyMapObject,activityObject,flags,cwd:options.klepton,ninja:options.ninja,python:options.python,pathRoots:nativePathRoots});
+const bionic=buildBionic({options,root,build,output,flags,pathRoots:nativePathRoots});
+if(bionic)inputs.bionic=bionic.identity;
+buildNativeBinding({root,build,native,keyMapObject,activityObject,flags,cwd:options.klepton,ninja:options.ninja,python:options.python,pathRoots:nativePathRoots,bionic:bionic?.binding});
 buildGraphicsLibrary({root,build,options,frameworkGles,xr,object,compile});
 const audioRoutes=object('audio-routes',path.join(root,'audio-routes.mm'),['-std=c++17','-fobjc-arc']);
 const mediaInputs=object('media-inputs',path.join(root,'media-inputs.mm'),['-std=c++20','-fobjc-arc']);

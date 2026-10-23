@@ -1,0 +1,20 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
+const {spawnSync}=require('node:child_process');
+test('Prepared native Java orchestration publishes before constructors without spanning the class monitor',t=>{
+ const runtime=process.env.KLEPTON_NATIVE_RUNTIME,jdk=process.env.JAVA_HOME,clang=process.env.ANDROID_CLANG;
+ if(!runtime||!jdk||!clang)return t.skip('Requires Java21, KLEPTON_NATIVE_RUNTIME and original ANDROID_CLANG');
+ const source=process.env.KLEPTON_NATIVE_SOURCE||path.resolve(__dirname,'../src/modules/android/native');
+ const metadata=process.env.KLEPTON_METADATA_SOURCE||path.join(source,'java/maclauncher/android/bridge/ElfNativeExports.java');
+ const fixture=path.join(__dirname,'fixtures/android-native-prepared-load'),temp=fs.mkdtempSync(path.join(os.tmpdir(),'android-prepared-java-'));
+ t.after(()=>fs.rmSync(temp,{recursive:true,force:true}));
+ const cp=['android-host.jar','android-framework.jar'].map(n=>path.join(runtime,n)).join(path.delimiter),env={...process.env};
+ for(const key of Object.keys(env))if(/^(DYLD_|KL_|JAVA_TOOL_OPTIONS$|JDK_JAVA_OPTIONS$|_JAVA_OPTIONS$|CLASSPATH$)/.test(key))delete env[key];
+ const run=(command,args)=>{const r=spawnSync(command,args,{env,encoding:'utf8',timeout:20000,maxBuffer:2<<20});assert.ifError(r.error);assert.equal(r.status,0,[r.signal,r.stdout,r.stderr].filter(Boolean).join('\n'));return r;};
+ const elf=(name,defines=[],dependency)=>run(clang,['-shared','-nostdlib','-fPIC',...defines.map(n=>'-D'+n),'-Wl,-soname,'+name,path.join(fixture,'metadata.c'),...(dependency?['-Wl,--no-as-needed','-L'+temp,'-l:'+dependency]:[]),'-o',path.join(temp,name)]);
+ elf('libsingle.so');elf('libdep.so',['DEPENDENCY']);elf('libmain.so',['NEED_DEPENDENCY'],'libdep.so');
+ elf('libcycleb.so',['DEPENDENCY']);elf('libcyclea.so',[],'libcycleb.so');elf('libcycleb.so',['DEPENDENCY'],'libcyclea.so');
+ run(path.join(jdk,'bin/javac'),['--release','21','-cp',cp,'-d',temp+'/classes',path.join(source,'java-jvm/maclauncher/android/bridge/GuestNativeLoader.java'),...['NativeBinding','GuestNativeEntry'].map(n=>path.join(source,'java/maclauncher/android/bridge/'+n+'.java')),metadata,path.join(fixture,'PreparedLoadProbe.java')]);
+ const result=run(path.join(jdk,'bin/java'),['-Xverify:all','-cp',temp+'/classes'+path.delimiter+cp,'maclauncher.android.bridge.PreparedLoadProbe',temp]);
+ assert.match(result.stdout,/PASS prepared Java orchestration 8 controls/);
+ console.log(result.stdout.trim());
+});

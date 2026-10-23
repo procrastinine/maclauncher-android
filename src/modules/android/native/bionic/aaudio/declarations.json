@@ -1,0 +1,555 @@
+{
+  "source": "host-ast.json",
+  "sha256": "39cd02ebe09de8f803494576d0d1940eb7e733168df9046cf513b71929651b92",
+  "header": "aaudio/AAudio.h",
+  "headerSha256": "2ddeb73a7e9b6b6edb47fbfbee71d6f50d177560eeaaf75208e07c13b9c3a03c",
+  "functions": [
+    {
+      "name": "AAudioStreamBuilder_delete",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStreamBuilder *"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_openStream",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "AAudioStream * _Nullable *"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setAllowedCapturePolicy",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "aaudio_allowed_capture_policy_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setAttributionTag",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "const char *"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setBufferCapacityInFrames",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "int32_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setChannelCount",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "int32_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setChannelMask",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "aaudio_channel_mask_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setContentType",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "aaudio_content_type_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setDataCallback",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "AAudioStream_dataCallback",
+        "void *"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setDeviceId",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "int32_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setDirection",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "aaudio_direction_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setErrorCallback",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "AAudioStream_errorCallback",
+        "void *"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setFormat",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "aaudio_format_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setFramesPerDataCallback",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "int32_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setInputPreset",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "aaudio_input_preset_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setIsContentSpatialized",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "_Bool"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setPackageName",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "const char *"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setPerformanceMode",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "aaudio_performance_mode_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setPresentationEndCallback",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "AAudioStream_presentationEndCallback",
+        "void *"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setPrivacySensitive",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "_Bool"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setSampleRate",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "int32_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setSamplesPerFrame",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "int32_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setSessionId",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "aaudio_session_id_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setSharingMode",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "aaudio_sharing_mode_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setSpatializationBehavior",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "aaudio_spatialization_behavior_t"
+      ]
+    },
+    {
+      "name": "AAudioStreamBuilder_setUsage",
+      "result": "void",
+      "parameters": [
+        "AAudioStreamBuilder *",
+        "aaudio_usage_t"
+      ]
+    },
+    {
+      "name": "AAudioStream_close",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getAllowedCapturePolicy",
+      "result": "aaudio_allowed_capture_policy_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getBufferCapacityInFrames",
+      "result": "int32_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getBufferSizeInFrames",
+      "result": "int32_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getChannelCount",
+      "result": "int32_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getChannelMask",
+      "result": "aaudio_channel_mask_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getContentType",
+      "result": "aaudio_content_type_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getDeviceId",
+      "result": "int32_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getDirection",
+      "result": "aaudio_direction_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getFormat",
+      "result": "aaudio_format_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getFramesPerBurst",
+      "result": "int32_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getFramesPerDataCallback",
+      "result": "int32_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getFramesRead",
+      "result": "int64_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getFramesWritten",
+      "result": "int64_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getHardwareChannelCount",
+      "result": "int32_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getHardwareFormat",
+      "result": "aaudio_format_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getHardwareSampleRate",
+      "result": "int32_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getInputPreset",
+      "result": "aaudio_input_preset_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getOffloadDelay",
+      "result": "int32_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getOffloadPadding",
+      "result": "int32_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getPerformanceMode",
+      "result": "aaudio_performance_mode_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getSampleRate",
+      "result": "int32_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getSamplesPerFrame",
+      "result": "int32_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getSessionId",
+      "result": "aaudio_session_id_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getSharingMode",
+      "result": "aaudio_sharing_mode_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getSpatializationBehavior",
+      "result": "aaudio_spatialization_behavior_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getState",
+      "result": "aaudio_stream_state_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getTimestamp",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStream *",
+        "clockid_t",
+        "int64_t *",
+        "int64_t *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getUsage",
+      "result": "aaudio_usage_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_getXRunCount",
+      "result": "int32_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_isContentSpatialized",
+      "result": "_Bool",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_isPrivacySensitive",
+      "result": "_Bool",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_read",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStream *",
+        "void *",
+        "int32_t",
+        "int64_t"
+      ]
+    },
+    {
+      "name": "AAudioStream_release",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_requestFlush",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_requestPause",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_requestStart",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_requestStop",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_setBufferSizeInFrames",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStream *",
+        "int32_t"
+      ]
+    },
+    {
+      "name": "AAudioStream_setOffloadDelayPadding",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStream *",
+        "int32_t",
+        "int32_t"
+      ]
+    },
+    {
+      "name": "AAudioStream_setOffloadEndOfStream",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStream *"
+      ]
+    },
+    {
+      "name": "AAudioStream_waitForStateChange",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStream *",
+        "aaudio_stream_state_t",
+        "aaudio_stream_state_t *",
+        "int64_t"
+      ]
+    },
+    {
+      "name": "AAudioStream_write",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStream *",
+        "const void *",
+        "int32_t",
+        "int64_t"
+      ]
+    },
+    {
+      "name": "AAudio_convertResultToText",
+      "result": "const char *",
+      "parameters": [
+        "aaudio_result_t"
+      ]
+    },
+    {
+      "name": "AAudio_convertStreamStateToText",
+      "result": "const char *",
+      "parameters": [
+        "aaudio_stream_state_t"
+      ]
+    },
+    {
+      "name": "AAudio_createStreamBuilder",
+      "result": "aaudio_result_t",
+      "parameters": [
+        "AAudioStreamBuilder * _Nullable *"
+      ]
+    }
+  ]
+}

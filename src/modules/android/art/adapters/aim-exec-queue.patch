@@ -1,0 +1,82 @@
+--- a/crates/aim-linux-abi/src/sys/exec.rs
++++ b/crates/aim-linux-abi/src/sys/exec.rs
+@@ -500,8 +500,9 @@
+     trace_stage("relaunch.receipt.capture");
+     if let Some(receipt)=&mut receipt{if let Err(error)=receipt.capture(){drop(guard);return -(error as i64);}}
+     trace_stage("relaunch.descriptors");
++    let retiring_kqueues=receipt.as_ref().map(|receipt|receipt.retiring_kqueues()).unwrap_or_default();
+     let mut descriptors=Vec::new();
+-    for fd in super::fd_visibility::visible(){let flags=unsafe{libc::fcntl(fd,libc::F_GETFD)};if flags<0{let error=errno::last();drop(guard);return -(error as i64);}descriptors.push(fd.to_string());}
++    for fd in super::fd_visibility::visible(){if retiring_kqueues.contains(&fd){continue;}let flags=unsafe{libc::fcntl(fd,libc::F_GETFD)};if flags<0{let error=errno::last();drop(guard);return -(error as i64);}descriptors.push(fd.to_string());}
+     let mut options=vec![arg("--guest-fds"),arg(descriptors.join(",")),arg("--socket-receipts"),arg(super::fdtab::socket_exec_text())];
+     trace_stage("relaunch.regular-fds");
+     let regular=match super::fdtab::regular_exec_text(){Ok(text)=>text,Err(error)=>{drop(guard);return -(error as i64);}};if !regular.is_empty(){options.extend([arg("--regular-fds"),arg(regular)]);}
+--- a/crates/aim-linux-abi/src/sys/exec_fd_receipt.rs
++++ b/crates/aim-linux-abi/src/sys/exec_fd_receipt.rs
+@@ -4,10 +4,10 @@
+ use sha2::{Digest,Sha256};
+ use std::{fs::{self,File},io::Read,os::{fd::{AsFd,AsRawFd,FromRawFd},unix::fs::{OpenOptionsExt,PermissionsExt,MetadataExt}},path::PathBuf};
+ const HEADER:usize=128;
+-const RECORD:usize=40;
+-const MAGIC:&[u8;8]=b"AIMEXCL2";
++const RECORD:usize=44;
++const MAGIC:&[u8;8]=b"AIMEXCL3";
+ fn io(error:std::io::Error)->Errno{errno::from_darwin(error.raw_os_error().unwrap_or(libc::EIO))}
+-pub struct Receipt{writer:PrivateFile,carrier:PrivateFd,path:PathBuf,bytes:Vec<u8>,captured:Vec<(i32,i32,Identity)>,process:ProcessIdentity,identity:Identity}
++pub struct Receipt{writer:PrivateFile,carrier:PrivateFd,path:PathBuf,bytes:Vec<u8>,captured:Vec<(i32,i32,Identity,u32)>,process:ProcessIdentity,identity:Identity}
+ pub struct HostExecFlags(Vec<(i32,i32)>);
+ impl Drop for HostExecFlags{fn drop(&mut self){for(fd,flags)in&self.0{unsafe{libc::fcntl(*fd,libc::F_SETFD,*flags);}}}}
+ impl Drop for Receipt{fn drop(&mut self){if let Err(error)=fs::remove_file(&self.path){if error.kind()!=std::io::ErrorKind::NotFound{crate::diag!("exec receipt cleanup: {error}");}}}}
+@@ -38,12 +38,16 @@
+   for fd in super::fd_visibility::visible(){
+    let flags=unsafe{libc::fcntl(fd,libc::F_GETFD)};if flags<0{return Err(errno::last());}if flags&libc::FD_CLOEXEC==0{continue;}
+    let identity=Identity::from_fd(unsafe{std::os::fd::BorrowedFd::borrow_raw(fd)}).map_err(io)?;
+-   captured.push((fd,flags,identity));
++   // Darwin closes kqueues at exec even when FD_CLOEXEC is cleared.
++   // Only this captured CLOEXEC generation is retired by the host syscall;
++   // it must never be republished or closed by its recycled numeric slot.
++   let disposition:u32=match super::fdtab::get(fd){Some(super::fdtab::Kind::Epoll(_))=>1,Some(super::fdtab::Kind::Inotify(_))=>2,_=>0};
++   captured.push((fd,flags,identity,disposition));
+   }
+   let count=captured.len();let count32=u32::try_from(count).map_err(|_|errno::ENOMEM)?;
+   let length=count.checked_mul(RECORD).and_then(|records|HEADER.checked_add(records)).ok_or(errno::ENOMEM)?;let file_length=i64::try_from(length).map_err(|_|errno::ENOMEM)?;
+   let mut bytes=Vec::new();bytes.try_reserve_exact(length).map_err(|_|errno::ENOMEM)?;bytes.resize(length,0);
+-  for(index,(fd,_,identity))in captured.iter().enumerate(){let at=HEADER+index*RECORD;bytes[at..at+4].copy_from_slice(&fd.to_le_bytes());bytes[at+4..at+RECORD].copy_from_slice(&identity.to_bytes());}
++  for(index,(fd,_,identity,disposition))in captured.iter().enumerate(){let at=HEADER+index*RECORD;bytes[at..at+4].copy_from_slice(&fd.to_le_bytes());bytes[at+4..at+40].copy_from_slice(&identity.to_bytes());bytes[at+40..at+RECORD].copy_from_slice(&disposition.to_le_bytes());}
+   bytes[..8].copy_from_slice(MAGIC);bytes[8..12].copy_from_slice(&self.process.host_pid.to_le_bytes());
+   bytes[16..24].copy_from_slice(&self.process.start_seconds.to_le_bytes());bytes[24..32].copy_from_slice(&self.process.start_microseconds.to_le_bytes());
+   bytes[32..68].copy_from_slice(&self.identity.to_bytes());bytes[68..72].copy_from_slice(&count32.to_le_bytes());
+@@ -52,12 +56,16 @@
+   let mut written=0;while written<length{let n=unsafe{libc::pwrite(self.writer.as_raw_fd(),bytes[written..].as_ptr().cast(),length-written,written as i64)};if n<0{return Err(errno::last());}if n==0{return Err(errno::EIO);}written+=n as usize;}
+   self.bytes=bytes;self.captured=captured;Ok(())
+  }
++ /// Numeric slots whose captured CLOEXEC queue generation Darwin retires.
++ /// No non-CLOEXEC descriptor is included, and failed exec changes nothing.
++ pub fn retiring_kqueues(&self)->Vec<i32>{self.captured.iter().filter_map(|(fd,_,_,disposition)|(*disposition!=0).then_some(*fd)).collect()}
+  pub fn retain_for_host_exec(&self)->Result<HostExecFlags,Errno>{
+   let mut changed=HostExecFlags(Vec::new());
+-  for(fd,original,identity)in&self.captured{
++  for(fd,original,identity,disposition)in&self.captured{
+    if !super::fdtab::visible(*fd){return Err(errno::EPERM);}
+    let flags=unsafe{libc::fcntl(*fd,libc::F_GETFD)};if flags<0{return Err(errno::last());}if flags!=*original||flags&libc::FD_CLOEXEC==0{return Err(errno::EPERM);}
+    let current=Identity::from_fd(unsafe{std::os::fd::BorrowedFd::borrow_raw(*fd)}).map_err(io)?;if current!=*identity{return Err(errno::EPERM);}
++   if *disposition!=0{continue;}
+    if unsafe{libc::fcntl(*fd,libc::F_SETFD,flags&!libc::FD_CLOEXEC)}<0{return Err(errno::last());}
+    changed.0.push((*fd,flags));
+   }
+@@ -98,8 +106,13 @@
+  let mut targets=Vec::with_capacity(count);
+  for bytes in bytes.chunks_exact(RECORD){
+   let target=i32::from_le_bytes(bytes[..4].try_into().unwrap());
+-  if target<0||!super::fdtab::visible(target){return Err(errno::EPERM);}
+-  let identity=Identity::from_bytes(&bytes[4..]).map_err(io)?;
++  let disposition=u32::from_le_bytes(bytes[40..44].try_into().unwrap());
++  if target<0||disposition>2{return Err(errno::EPERM);}
++  let identity=Identity::from_bytes(&bytes[4..40]).map_err(io)?;
++  // These authenticated queue generations were closed by successful host
++  // exec itself. A new owner may already have reused the numeric slot.
++  if disposition!=0{continue;}
++  if !super::fdtab::visible(target){return Err(errno::EPERM);}
+   let actual=Identity::from_fd(unsafe{std::os::fd::BorrowedFd::borrow_raw(target)}).map_err(io)?;
+   if actual!=identity{return Err(errno::EPERM);}
+   targets.push(target);

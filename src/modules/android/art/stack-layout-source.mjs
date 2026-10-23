@@ -6,8 +6,11 @@ import {copyChanged,writeChanged} from '../native/upstream/source-files.mjs';
  * top. Reuse AIM's existing guest bounds, mapping and retirement owners. */
 export function prepareInitialStackLayout(aim){
  const root=path.join(aim,'crates/aim-linux-abi/src');
- copyChanged(path.join(import.meta.dirname,'native/initial-stack-tests.rs'),path.join(root,'sys/initial-stack-tests.rs'));
- const mod=path.join(root,'sys/mod.rs');writeChanged(mod,fs.readFileSync(mod,'utf8')+'\n#[cfg(test)]\n#[path="initial-stack-tests.rs"]\nmod initial_stack_tests;\n');
+ const fixture=path.join(import.meta.dirname,'native/initial-stack-tests.rs');
+ if(fs.existsSync(fixture)){
+  copyChanged(fixture,path.join(root,'sys/initial-stack-tests.rs'));
+  const mod=path.join(root,'sys/mod.rs');writeChanged(mod,fs.readFileSync(mod,'utf8')+'\n#[cfg(test)]\n#[path="initial-stack-tests.rs"]\nmod initial_stack_tests;\n');
+ }
  const edit=(file,from,to)=>{
   const target=path.join(root,file),source=fs.readFileSync(target,'utf8');
   if(source.split(from).length!==2)throw Error('AIM initial stack boundary changed: '+file);

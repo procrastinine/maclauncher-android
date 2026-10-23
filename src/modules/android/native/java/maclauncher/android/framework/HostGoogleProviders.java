@@ -5,6 +5,11 @@ import android.content.pm.*;
 import android.app.ContentProviderHolder;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Binder;
+import android.os.IBinder;
+import android.os.Parcel;
+import android.os.Parcelable;
+import android.os.RemoteException;
 import maclauncher.android.HostDigests;
 import java.util.*;
 
@@ -21,6 +26,134 @@ public final class HostGoogleProviders {
     static boolean accountActivityAllowed(ActivityInfo info){
         if(accountInteraction||!applies(info.packageName))return true;
         return Collections.disjoint(HostPackages.activityActions(new ComponentName(info.packageName,info.name)),ACCOUNT_ACTIONS);
+    }
+    private static final String SERVICE_BROKER="com.google.android.gms.common.internal.IGmsServiceBroker";
+    private static final String SERVICE_CALLBACKS="com.google.android.gms.common.internal.IGmsCallbacks";
+    private static final String GAMES_CONNECT="com.google.android.gms.games.internal.connect.IGamesConnectService";
+    private static final String GAMES_CALLBACKS="com.google.android.gms.games.internal.connect.IGamesConnectCallbacks";
+    /** The original broker retains sign-in-required status. A background caller
+     * receives no interactive resolution capability; successful service binding
+     * and the explicit account owner's original callbacks remain unchanged. */
+    static IBinder serviceBinder(Context context,IBinder original){
+        if(accountInteraction||original==null||!applies(context.getPackageName()))return original;
+        try{
+            if(!SERVICE_BROKER.equals(original.getInterfaceDescriptor())||!publisher(HostPackages.verifiedCurrentSigningDetails()))return original;
+        }catch(Exception failure){throw new IllegalStateException("Google provider service identity is unavailable",failure);}
+        return new ServiceBroker(original,context.getClassLoader());
+    }
+    private static class ForwardingBinder extends Binder {
+        final IBinder original;
+        ForwardingBinder(IBinder original,String descriptor){this.original=original;attachInterface(null,descriptor);}
+        @Override public boolean pingBinder(){return original.pingBinder();}
+        @Override public boolean isBinderAlive(){return original.isBinderAlive();}
+        @Override public void linkToDeath(DeathRecipient recipient,int flags){try{original.linkToDeath(recipient,flags);}catch(RemoteException failure){HostUiAccess.raise(failure);}}
+        @Override public boolean unlinkToDeath(DeathRecipient recipient,int flags){return original.unlinkToDeath(recipient,flags);}
+        @Override protected boolean onTransact(int code,Parcel data,Parcel reply,int flags)throws RemoteException{return original.transact(code,data,reply,flags);}
+    }
+    private static final class ServiceBroker extends ForwardingBinder {
+        final ClassLoader loader;
+        ServiceBroker(IBinder original,ClassLoader loader){super(original,SERVICE_BROKER);this.loader=loader;}
+        @Override protected boolean onTransact(int code,Parcel data,Parcel reply,int flags)throws RemoteException{
+            // Every original legacy request and getService/validateAccount has
+            // the callbacks Binder first. Other transactions keep original bytes.
+            if(!(code>=1&&code<=24||code==42||code==46||code==47))return super.onTransact(code,data,reply,flags);
+            int position=data.dataPosition();Parcel request=Parcel.obtain();
+            try{
+                data.enforceInterface(SERVICE_BROKER);IBinder callbacks=data.readStrongBinder();
+                request.writeInterfaceToken(SERVICE_BROKER);request.writeStrongBinder(callbacks==null?null:new ServiceCallbacks(callbacks,loader));
+                request.appendFrom(data,data.dataPosition(),data.dataAvail());request.setDataPosition(0);
+                return original.transact(code,request,reply,flags);
+            }finally{data.setDataPosition(position);request.recycle();}
+        }
+    }
+    private static final class ServiceCallbacks extends ForwardingBinder {
+        final ClassLoader loader;
+        ServiceCallbacks(IBinder original,ClassLoader loader){super(original,SERVICE_CALLBACKS);this.loader=loader;}
+        private Bundle accountResolution(Bundle original){
+            if(original==null)return null;
+            original.setClassLoader(loader);
+            if(!original.containsKey("pendingIntent"))return original;
+            Bundle result=new Bundle(original);result.remove("pendingIntent");return result;
+        }
+        @SuppressWarnings("unchecked") private Parcelable connectionInfo(Parcel data)throws ReflectiveOperationException{
+            // Use the provider's original public Parcelable contract and creator.
+            // Its fields, features and other metadata retain their original owner.
+            Class<?> contract=Class.forName("com.google.android.gms.common.internal.ConnectionInfo",false,loader);
+            var creator=(Parcelable.Creator<Parcelable>)contract.getField("CREATOR").get(null);
+            Parcelable value=data.readTypedObject(creator);
+            if(value!=null){var params=contract.getField("params");Bundle original=(Bundle)params.get(value);Bundle selected=accountResolution(original);if(selected!=original)params.set(value,selected);}
+            return value;
+        }
+        @Override protected boolean onTransact(int code,Parcel data,Parcel reply,int flags)throws RemoteException{
+            if(code<1||code>3)return super.onTransact(code,data,reply,flags);
+            int position=data.dataPosition();Parcel result=null;
+            try{
+                data.enforceInterface(SERVICE_CALLBACKS);int status=data.readInt();
+                if(status==0&&code!=2){
+                    IBinder service=data.readStrongBinder();
+                    if(service!=null&&GAMES_CONNECT.equals(service.getInterfaceDescriptor())){
+                        result=Parcel.obtain();result.writeInterfaceToken(SERVICE_CALLBACKS);result.writeInt(status);
+                        result.writeStrongBinder(new GamesConnectService(service,loader));
+                        result.appendFrom(data,data.dataPosition(),data.dataAvail());result.setDataPosition(0);
+                        return original.transact(code,result,reply,flags);
+                    }
+                }
+                if(status!=4){data.setDataPosition(position);return super.onTransact(code,data,reply,flags);}
+                IBinder service=code==2?null:data.readStrongBinder();result=Parcel.obtain();
+                result.writeInterfaceToken(SERVICE_CALLBACKS);result.writeInt(status);
+                if(code!=2)result.writeStrongBinder(service);
+                if(code==3)try{result.writeTypedObject(connectionInfo(data),0);}
+                catch(ReflectiveOperationException failure){throw new IllegalStateException("Google service connection metadata is unavailable",failure);}
+                else result.writeTypedObject(accountResolution(data.readTypedObject(Bundle.CREATOR)),0);
+                result.appendFrom(data,data.dataPosition(),data.dataAvail());result.setDataPosition(0);
+                return original.transact(code,result,reply,flags);
+            }finally{data.setDataPosition(position);if(result!=null)result.recycle();}
+        }
+    }
+    /** Games Connect binds successfully before reporting sign-in availability.
+     * Its later callback carries a Status resolution rather than broker params. */
+    private static final class GamesConnectService extends ForwardingBinder {
+        final ClassLoader loader;
+        GamesConnectService(IBinder original,ClassLoader loader){super(original,GAMES_CONNECT);this.loader=loader;}
+        @Override protected boolean onTransact(int code,Parcel data,Parcel reply,int flags)throws RemoteException{
+            // Original AIDL signIn = 1, relative to FIRST_CALL_TRANSACTION.
+            if(code!=IBinder.FIRST_CALL_TRANSACTION+1)return super.onTransact(code,data,reply,flags);
+            int position=data.dataPosition();Parcel request=Parcel.obtain();
+            try{
+                data.enforceInterface(GAMES_CONNECT);IBinder callbacks=data.readStrongBinder();
+                request.writeInterfaceToken(GAMES_CONNECT);request.writeStrongBinder(callbacks==null?null:new GamesConnectCallbacks(callbacks,loader));
+                request.appendFrom(data,data.dataPosition(),data.dataAvail());request.setDataPosition(0);
+                return original.transact(code,request,reply,flags);
+            }finally{data.setDataPosition(position);request.recycle();}
+        }
+    }
+    private static final class GamesConnectCallbacks extends ForwardingBinder {
+        final ClassLoader loader;
+        GamesConnectCallbacks(IBinder original,ClassLoader loader){super(original,GAMES_CALLBACKS);this.loader=loader;}
+        @SuppressWarnings("unchecked") private Parcelable signInStatus(Parcel data)throws ReflectiveOperationException{
+            Class<?> contract=Class.forName("com.google.android.gms.common.api.Status",false,loader);
+            var creator=(Parcelable.Creator<Parcelable>)contract.getField("CREATOR").get(null);
+            Parcelable status=data.readTypedObject(creator);
+            if(status==null||(Integer)contract.getMethod("getStatusCode").invoke(status)!=4||contract.getMethod("getResolution").invoke(status)==null)return null;
+            // This is the original CREATOR's parcel-owned copy, never the
+            // provider's original Status. Keep its version and every other
+            // field while removing only the account UI capability.
+            var resolution=contract.getDeclaredField("resolution");resolution.setAccessible(true);resolution.set(status,null);
+            return status;
+        }
+        @Override protected boolean onTransact(int code,Parcel data,Parcel reply,int flags)throws RemoteException{
+            if(code!=IBinder.FIRST_CALL_TRANSACTION+1)return super.onTransact(code,data,reply,flags);
+            int position=data.dataPosition();Parcel result=null;
+            try{
+                data.enforceInterface(GAMES_CALLBACKS);Parcelable status;
+                try{status=signInStatus(data);}
+                catch(ReflectiveOperationException failure){throw new IllegalStateException("Google Games sign-in status is unavailable",failure);}
+                if(status==null){data.setDataPosition(position);return super.onTransact(code,data,reply,flags);}
+                result=Parcel.obtain();result.writeInterfaceToken(GAMES_CALLBACKS);result.writeTypedObject(status,0);
+                result.appendFrom(data,data.dataPosition(),data.dataAvail());result.setDataPosition(0);
+                return original.transact(code,result,reply,flags);
+            }finally{data.setDataPosition(position);if(result!=null)result.recycle();}
+        }
     }
     public static synchronized void configure(boolean value){if(enabled!=null&&enabled!=value)throw new IllegalStateException("Google provider policy is already configured");enabled=value;}
     static synchronized boolean applies(String name){return Boolean.TRUE.equals(enabled)&&(name.equals("com.google.android.gms")||name.equals("com.android.vending"));}

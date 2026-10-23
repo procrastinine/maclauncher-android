@@ -1,0 +1,383 @@
+diff --git a/crates/aim-binder-driver/src/state.rs b/crates/aim-binder-driver/src/state.rs
+index ddc7fe1..d887599 100644
+--- a/crates/aim-binder-driver/src/state.rs
++++ b/crates/aim-binder-driver/src/state.rs
+@@ -150,6 +150,8 @@ pub type Notifier = Arc<dyn Fn(Option<Tid>) + Send + Sync>;
+ pub(crate) struct Proc {
+     pub context: usize,
+     pub creds: Credentials,
++    /// Live sender UID, distinct from the immutable open security credentials.
++    pub sender_euid: Option<u32>,
+     pub threads: IdMap<Tid, Thread>,
+     /// Nodes this process owns, by user pointer.
+     pub nodes: BTreeMap<u64, NodeId>,
+@@ -336,6 +338,7 @@ impl State {
+             id,
+             Proc {
+                 context,
++                sender_euid: Some(creds.euid),
+                 creds,
+                 threads: IdMap::default(),
+                 nodes: BTreeMap::new(),
+diff --git a/crates/aim-binder-driver/src/driver.rs b/crates/aim-binder-driver/src/driver.rs
+index 4b6651f..4ec1ce3 100644
+--- a/crates/aim-binder-driver/src/driver.rs
++++ b/crates/aim-binder-driver/src/driver.rs
+@@ -75,6 +75,13 @@ impl Driver {
+         pending.deliver();
+     }
+ 
++    /// Authenticated native credential owner; no guest ioctl exposes this setter.
++    pub fn set_sender_euid(&self, handle: ProcHandle, euid: Option<u32>) {
++        let mut st=self.lock();
++        if let Some(proc)=st.procs.get_mut(&handle.0){proc.sender_euid=euid;}
++        self.unlock(st);
++    }
++
+     /// Lookup a receipt owned by this exact receiving process/thread/buffer.
+     pub fn delivery_id(&self, handle: ProcHandle, tid: Tid, buffer: u64) -> Result<u64, Errno> {
+         let st = self.lock();
+diff --git a/crates/aim-binder-driver/src/transaction.rs b/crates/aim-binder-driver/src/transaction.rs
+index 7d8d71c..b7b0126 100644
+--- a/crates/aim-binder-driver/src/transaction.rs
++++ b/crates/aim-binder-driver/src/transaction.rs
+@@ -122,13 +122,16 @@ impl State {
+             && self
+                 .thread(proc, tid)
+                 .is_some_and(|thread| thread.forwarded_sender.is_some());
+-        let sender_credentials = if reply {
++        let mut sender_credentials = if reply {
+             self.procs[&proc].creds.clone()
+         } else {
+             self.thread(proc, tid)
+                 .and_then(|thread| thread.forwarded_sender.clone())
+                 .unwrap_or_else(|| self.procs[&proc].creds.clone())
+         };
++        if !delegated_sender {
++            sender_credentials.euid=self.procs[&proc].sender_euid.ok_or(fail(BR_FAILED_REPLY,errno::EPERM))?;
++        }
+         let mut target_thread: Option<Tid> = None;
+         let mut target_node: Option<NodeId> = None;
+         let target_proc: ProcId;
+diff --git a/crates/aim-binder-host/src/wire.rs b/crates/aim-binder-host/src/wire.rs
+index 33eb429..98ba843 100644
+--- a/crates/aim-binder-host/src/wire.rs
++++ b/crates/aim-binder-host/src/wire.rs
+@@ -14,6 +14,10 @@
+ 
+ use aim_binder_driver::Errno;
+ 
++pub const CREDENTIAL_COMMIT:i32=0x6264_0016;
++pub const CREDENTIAL_BEGIN:i32=0x6264_0013;
++pub const CREDENTIAL_END:i32=0x6264_0014;
++pub const CREDENTIAL_INVALIDATE:i32=0x6264_0015;
+ pub const OPEN: i32 = 0x6264_0001;
+ pub const FLUSH: i32 = 0x6264_0012;
+ pub const THREAD: i32 = 0x6264_0002;
+diff --git a/crates/aim-binder-host/src/client.rs b/crates/aim-binder-host/src/client.rs
+index d3d6443..28decbd 100644
+--- a/crates/aim-binder-host/src/client.rs
++++ b/crates/aim-binder-host/src/client.rs
+@@ -360,6 +360,27 @@ impl Client {
+         }
+     }
+ 
++    /// Cold native credential transitions contain no caller-selected UID.
++    pub fn credential_begin(&self)->Result<u64,Errno>{
++        let reply=with_thread(|t|call(t,self.service,&Msg{id:wire::CREDENTIAL_BEGIN,ports:vec![],data:vec![]}))??;
++        let mut reader=status(&reply)?;let ticket=reader.u64()?;
++        if ticket==0||reader.remaining()!=0||!reply.ports.is_empty(){return Err(wire::EPROTO);}Ok(ticket)
++    }
++    pub fn credential_end(&self,ticket:u64)->Result<u32,Errno>{
++        let reply=with_thread(|t|call(t,self.service,&Msg{id:wire::CREDENTIAL_END,ports:vec![],data:ticket.to_le_bytes().to_vec()}))??;
++        let mut reader=status(&reply)?;let uid=reader.u32()?;
++        if reader.remaining()!=0||!reply.ports.is_empty(){return Err(wire::EPROTO);}Ok(uid)
++    }
++    pub fn credential_commit(&self,ticket:u64,expected:u32)->Result<(),Errno>{
++        let reply=with_thread(|t|call(t,self.service,&Msg{id:wire::CREDENTIAL_COMMIT,ports:vec![],data:ticket.to_le_bytes().to_vec()}))??;
++        let mut reader=status(&reply)?;let uid=reader.u32()?;
++        if uid!=expected||reader.remaining()!=0||!reply.ports.is_empty(){return Err(wire::EPROTO);}Ok(())
++    }
++    pub fn credential_invalidate(&self,ticket:u64)->Result<(),Errno>{
++        let reply=with_thread(|t|call(t,self.service,&Msg{id:wire::CREDENTIAL_INVALIDATE,ports:vec![],data:ticket.to_le_bytes().to_vec()}))??;
++        if status(&reply)?.remaining()!=0||!reply.ports.is_empty(){return Err(wire::EPROTO);}Ok(())
++    }
++
+     /// `open("/dev/binder")`. Returns the file and the guest fd.
+     pub fn open(
+         &self,
+diff --git a/crates/aim-binder-host/src/server.rs b/crates/aim-binder-host/src/server.rs
+index 8f9a4d7..f8be326 100644
+--- a/crates/aim-binder-host/src/server.rs
++++ b/crates/aim-binder-host/src/server.rs
+@@ -12,6 +12,26 @@
+ //!   process death: the daemon's end of the readiness socket reads EOF.
+ 
+ use std::collections::HashMap;
++static CREDENTIAL_TABLE:std::sync::OnceLock<std::path::PathBuf>=std::sync::OnceLock::new();
++pub fn set_credential_table(table:std::path::PathBuf)->Result<(),String>{
++ let table=std::fs::canonicalize(table).map_err(|e|e.to_string())?;
++ if !table.is_dir(){return Err("Binder process table is not a directory".into());}
++ CREDENTIAL_TABLE.set(table).map_err(|_|"Binder process table is already installed".into())
++}
++#[derive(Default)]
++struct SenderEpoch{ticket:u64,pending:bool,euid:Option<u32>,prepared:Option<u32>,handles:Vec<ProcHandle>}
++type Actor=(i32,u64,u64);
++fn credential_actor_identity(host:i32)->Result<(Actor,aim_storage::process_namespace::ProcessIdentity),Errno>{
++ let table=CREDENTIAL_TABLE.get().ok_or(19)?;
++ let actor=aim_storage::process_namespace::ProcessIdentity::running(host).map_err(|_|errno::EPERM)?;
++ aim_storage::process_namespace::mount_namespace_of(table,actor).map_err(|_|errno::EPERM)?;
++ Ok(((host,actor.start_seconds,actor.start_microseconds),actor))
++}
++fn credential_actor(host:i32)->Result<(Actor,u32),Errno>{
++ let(key,actor)=credential_actor_identity(host)?;
++ let credential=aim_storage::posix_broker::read_credentials(CREDENTIAL_TABLE.get().unwrap(),actor).map_err(|_|errno::EPERM)?;
++ Ok((key,credential.effective_uid))
++}
+ static PID_RESOLVER:std::sync::OnceLock<unsafe extern "C" fn(i32)->i32>=std::sync::OnceLock::new();
+ pub fn set_pid_resolver(resolver:unsafe extern "C" fn(i32)->i32)->Result<(),String>{
+  PID_RESOLVER.set(resolver).map_err(|_|"Binder identity resolver is already installed".into())
+@@ -314,6 +334,8 @@ pub struct Server {
+     files: Mutex<HashMap<Port, Arc<OpenFile>>>,
+     kq: i32,
+     shared: Mutex<Vec<SharedFile>>,
++    senders:Mutex<HashMap<Actor,SenderEpoch>>,
++    next_sender:std::sync::atomic::AtomicU64,
+     pool: Arc<Pool>,
+ }
+ 
+@@ -361,6 +383,8 @@ impl Server {
+             files: Mutex::new(HashMap::new()),
+             kq,
+             shared: Mutex::new(Vec::new()),
++            senders:Mutex::new(HashMap::new()),
++            next_sender:std::sync::atomic::AtomicU64::new(1),
+             pool: pool.clone(),
+         });
+         for _ in 0..std::thread::available_parallelism().map_or(4, |n| n.get()) {
+@@ -392,7 +416,9 @@ impl Server {
+             if req.local==self.service&&matches!(req.id,wire::CREATE_REGULAR_SCM|wire::RESOLVE_REGULAR_SCM|wire::DRAIN_REGULAR_SCM){
+                 serve_regular_control(&req,&mut buf);continue;
+             }
+-            let result = if req.local==self.service&&req.id==wire::SOCKET_SCM_CHANNEL {
++            let result = if req.local==self.service&&matches!(req.id,wire::CREDENTIAL_BEGIN|wire::CREDENTIAL_END|wire::CREDENTIAL_INVALIDATE|wire::CREDENTIAL_COMMIT){
++                self.credential_change(&req)
++            } else if req.local==self.service&&req.id==wire::SOCKET_SCM_CHANNEL {
+                 if !req.ports.is_empty()||!req.data.is_empty(){Err(wire::EPROTO)}else{Ok((Vec::new(),self.socket_service.endpoint().encode()))}
+             } else if req.local == self.service && req.id == wire::CREATE_PATH {
+                 if req.ports.len() != 1 || req.data.len() != 4 {
+@@ -480,6 +506,47 @@ impl Server {
+         Ok((ports, w.0))
+     }
+ 
++    fn credential_change(&self,req:&Received)->Result<ControlReply,Errno>{
++        if !req.ports.is_empty(){return Err(wire::EPROTO);}
++        let(actor,identity)=credential_actor_identity(req.pid)?;
++        let mut states=self.senders.lock().unwrap();let state=states.entry(actor).or_default();
++        let mut out=Writer::default();
++        if req.id==wire::CREDENTIAL_BEGIN{
++            if !req.data.is_empty(){return Err(wire::EPROTO);}
++            if state.pending{return Err(errno::EBUSY);}
++            state.ticket=self.next_sender.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
++            if state.ticket==0{return Err(errno::EPERM);}
++            state.pending=true;state.euid=None;state.prepared=None;
++            for handle in &state.handles{self.driver.set_sender_euid(*handle,None);}
++            out.u64(state.ticket);
++        }else{
++            let mut reader=Reader::new(&req.data);let ticket=reader.u64()?;
++            if reader.remaining()!=0||ticket==0||ticket!=state.ticket{return Err(errno::EPERM);}
++            if req.id==wire::CREDENTIAL_INVALIDATE{
++                state.pending=true;state.euid=None;state.prepared=None;
++                for handle in &state.handles{self.driver.set_sender_euid(*handle,None);}
++            }else{
++                let euid=aim_storage::posix_broker::read_credentials(CREDENTIAL_TABLE.get().unwrap(),identity).map_err(|_|errno::EPERM)?.effective_uid;
++                if req.id==wire::CREDENTIAL_END{
++                    if !state.pending{return Err(errno::EPERM);}
++                    // Remain invalid until the native caller has compared this
++                    // authoritative value with its actual committed identity.
++                    state.prepared=Some(euid);out.u32(euid);
++                }else{
++                    if state.prepared!=Some(euid){
++                        state.pending=true;state.euid=None;state.prepared=None;
++                        for handle in &state.handles{self.driver.set_sender_euid(*handle,None);}
++                        return Err(errno::EPERM);
++                    }
++                    state.pending=false;state.euid=Some(euid);
++                    for handle in &state.handles{self.driver.set_sender_euid(*handle,Some(euid));}
++                    out.u32(euid);
++                }
++            }
++        }
++        Ok((Vec::new(),out.0))
++    }
++
+     fn open(&self, req: &Received) -> Result<ControlReply, Errno> {
+         let parse = || -> Result<(Device, bool, u32, Option<String>), Errno> {
+             let mut r = Reader::new(&req.data);
+@@ -496,6 +563,8 @@ impl Server {
+             Ok((device, nonblocking, euid, ctx))
+         };
+         let (device, nonblocking, euid, security_context) = parse()?;
++        let mut states=self.senders.lock().unwrap();
++        let actor=if CREDENTIAL_TABLE.get().is_some(){let(actor,current)=credential_actor(req.pid)?;if current!=euid{return Err(errno::EPERM);}Some((actor,current))}else{None};
+         let socket = req
+             .ports
+             .first()
+@@ -512,6 +581,16 @@ impl Server {
+             security_context,
+         };
+         let handle = self.driver.open(device, creds);
++        if let Some((actor,current))=actor{
++            let state=states.entry(actor).or_default();
++            if !state.pending&&state.ticket==0{state.euid=Some(current);}
++            if !state.pending&&state.euid!=Some(current){
++                state.pending=true;state.euid=None;state.prepared=None;
++                for owner in &state.handles{self.driver.set_sender_euid(*owner,None);}
++            }
++            state.handles.push(handle);self.driver.set_sender_euid(handle,state.euid);
++        }
++        drop(states);
+         self.driver.set_nonblocking(handle, nonblocking);
+         let file = Arc::new(OpenFile {
+             handle,
+diff --git a/crates/aim-binder-host/src/bin/aim-binderd.rs b/crates/aim-binder-host/src/bin/aim-binderd.rs
+index e0d6570..a864c62 100644
+--- a/crates/aim-binder-host/src/bin/aim-binderd.rs
++++ b/crates/aim-binder-host/src/bin/aim-binderd.rs
+@@ -5,10 +5,10 @@
+ 
+ fn main() {
+     let mut args=std::env::args().skip(1);
+-    let(mut name,mut host_module)=(None,None);
++    let(mut name,mut host_module,mut process_table)=(None,None,None);
+     while let Some(option)=args.next(){
+         let target=match option.as_str(){
+-            "--service"=>&mut name,"--host-module"=>&mut host_module,
++            "--service"=>&mut name,"--host-module"=>&mut host_module,"--process-table"=>&mut process_table,
+             _=>usage(),
+         };
+         if target.is_some(){usage();}
+@@ -16,6 +16,7 @@ fn main() {
+     }
+     let name=name.unwrap_or_else(||usage());
+     if let Some(path)=host_module{if let Err(error)=install_identity(&path){eprintln!("aim-binderd: {error}");std::process::exit(1);}}
++    if let Some(table)=process_table{if let Err(error)=aim_binder_host::server::set_credential_table(table.into()){eprintln!("aim-binderd: {error}");std::process::exit(1);}}
+     if let Err(e) = aim_binder_host::server::Server::start(&name) {
+         eprintln!("aim-binderd: {e}");
+         std::process::exit(1);
+@@ -43,4 +44,4 @@ fn install_identity(path:&str)->Result<(),String>{
+  Ok(())
+ }
+ 
+-fn usage()->!{eprintln!("usage: aim-binderd --service NAME [--host-module PATH]");std::process::exit(2)}
++fn usage()->!{eprintln!("usage: aim-binderd --service NAME [--host-module PATH] [--process-table DIRECTORY]");std::process::exit(2)}
+diff --git a/crates/aim-linux-abi/src/sys/binder.rs b/crates/aim-linux-abi/src/sys/binder.rs
+index 853b999..fa7dc9d 100644
+--- a/crates/aim-linux-abi/src/sys/binder.rs
++++ b/crates/aim-linux-abi/src/sys/binder.rs
+@@ -89,6 +89,18 @@ pub(super) fn drain_regular_scm(identity: &[u8; 36]) -> Result<(), i32> {
+     CLIENT.lock().unwrap().as_ref().ok_or(crate::errno::ENODEV)?.drain_regular_scm(identity)
+ }
+ 
++pub(super) fn credential_begin()->Result<Option<u64>,i32>{
++ let client=CLIENT.lock().unwrap();client.as_ref().map(|client|client.credential_begin()).transpose()
++}
++pub(super) fn credential_end(ticket:Option<u64>,expected:u32)->Result<(),i32>{
++ let Some(ticket)=ticket else{return Ok(());};let client=CLIENT.lock().unwrap();
++ let uid=client.as_ref().ok_or(ENODEV)?.credential_end(ticket)?;
++ if uid!=expected{return Err(EPERM);}client.as_ref().ok_or(ENODEV)?.credential_commit(ticket,expected)
++}
++pub(super) fn credential_invalidate(ticket:Option<u64>)->Result<(),i32>{
++ let Some(ticket)=ticket else{return Ok(());};let client=CLIENT.lock().unwrap();client.as_ref().ok_or(ENODEV)?.credential_invalidate(ticket)
++}
++
+ fn lookup(fd: i32) -> Option<BinderFile> {
+     match super::fdtab::get(fd)? {
+         Kind::Binder(mut file) => { file.fd = fd; Some(file) },
+@@ -223,18 +235,11 @@ pub fn is_device(guest_path: &str) -> bool {
+ /// `openat` of a binder device node; None for any other path.
+ pub fn open(guest_path: &str, flags: u64) -> Option<i64> {
+     let device = device(guest_path)?;
+-    let client = CLIENT.lock().unwrap();
+-    let Some(client) = client.as_ref() else {
+-        return Some(-(ENODEV as i64));
+-    };
+-    let euid = super::cred::getuid(175) as u32;
+-    let file = client.open(
+-        device,
+-        flags & O_NONBLOCK != 0,
+-        flags & O_CLOEXEC != 0,
+-        euid,
+-        &super::cred::seclabel(),
+-    );
++    let file=super::cred::with_binder_identity(|euid,seclabel|{
++        let client=CLIENT.lock().unwrap();
++        let client=client.as_ref().ok_or(ENODEV)?;
++        client.open(device,flags&O_NONBLOCK!=0,flags&O_CLOEXEC!=0,euid,seclabel)
++    });
+     Some(match file {
+         Ok(f) => {
+             super::fdtab::insert(f.fd, Kind::Binder(f));
+@@ -250,6 +255,7 @@ pub fn ioctl(fd: i32, cmd: u64, arg: u64) -> Option<i64> {
+         return None;
+     }
+     let file = lookup(fd)?;
++    super::cred::credential_barrier();
+     let tid = super::process::gettid() as i32;
+     // A guest signal for this thread interrupts a read parked in the
+     // daemon, as `binder_wait_for_work` returns on a pending signal; the
+diff --git a/crates/aim-linux-abi/src/sys/cred.rs b/crates/aim-linux-abi/src/sys/cred.rs
+index 74900b1..021ea1f 100644
+--- a/crates/aim-linux-abi/src/sys/cred.rs
++++ b/crates/aim-linux-abi/src/sys/cred.rs
+@@ -527,16 +527,42 @@ fn with<R>(f: impl FnOnce(&mut Identity) -> R) -> R {
+ 
+ /// Changes of effective/filesystem ids clear dumpability before publishing the
+ /// new credentials. An authority failure rolls the credential change back.
++/// Cold Binder requests cannot observe a half-committed effective identity.
++pub(super) fn credential_barrier(){drop(STATE.lock().unwrap());}
++pub(super) fn with_binder_identity<R>(f:impl FnOnce(u32,&str)->R)->R{read(|id|f(id.uid[1],&id.seclabel))}
++fn credential_authority_lost()->!{eprintln!("Android process credential authority is unavailable");std::process::exit(1)}
++fn write_own_entry_checked(id:&Identity)->std::io::Result<()>{
++ use std::os::fd::{AsRawFd,FromRawFd};use std::os::unix::fs::FileExt;
++ let Some(dir)=BY_PID.get()else{return Ok(());};
++ let mut entry=ENTRY.lock().unwrap();if entry.is_none(){*entry=Some(open_entry_checked(dir,unsafe{libc::getpid()},id)?);}
++ let(file,length)=entry.as_mut().unwrap();let borrowed=std::mem::ManuallyDrop::new(unsafe{std::fs::File::from_raw_fd(file.as_raw_fd())});
++ let _lock=Flock::checked(&borrowed,libc::LOCK_EX)?;let mut bytes=id.to_text().into_bytes();if bytes.len()<*length{bytes.resize(*length,b'\n');}
++ borrowed.write_all_at(&bytes,0)?;*length=bytes.len();Ok(())
++}
++
+ fn with_credentials(f:impl FnOnce(&mut Identity)->i64)->i64{
+-    with(|id|{
+-        let before=id.clone();let result=f(id);
+-        if result<0{*id=before;return result;}
+-        if [id.uid[1],id.uid[3],id.gid[1],id.gid[3]] != [before.uid[1],before.uid[3],before.gid[1],before.gid[3]]{
+-            let policy=super::misc::set_dumpable(0);
+-            if policy<0{*id=before;return policy;}
++    let mut state=STATE.lock().unwrap();let id=state.get_or_insert_with(Identity::default);let before=id.clone();let result=f(id);
++    if result<0{*id=before;return result;}
++    if [id.uid[1],id.uid[3],id.gid[1],id.gid[3]] != [before.uid[1],before.uid[3],before.gid[1],before.gid[3]]{
++        let policy=super::misc::set_dumpable(0);if policy<0{*id=before;return policy;}
++    }
++    if *id==before{return result;}
++    if id.uid[1]==before.uid[1]{publish(id);write_own_entry(id);return result;}
++    let ticket=match super::binder::credential_begin(){Ok(ticket)=>ticket,Err(error)=>{*id=before;return -(error as i64);}};
++    publish(id);
++    let written=write_own_entry_checked(id).map_err(|error|crate::errno::from_darwin(error.raw_os_error().unwrap_or(libc::EIO)));
++    let refreshed=written.and_then(|()|super::binder::credential_end(ticket,id.uid[1]));
++    if let Err(error)=refreshed{
++        // Invalidate even if an END reply was lost after the server committed.
++        // Rollback cannot expose a higher cached UID from an earlier epoch.
++        if super::binder::credential_invalidate(ticket).is_err(){credential_authority_lost();}
++        *id=before;publish(id);
++        if write_own_entry_checked(id).is_ok()&&super::binder::credential_end(ticket,id.uid[1]).is_err(){
++            if super::binder::credential_invalidate(ticket).is_err(){credential_authority_lost();}
+         }
+-        result
+-    })
++        return -(error as i64);
++    }
++    result
+ }
+ 
+ /// Validate the actual native connection peer, never a privilege bit supplied

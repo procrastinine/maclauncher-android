@@ -1,0 +1,25 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+const directory=path.dirname(fileURLToPath(import.meta.url));
+test('ART uses untargeted observed presentation without changing source or retirement ownership',{skip:process.platform!=='darwin'},t=>{
+ const source=fs.readFileSync(path.join(directory,'../src/modules/android/art/native/window-host.mm'),'utf8');
+ const begin=source.indexOf('struct PresentationClock {'),end=source.indexOf('struct FrameMeasurement {',begin);
+ assert.ok(begin>0&&end>begin,'Actual ART presentation dispatch block is absent');
+ const poll=source.slice(source.indexOf('extern "C" int maclauncher_art_compositor_poll('),source.indexOf('extern "C" int64_t maclauncher_art_compositor_submit('));
+ assert.ok(poll.includes('displayedPresentation()')&&!poll.includes('lastPresentedTime')&&!poll.includes('frames.timing('),'Compositor clock must use the actual source retirement receipt');
+ assert.ok(source.includes('void retireFrames(){retirePresentationClock();'),'Stop must deactivate its generation before presenter destruction');
+ const opening=source.slice(source.indexOf(' if(p->operation==1){'),source.indexOf(' if(p->operation==3){'));
+ assert.ok(opening.indexOf('prepareFrameLibrary()')>=0&&opening.indexOf('prepareFrameLibrary()')<opening.indexOf('kl_session_init('),'Required API must be checked before a window/guest producer starts');
+ const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'art-presentation-routing-'));t.after(()=>fs.rmSync(temporary,{recursive:true,force:true}));
+ const fixture=fs.readFileSync(path.join(directory,'fixtures/android-native/art-presentation-routing.mm'),'utf8');
+ const file=path.join(temporary,'routing.mm'),binary=path.join(temporary,'routing');
+ fs.writeFileSync(file,fixture.replace('/* ACTUAL_ART_PRESENTATION_DISPATCH */',source.slice(begin,end)));
+ const run=(command,args)=>{const r=spawnSync(command,args,{encoding:'utf8',timeout:30000});assert.ifError(r.error);assert.equal(r.signal,null,r.stderr);assert.equal(r.status,0,r.stdout+r.stderr);return r.stdout;};
+ run('/usr/bin/clang++',['-std=c++17','-O2','-Wall','-Wextra','-Werror','-fobjc-arc','-mmacosx-version-min=13.0','-I'+path.join(directory,'../src/modules/android/native'),file,'-o',binary,'-framework','Foundation']);
+ assert.match(run(binary,[]),/PASS actual ART untargeted observed dispatch/);
+});

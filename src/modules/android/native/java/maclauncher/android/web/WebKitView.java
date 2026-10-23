@@ -33,7 +33,7 @@ public final class WebKitView implements InvocationHandler,AutoCloseable {
     private WebViewClient client=new WebViewClient();
     private WebChromeClient chrome;
     private DownloadListener download;
-    private String url,originalUrl,title;
+    private String url,originalUrl,title,navigationUrl;
     private int progress,historyIndex=-1,contentWidth,contentHeight;
     private boolean horizontalOverlay,verticalOverlay;
     private float scale=1;
@@ -66,7 +66,7 @@ public final class WebKitView implements InvocationHandler,AutoCloseable {
     private void dirty(){if(closed)return;dirty=true;if(!scheduled&&attached&&!paused){scheduled=true;Choreographer.getInstance().postFrameCallback(time->{scheduled=false;if(closed||!attached||paused||!dirty||pending)return;dirty=false;pending=true;WebKitNative.snapshot(handle);});}}
     private void diagnostic(String operation){if(diagnostics.add(operation))System.err.println("[android-webkit] Platform operation is unavailable: "+operation);}
     private void command(String name,Map<String,?> values,ValueCallback<String> callback){long id=callback==null?0:++request;if(callback!=null)scripts.put(id,callback);WebKitNative.command(handle,name,new JSONObject(values).toString(),id);}
-    private void load(String next,Map<String,String> headers,byte[] body){Objects.requireNonNull(next);if(next.regionMatches(true,0,"javascript:",0,11)){WebKitNative.script(handle,next.substring(11),0);return;}originalUrl=next;Map<String,String> supplied=headers==null?Map.of():headers;String[] keys=supplied.keySet().toArray(String[]::new),values=Arrays.stream(keys).map(supplied::get).toArray(String[]::new);WebKitNative.load(handle,next,keys,values,body);}
+    private void load(String next,Map<String,String> headers,byte[] body){Objects.requireNonNull(next);if(next.regionMatches(true,0,"javascript:",0,11)){WebKitNative.script(handle,next.substring(11),0);return;}originalUrl=navigationUrl=next;Map<String,String> supplied=headers==null?Map.of():headers;String[] keys=supplied.keySet().toArray(String[]::new),values=Arrays.stream(keys).map(supplied::get).toArray(String[]::new);WebKitNative.load(handle,next,keys,values,body);}
     @Override public Object invoke(Object ignored,Method method,Object[] supplied)throws Throwable{
         Object[] a=supplied==null?new Object[0]:supplied;String name=method.getName();
         if(method.getDeclaringClass()==Object.class)return switch(name){case "toString"->"WebKit Android browser provider";case "hashCode"->System.identityHashCode(this);case "equals"->ignored==a[0];default->throw new AssertionError(name);};
@@ -77,8 +77,8 @@ public final class WebKitView implements InvocationHandler,AutoCloseable {
             case "setHorizontalScrollbarOverlay":horizontalOverlay=(Boolean)a[0];return null;case "setVerticalScrollbarOverlay":verticalOverlay=(Boolean)a[0];return null;case "overlayHorizontalScrollbar":return horizontalOverlay;case "overlayVerticalScrollbar":return verticalOverlay;case "getVisibleTitleHeight":return 0;
             case "loadUrl":load((String)a[0],a.length>1?(Map<String,String>)a[1]:Map.of(),null);return null;
             case "postUrl":load((String)a[0],Map.of("Content-Type","application/x-www-form-urlencoded"),(byte[])a[1]);return null;
-            case "loadData":{String data=(String)a[0];if("base64".equals(a[2]))data=new String(Base64.getDecoder().decode(data),java.nio.charset.StandardCharsets.UTF_8);WebKitNative.html(handle,data,"about:blank");return null;}
-            case "loadDataWithBaseURL":originalUrl=(String)a[0];WebKitNative.html(handle,(String)a[1],originalUrl);return null;
+            case "loadData":{String data=(String)a[0];if("base64".equals(a[2]))data=new String(Base64.getDecoder().decode(data),java.nio.charset.StandardCharsets.UTF_8);originalUrl=navigationUrl="about:blank";WebKitNative.html(handle,data,originalUrl);return null;}
+            case "loadDataWithBaseURL":originalUrl=navigationUrl=a[0]==null||((String)a[0]).isEmpty()?"about:blank":(String)a[0];WebKitNative.html(handle,(String)a[1],originalUrl);return null;
             case "evaluateJavaScript":{long id=++request;if(a[1]!=null)scripts.put(id,(ValueCallback<String>)a[1]);WebKitNative.script(handle,(String)a[0],id);return null;}
             case "reload":WebKitNative.reload(handle);return null;case "stopLoading":WebKitNative.stop(handle);return null;
             case "goBack":if(historyIndex>0)WebKitNative.navigate(handle,-1);return null;case "goForward":if(historyIndex+1<historyUrls.length)WebKitNative.navigate(handle,1);return null;case "goBackOrForward":{int delta=(Integer)a[0],next=historyIndex+delta;if(next>=0&&next<historyUrls.length)WebKitNative.navigate(handle,delta);return null;}
@@ -223,6 +223,7 @@ public final class WebKitView implements InvocationHandler,AutoCloseable {
     public void navigation(String state,String next,String text,int value){
         if(closed)return;
         boolean failed="error".equals(state);
+        if(!failed&&next!=null)navigationUrl=next;
         if(next!=null||!failed)url=next;
         if(!failed)title=text;
         progress=value;
@@ -230,7 +231,7 @@ public final class WebKitView implements InvocationHandler,AutoCloseable {
             case "started":client.onPageStarted(view,next,null);break;
             case "finished":client.onPageFinished(view,next);break;
             case "history":client.doUpdateVisitedHistory(view,next,false);break;
-            case "error":client.onReceivedError(view,WebViewClient.ERROR_UNKNOWN,text,next!=null?next:originalUrl);break;
+            case "error":client.onReceivedError(view,WebViewClient.ERROR_UNKNOWN,text,next!=null?next:navigationUrl!=null?navigationUrl:originalUrl!=null?originalUrl:url!=null?url:"about:blank");break;
         }
         if(chrome!=null){chrome.onProgressChanged(view,value);if(!failed&&text!=null)chrome.onReceivedTitle(view,text);}
         dirty();

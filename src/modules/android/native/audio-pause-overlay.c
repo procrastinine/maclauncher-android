@@ -7,6 +7,7 @@
 #include <AudioToolbox/AudioToolbox.h>
 #include "audio-volume.h"
 #include "audio-pcm.h"
+#include "audio-hardware.h"
 static _Atomic int owned_paused;
 static _Atomic uint32_t owned_capture_device;
 static pthread_mutex_t owned_sources_lock=PTHREAD_MUTEX_INITIALIZER;
@@ -127,4 +128,24 @@ int klj_audio_pcm_device(void){
     pthread_mutex_lock(&g_lock);int opened=g_open;pthread_mutex_unlock(&g_lock);
     if(!opened&&kl_audio_open(48000,2,16)!=0)return -1;
     kl_audio_play();return 0;
+}
+
+// Report the PCM format adopted by the actual native AudioUnit owner. These
+// queries do not open a device and never replay a guest stream's requested
+// rate, channel count or sample format.
+int klj_audio_hardware_info(int32_t *rate,int32_t *channels,int32_t *format){
+    if(!rate||!channels||!format)return -886; // AAUDIO_ERROR_NULL
+    pthread_mutex_lock(&g_lock);
+    int available=g_open&&g_unit&&g_out_rate>=1.0&&g_out_rate<=INT32_MAX&&g_out_ch>0&&g_out_ch<=INT32_MAX;
+    if(available){*rate=(int32_t)g_out_rate;*channels=(int32_t)g_out_ch;*format=2;} // native float PCM
+    pthread_mutex_unlock(&g_lock);
+    return available?0:-889; // AAUDIO_ERROR_UNAVAILABLE
+}
+int klj_audio_capture_hardware_info(int32_t *rate,int32_t *channels,int32_t *format){
+    if(!rate||!channels||!format)return -886;
+    pthread_mutex_lock(&g_mic_lock);
+    int available=g_mic_open&&g_cap_unit&&g_mic_rate>0&&g_mic_rate<=INT32_MAX&&g_mic_ch>0&&g_mic_ch<=INT32_MAX;
+    if(available){*rate=(int32_t)g_mic_rate;*channels=(int32_t)g_mic_ch;*format=1;} // native capture int16 PCM
+    pthread_mutex_unlock(&g_mic_lock);
+    return available?0:-889;
 }

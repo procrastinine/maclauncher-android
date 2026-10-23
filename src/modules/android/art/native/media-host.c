@@ -1,4 +1,5 @@
 #include "media-bridge.h"
+#include "host-packets.h"
 #include "media-platform.h"
 #include <limits.h>
 #include <stdlib.h>
@@ -14,6 +15,7 @@ static int transfer(struct KljArtMedia *request,void *bytes,size_t length){
 
 int64_t maclauncher_art_media(uint64_t address,uint64_t size){
     if(!address||size!=sizeof(struct KljArtMedia))return -22;
+ int64_t packet_error=klj_art_resolve_packet(address,size,KLJ_ART_PACKET_ALIGN(struct KljArtMedia),KLJ_ART_PACKET_READ_WRITE,&address);if(packet_error)return packet_error;
     struct KljArtMedia *r=(void*)(uintptr_t)address;
     switch(r->operation){
         case KLJ_ART_MEDIA_DEVICES:{char *text=klj_media_devices();if(!text)return -12;return transfer(r,text,strlen(text));}

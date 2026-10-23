@@ -12,6 +12,7 @@
 #include <dlfcn.h>
 #include <cstring>
 #include <vector>
+#include <cmath>
 #include "wide-strings.hpp"
 #include "native-dlopen.hpp"
 #include "surface-texture.hpp"
@@ -68,7 +69,7 @@ struct WindowLock {
     ~WindowLock(){lock.unlock();for(auto entry:retired)entry.release((void*)(uintptr_t)entry.handle);}
 };
 void *fromSurface(JNIEnv *env,jobject surface){
-    if(!surface)return nullptr;
+    if(!env||!surface||env->ExceptionCheck())return nullptr;
     auto type=env->FindClass("android/view/Surface");if(!type)return nullptr;bool matches=env->IsInstanceOf(surface,type);env->DeleteLocalRef(type);if(!matches)return nullptr;
     auto adapter=env->FindClass("maclauncher/android/framework/HostSurface");if(!adapter)return nullptr;
     auto method=env->GetStaticMethodID(adapter,"nativeLease","(Landroid/view/Surface;)J");if(!method){env->DeleteLocalRef(adapter);return nullptr;}
@@ -78,6 +79,7 @@ void *fromSurface(JNIEnv *env,jobject surface){
 void acquire(void *pointer){WindowLock lock;if(auto value=known(pointer))lock.retain(value);}
 void release(void *pointer){WindowLock lock;if(auto value=known(pointer))lock.retire(value);}
 jobject toSurface(JNIEnv *env,void *pointer){
+    if(!env||env->ExceptionCheck())return nullptr;
     uint64_t consumer=0;{WindowLock lock;auto value=known(pointer);if(!value||!value->consumer||!lock.retain(value))return nullptr;consumer=value->consumer;}
     auto type=env->FindClass("maclauncher/android/framework/HostSurface");jobject result=nullptr;
     if(type){auto method=env->GetStaticMethodID(type,"fromNativeHandle","(J)Landroid/view/Surface;");if(method){result=env->CallStaticObjectMethod(type,method,(jlong)consumer);if(env->ExceptionCheck())result=nullptr;}env->DeleteLocalRef(type);}release(pointer);return result;
@@ -122,8 +124,46 @@ int defaultGeometryLocked(Window *value,int w,int h,int f){
     return result;
 }
 int geometry(void *pointer,int w,int h,int f){WindowLock lock;return geometryLocked(known(pointer),w,h,f);}
-int lockBuffer(void *,void *,void *){return -ENOSYS;}
-int postBuffer(void *){return -ENOSYS;}
+// Native API return values use Android errno numbers, independently of the
+// host thread's errno (Darwin ENOSYS is 78; Android ENOSYS is 38).
+constexpr int androidNotImplemented=38;
+int lockBuffer(void *,void *,void *){return -androidNotImplemented;}
+int postBuffer(void *){return -androidNotImplemented;}
+// Every public native-window operation stays in the Window owner's domain.
+// Unsupported producer/display/Parcel facilities report the native error; an
+// opaque host Window must never reach Android's unrelated android::Surface.
+int bufferTransform(void *pointer,int transform){
+    WindowLock lock;auto value=known(pointer);if(!value||!value->bound||transform<0||(transform&~7))return -EINVAL;
+    return transform==0?0:-androidNotImplemented;
+}
+int bufferDataSpace(void *pointer,int dataSpace){
+    WindowLock lock;auto value=known(pointer);if(!value||!value->bound||dataSpace!=0)return -EINVAL;
+    return 0;
+}
+int dataSpace(void *pointer){WindowLock lock;auto value=known(pointer);return value&&value->bound?0:-EINVAL;}
+int frameRateStrategy(void *pointer,float rate,int8_t compatibility,int8_t strategy){
+    WindowLock lock;auto value=known(pointer);if(!value||!value->bound||!std::isfinite(rate)||rate<0)return -EINVAL;
+    if(rate==0)return 0;
+    if(compatibility<0||compatibility>1||strategy<0||strategy>1)return -EINVAL;
+    return -androidNotImplemented;
+}
+int frameRate(void *pointer,float rate,int8_t compatibility){return frameRateStrategy(pointer,rate,compatibility,0);}
+int clearFrameRate(void *pointer){return frameRateStrategy(pointer,0,0,0);}
+void tryAllocateBuffers(void *pointer){
+    WindowLock lock;auto value=known(pointer);if(!value||!value->bound||value->storage||value->composition)return;
+    // Preallocation is a best-effort hint. Composed producers own their own
+    // buffers; ordinary windows keep their eagerly allocated IOSurface.
+    auto storage=allocate(value->width,value->height,value->format);if(!storage)return;
+    value->storage=storage;value->bytes=IOSurfaceGetAllocSize(storage);chargeStorage(storage,true);
+}
+int readWindowParcel(const void *parcel,void **output){
+    if(!output)return -EINVAL;*output=nullptr;if(!parcel)return -EINVAL;
+    return -androidNotImplemented;
+}
+int writeWindowParcel(void *pointer,void *parcel){
+    WindowLock lock;auto value=known(pointer);if(!value||!value->bound||!parcel)return -EINVAL;
+    return -androidNotImplemented;
+}
 std::mutex installMutex;
 bool importsInstalled=false;
 #ifdef KL_NATIVE_EGL_HOST
@@ -174,7 +214,12 @@ void *lookup(const char *name){
         {"ANativeWindow_fromSurface",(void*)fromSurface},{"ANativeWindow_acquire",(void*)acquire},{"ANativeWindow_release",(void*)release},
         {"ANativeWindow_toSurface",(void*)toSurface},
         {"ANativeWindow_getWidth",(void*)width},{"ANativeWindow_getHeight",(void*)height},{"ANativeWindow_getFormat",(void*)format},
-        {"ANativeWindow_setBuffersGeometry",(void*)geometry},{"ANativeWindow_lock",(void*)lockBuffer},{"ANativeWindow_unlockAndPost",(void*)postBuffer}};
+        {"ANativeWindow_setBuffersGeometry",(void*)geometry},{"ANativeWindow_lock",(void*)lockBuffer},{"ANativeWindow_unlockAndPost",(void*)postBuffer},
+        {"ANativeWindow_setBuffersTransform",(void*)bufferTransform},{"ANativeWindow_setBuffersDataSpace",(void*)bufferDataSpace},
+        {"ANativeWindow_getBuffersDataSpace",(void*)dataSpace},{"ANativeWindow_getBuffersDefaultDataSpace",(void*)dataSpace},
+        {"ANativeWindow_setFrameRate",(void*)frameRate},{"ANativeWindow_setFrameRateWithChangeStrategy",(void*)frameRateStrategy},
+        {"ANativeWindow_clearFrameRate",(void*)clearFrameRate},{"ANativeWindow_tryAllocateBuffers",(void*)tryAllocateBuffers},
+        {"ANativeWindow_readFromParcel",(void*)readWindowParcel},{"ANativeWindow_writeToParcel",(void*)writeWindowParcel}};
     for(auto &entry:entries)if(!strcmp(name,entry.name))return entry.address;
 #ifdef KL_NATIVE_EGL_HOST
     if(auto result=klj_native_egl_guest_lookup(name))return result;

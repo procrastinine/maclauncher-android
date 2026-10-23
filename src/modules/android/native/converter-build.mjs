@@ -16,6 +16,7 @@ export async function buildConverter({root,build,output,jdk,checkout,apksig,asmC
   const run=(command,args,extra={})=>execFileSync(command,args,{stdio:'inherit',...extra});
   await cachedBuildStep({cache:path.join(build,'converter.reuse.json'),
     inputs:[fileURLToPath(import.meta.url),fileURLToPath(new URL('./converter-source.mjs',import.meta.url)),
+      fileURLToPath(new URL('./converter-array-source.mjs',import.meta.url)),
       fileURLToPath(new URL('./framework-build.mjs',import.meta.url)),...javaToolInputs(jdk),...sources,...portability,
       ...names.map(name=>path.join(upstream,name+'.java')),converter,apksig,...asmClasspath.split(path.delimiter)],
     trees:[classes,generated],files:[archive,apiHeaders],key:{release:21,asmClasspath,environment:javaToolEnvironment()},build(){

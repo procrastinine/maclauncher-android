@@ -87,6 +87,7 @@ public final class HostActivityService extends IActivityManager.Default implemen
     @Override public int sendIntentSender(IApplicationThread caller,IIntentSender sender,IBinder allowlist,int code,Intent intent,String resolvedType,IIntentReceiver finished,String permission,Bundle options)throws RemoteException{return HostActivityTasks.windowRequest(options,windowOptions->{var remote=HostRemoteServices.intentManager(sender);return remote==null?HostPendingIntentInjector.send(caller,sender,allowlist,code,intent,resolvedType,finished,permission,options):remote.sendIntentSender(caller,sender,allowlist,code,intent,resolvedType,finished,permission,windowOptions);});}
     @Override public int checkPermission(String permission,int pid,int uid){return HostPermissions.check(permission,uid,Context.DEVICE_ID_DEFAULT);}
     @Override public int checkPermissionForDevice(String permission,int pid,int uid,int device){return HostPermissions.check(permission,uid,device);}
+    @Override public android.content.res.Configuration getConfiguration(){return HostApplication.systemConfiguration();}
     @Override public void getMemoryInfo(ActivityManager.MemoryInfo result){HostActivityManager.getMemoryInfo(result);}
     @Override public Debug.MemoryInfo[] getProcessMemoryInfo(int[] pids){return HostActivityManager.getProcessMemoryInfo(pids);}
     @Override public long[] getProcessPss(int[] pids){return HostActivityManager.getProcessPss(pids);}

@@ -1,4 +1,5 @@
 import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import {fileURLToPath} from 'node:url';
+import {adaptRegistryBinding} from './registry-binding-source.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url));
 export function prepareRegistrySource(vendor,build){
  const source=fs.readFileSync(path.join(vendor,'runtime/kl_dl.c'),'utf8'),hash=s=>crypto.createHash('sha256').update(s).digest('hex'),anchor='static int    g_nimgs = 0;';
@@ -240,5 +241,6 @@ size_t klj_image_gap_pool_leases(uintptr_t address,size_t size,KljImagePoolLease
     }
     return 0;
 }\n`;
+ adapted=adaptRegistryBinding(adapted,root);
  const file=path.join(build,'kl_dl.c');fs.writeFileSync(file,adapted);return file;
 }

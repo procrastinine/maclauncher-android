@@ -443,6 +443,12 @@
 	maclauncher-revision = 83b71974f00edaef78b72e212d60168b4bc4a70a
 	maclauncher-role = reference
 	maclauncher-init = false
+[submodule "unicorn"]
+	path = src/external/unicorn
+	url = https://github.com/unicorn-engine/unicorn.git
+	maclauncher-revision = 8028ec436f2d9376525352dd38ed9ed6b9f6be10
+	maclauncher-role = source
+
 [submodule "aosp-hwui-av"]
 	path = src/external/aosp-hwui/av
 	url = https://android.googlesource.com/platform/frameworks/av
@@ -585,4 +591,16 @@
 	path = src/external/aosp-hwui/soong
 	url = https://android.googlesource.com/platform/build/soong
 	maclauncher-revision = 533c3c2c9166b49caa556518bb547d8f9acf9594
+	maclauncher-role = source
+
+[submodule "aosp-arm-optimized-routines"]
+	path = src/external/aosp-arm-optimized-routines
+	url = https://android.googlesource.com/platform/external/arm-optimized-routines
+	maclauncher-revision = 43049f685bc5dae7182a8800e673cab6471f3ac1
+	maclauncher-role = source
+
+[submodule "aosp-llvm-libc"]
+	path = src/external/aosp-llvm-libc
+	url = https://android.googlesource.com/platform/external/llvm-libc
+	maclauncher-revision = 549bb629f8325dc9f5221bb16a3de908a753c304
 	maclauncher-role = source

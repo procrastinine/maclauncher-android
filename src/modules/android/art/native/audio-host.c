@@ -1,6 +1,7 @@
 // Original AIM audio-ring transport into the same physical PCM/CoreAudio owner.
 // Android port/patch/stream policy remains in the original guest HAL and server.
 #include "audio-pcm.h"
+#include "host-packets.h"
 #include "audio-device.h"
 #include "media-platform.h"
 #include <pthread.h>
@@ -128,9 +129,10 @@ static int openStream(Open *o){
 }
 int64_t maclauncher_art_audio(uint32_t function,uint64_t address,uint64_t size){
  if(!address)return -22;
- if(function==1)return size==sizeof(Devices)?devices((void*)(uintptr_t)address):-22;
- if(function==2)return size==sizeof(Open)?openStream((void*)(uintptr_t)address):-22;
+ if(function==1){if(size!=sizeof(Devices))return -22;int64_t packet_error=klj_art_resolve_packet(address,size,KLJ_ART_PACKET_ALIGN(Devices),KLJ_ART_PACKET_READ_WRITE,&address);if(packet_error)return packet_error;return devices((void*)(uintptr_t)address);}
+ if(function==2){if(size!=sizeof(Open))return -22;int64_t packet_error=klj_art_resolve_packet(address,size,KLJ_ART_PACKET_ALIGN(Open),KLJ_ART_PACKET_READ_WRITE,&address);if(packet_error)return packet_error;return openStream((void*)(uintptr_t)address);}
  if(size!=8||function<3||function>5)return -22;
+ int64_t packet_error=klj_art_resolve_packet(address,size,KLJ_ART_PACKET_ALIGN(uint64_t),KLJ_ART_PACKET_READ,&address);if(packet_error)return packet_error;
  uint64_t id=*(uint64_t*)(uintptr_t)address;pthread_mutex_lock(&registry);Stream **slot=&streams;while(*slot&&(*slot)->id!=id)slot=&(*slot)->next;Stream *s=*slot;if(!s){pthread_mutex_unlock(&registry);return -22;}
  pthread_mutex_lock(&s->lock);
  int result=0;

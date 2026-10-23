@@ -17,6 +17,8 @@ public final class HostApplication {
     final Context context;
     private Application application;
     private Configuration pendingConfiguration;
+    private final android.os.LocaleList systemLocales;
+    private final boolean systemUserSetLocale;
     private final Runnable configurationDispatch=this::dispatchConfiguration;
     private final HostActivityService services;
     private HostApplication(ClassLoader loader){
@@ -26,6 +28,7 @@ public final class HostApplication {
         HostUiAccess.set(thread,ActivityThread.class,"mProfiler",HostUiAccess.construct(HostUiAccess.type("android.app.ActivityThread$Profiler"),new Class<?>[0]));
         ApplicationInfo info=HostContext.hostApplicationInfoSnapshot();
         Configuration resourceConfiguration=new Configuration(ResourcesManager.getInstance().getConfiguration());
+        systemLocales=resourceConfiguration.getLocales();systemUserSetLocale=resourceConfiguration.userSetLocale;
         // ActivityThread binds the process records before application code can
         // initialize its component factory. A non-null base loader would run
         // that factory inside LoadedApk's constructor, before those records exist.
@@ -98,6 +101,7 @@ public final class HostApplication {
         HostDisplay.install();current=new HostApplication(loader);var windows=HostContextServices.install(current.context,physical);HostActivity.install();
         HostStartupTiming.mark("application-context-services");
         android.security.net.config.NetworkSecurityConfigProvider.install(current.context);
+        HostLocaleConfiguration.install(current.context);
         current.initializeClassLoader(loader);
         HostStartupTiming.mark("application-prepare-ready");
         return windows;
@@ -111,6 +115,25 @@ public final class HostApplication {
         boolean queued=current.pendingConfiguration!=null;
         current.pendingConfiguration=new Configuration(config);
         if(!queued)current.thread.getHandler().post(current.configurationDispatch);
+    }
+    /** ActivityManager exposes system locales, independently of this app's resource overlay. */
+    static synchronized Configuration systemConfiguration(){
+        Configuration config=new Configuration(ResourcesManager.getInstance().getConfiguration());
+        if(current!=null){config.setLocales(current.systemLocales);config.userSetLocale=current.systemUserSetLocale;}
+        return config;
+    }
+    /** Package locale changes retain original ResourcesManager and Activity transactions. */
+    static synchronized void applicationLocalesChanged(android.os.LocaleList locales){
+        if(current==null)throw new IllegalStateException("No Android application is bound");current.check();
+        var manager=ResourcesManager.getInstance();Configuration previous=manager.getConfiguration();
+        Configuration config=new Configuration(previous);
+        android.os.LocaleList system=current.systemLocales;
+        config.setLocales(com.android.server.wm.HostPackageConfiguration.combine(locales,system));
+        config.userSetLocale=!locales.isEmpty();config.seq=previous.seq+1;if(config.seq==0)config.seq=1;
+        manager.applyConfigurationToResources(config,CompatibilityInfo.DEFAULT_COMPATIBILITY_INFO);
+        Object controller=HostUiAccess.get(current.thread,ActivityThread.class,"mConfigurationController");
+        if(current.application==null){HostUiAccess.call(HostUiAccess.method(controller.getClass(),"setConfiguration",Configuration.class),controller,config);HostUiAccess.call(HostUiAccess.method(controller.getClass(),"setCompatConfiguration",Configuration.class),controller,config);}
+        else displayConfigurationChanged(config);
     }
     private void dispatchConfiguration(){
         check();Configuration config=pendingConfiguration;pendingConfiguration=null;
@@ -153,14 +176,27 @@ public final class HostApplication {
     /** Original LoadedApk factory retains the declared Service and application loader. */
     private static android.content.pm.ServiceInfo serviceInfo(String name){
         HostApplication value=current();
-        try{return value.context.getPackageManager().getServiceInfo(new ComponentName(value.context.getPackageName(),name),android.content.pm.PackageManager.GET_META_DATA);}
+        try{var info=value.context.getPackageManager().getServiceInfo(new ComponentName(value.apk.getApplicationInfo().packageName,name),android.content.pm.PackageManager.GET_META_DATA);
+            ApplicationInfo own=value.apk.getApplicationInfo();
+            if(!Objects.equals(info.packageName,own.packageName)||info.applicationInfo==null||info.applicationInfo.uid!=own.uid||!HostPackages.owns(info))throw new SecurityException("Service is outside the bound application process");
+            return info;}
         catch(android.content.pm.PackageManager.NameNotFoundException failure){return HostUiAccess.raise(failure);}
+    }
+    /** Original ActivityThread selects the resolved service's LoadedApk Application. */
+    static Application serviceApplication(ComponentName component){
+        HostApplication value=current();
+        if(!Objects.equals(component.getPackageName(),value.apk.getApplicationInfo().packageName))throw new SecurityException("Service is outside the bound application package");
+        serviceInfo(component.getClassName());
+        Application application=(Application)HostUiAccess.get(value.apk,LoadedApk.class,"mApplication");
+        if(application==null)throw new IllegalStateException("The bound LoadedApk has no attached Application");
+        return application;
     }
     static Service instantiateService(String name,Intent intent)throws ReflectiveOperationException{HostApplication value=current();return value.apk.getAppFactory().instantiateService(splitClassLoader(serviceInfo(name).splitName),name,intent);}
     public static void attachService(Service service,Application application){attachService(service,application,new android.os.Binder());}
     static void attachService(Service service,Application application,android.os.IBinder token){attachService(service,application,token,service.getClass().getName());}
     static void attachService(Service service,Application application,android.os.IBinder token,String name){
-        HostApplication value=current();if(value.application!=application)throw new IllegalArgumentException("Service belongs to another application");
+        HostApplication value=current();Application owner=(Application)HostUiAccess.get(value.apk,LoadedApk.class,"mApplication");
+        if(owner==null||owner!=application)throw new IllegalArgumentException("Service belongs to another application");
         Context context=(Context)HostUiAccess.call(HostUiAccess.method(HostUiAccess.type("android.app.ContextImpl"),"createAppContext",ActivityThread.class,LoadedApk.class),null,value.thread,value.apk);
         String splitName=serviceInfo(name).splitName;
         if(splitName!=null)try{context=context.createContextForSplit(splitName);}catch(android.content.pm.PackageManager.NameNotFoundException failure){HostUiAccess.raise(failure);}
@@ -182,6 +218,7 @@ public final class HostApplication {
         if(current==null)return;
         current.check();Throwable first=null;
         current.thread.getHandler().removeCallbacks(current.configurationDispatch);current.pendingConfiguration=null;
+        HostLocaleConfiguration.retire();
         try{HostAccounts.shutdown();}catch(Throwable failure){first=failure;}
         try{HostLocalServices.shutdown();}catch(Throwable failure){if(first==null)first=failure;else if(first!=failure)first.addSuppressed(failure);}
         try{releaseContext(current.context,"Application");}catch(Throwable failure){if(first==null)first=failure;else if(first!=failure)first.addSuppressed(failure);}

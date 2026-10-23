@@ -1,12 +1,7 @@
 import fs from 'node:fs';import path from 'node:path';
 import {writeChanged} from './upstream/source-files.mjs';
 export function generate(output,jdk){
- const operations=[{name:'NewObject',kind:'Object',fixed:3,invoke:'originals.NewObjectA(env,(jclass)f->x[1],method,values)'}];
- for(const group of ['','Static','Nonvirtual'])for(const kind of ['Object','Boolean','Byte','Char','Short','Int','Long','Float','Double','Void']){
-  const name='Call'+group+kind+'Method',fixed=group==='Nonvirtual'?4:3;
-  const args=group==='Nonvirtual'?'env,(jobject)f->x[1],(jclass)f->x[2],method,values':`env,(${group==='Static'?'jclass':'jobject'})f->x[1],method,values`;
-  operations.push({name,kind,fixed,invoke:'originals.'+name+'A('+args+')'});
- }
+ const operations=jniCallOperations();
  let header='',assembly=`.text
 .p2align 2
 Lklj_jni_call:
@@ -41,10 +36,7 @@ Lklj_jni_call:
  operations.forEach((o,i)=>{let statement=o.kind==='Void'?o.invoke+';':o.kind==='Float'?`jfloat value=${o.invoke};memcpy(&f->floating,&value,sizeof value);`:o.kind==='Double'?`jdouble value=${o.invoke};memcpy(&f->floating,&value,sizeof value);`:`f->integer=(uint64_t)${o.invoke};`;header+=`case ${i}:{${statement}break;}\n`;});
  header=header.replace('switch(operation/2){','if(!klj_jni_before_java(env))return NULL;switch(operation/2){');
  header+='}\nklj_jni_after_java(env);(*env)->ExceptionCheck(env);return NULL;}\n';
- const declaration=fs.readFileSync(path.join(jdk,'include/jni.h'),'utf8').split('struct JNINativeInterface_ {')[1]?.split('\n};')[0];
- if(!declaration)throw Error('JNI function declarations are missing');
- const fields=[...declaration.matchAll(/([\w\s*]+?)\(JNICALL\s*\*(\w+)\)\s*\(([\s\S]*?)\)\s*;/g)].map(m=>({result:m[1].trim().replace(/\s+/g,' '),name:m[2],parameters:m[3].split(',').map(s=>s.trim().replace(/\s+/g,' '))}));
- if(fields.length!==[...declaration.matchAll(/JNICALL/g)].length)throw Error('JNI declaration parsing is incomplete');
+ const fields=jniDeclarations(jdk);
  const variable=new Set(variants.map(o=>o.name+(o.isV?'V':'')));
  let forward='static struct JNINativeInterface_ guest_functions;\n';
  for(const {name,result,parameters}of fields){if(variable.has(name))continue;
@@ -61,4 +53,22 @@ Lklj_jni_call:
  forward+='}\n';
  writeChanged(path.join(output,'jni-forward-generated.h'),forward);
  writeChanged(path.join(output,'jni-calls-generated.h'),header);writeChanged(path.join(output,'jni-calls.S'),assembly);
+}
+
+export function jniCallOperations(){
+ const operations=[{name:'NewObject',kind:'Object',fixed:3,invoke:'originals.NewObjectA(env,(jclass)f->x[1],method,values)'}];
+ for(const group of ['','Static','Nonvirtual'])for(const kind of ['Object','Boolean','Byte','Char','Short','Int','Long','Float','Double','Void']){
+  const name='Call'+group+kind+'Method',fixed=group==='Nonvirtual'?4:3;
+  const args=group==='Nonvirtual'?'env,(jobject)f->x[1],(jclass)f->x[2],method,values':`env,(${group==='Static'?'jclass':'jobject'})f->x[1],method,values`;
+  operations.push({name,kind,fixed,invoke:'originals.'+name+'A('+args+')'});
+ }
+ return operations;
+}
+
+export function jniDeclarations(jdk,table="JNINativeInterface_"){
+ const declaration=fs.readFileSync(path.join(jdk,'include/jni.h'),'utf8').split('struct '+table+' {')[1]?.split('\n};')[0];
+ if(!declaration)throw Error('JNI function declarations are missing');
+ const fields=[...declaration.matchAll(/([\w\s*]+?)\(JNICALL\s*\*(\w+)\)\s*\(([\s\S]*?)\)\s*;/g)].map(m=>({result:m[1].trim().replace(/\s+/g,' '),name:m[2],parameters:m[3].split(',').map(s=>s.trim().replace(/\s+/g,' '))}));
+ if(fields.length!==[...declaration.matchAll(/JNICALL/g)].length)throw Error('JNI declaration parsing is incomplete');
+ return fields;
 }

@@ -1,6 +1,6 @@
 package io.github.kksimp.dex2jvm;
 
-/** Owned opt-in routing for APK native loading. Host JVM classes are not input DEX. */
+/** Owned opt-in Android VM boundaries. Host JVM classes are not input DEX. */
 final class NativeLoadRepoint {
     private static final String TARGET = target();
     private static String target() {
@@ -13,6 +13,9 @@ final class NativeLoadRepoint {
     }
     static GuestRepoint.Target lookup(boolean isStatic, boolean isVirtual, String owner, String name, String desc) {
         if (TARGET == null) return null;
+        if (isStatic && owner.equals("java/lang/ClassLoader") && name.equals("getSystemClassLoader") &&
+                desc.equals("()Ljava/lang/ClassLoader;"))
+            return new GuestRepoint.Target("maclauncher/android/framework/HostDexFiles", name, desc);
         if (isVirtual && owner.equals("java/lang/Runtime") && desc.equals("(Ljava/lang/String;)V")) {
             if (name.equals("load")) return new GuestRepoint.Target(TARGET, "runtimeLoad", "(Ljava/lang/Runtime;Ljava/lang/String;)V");
             if (name.equals("loadLibrary")) return new GuestRepoint.Target(TARGET, "runtimeLoadLibrary", "(Ljava/lang/Runtime;Ljava/lang/String;)V");

@@ -1,0 +1,3555 @@
+{
+  "schemaVersion": 1,
+  "target": "aarch64-linux-android36",
+  "header": {
+    "path": "GLES2/gl2ext_angle.h",
+    "sha256": "2c49625b9dfd9d72714315247d6002e45759dc8423d3d366c17d5a41fd5d1380"
+  },
+  "extractorSha256": "1e22621c258e5b71784cf767db6921355579492d97773258f39ab1ba351a9a69",
+  "types": {
+    "void (GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLenum, GLsizei, const void *)": {
+      "name": "void (GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLenum, GLsizei, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLsizei",
+        "GLsizei",
+        "GLsizei",
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "const void *": {
+      "name": "const void *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "const void"
+    },
+    "const void": {
+      "name": "const void",
+      "kind": "Void",
+      "size": -2,
+      "alignment": -2,
+      "const": true
+    },
+    "GLsizei": {
+      "name": "GLsizei",
+      "kind": "Int",
+      "size": 4,
+      "alignment": 4,
+      "const": false,
+      "aliases": [
+        "GLsizei"
+      ],
+      "declaration": {
+        "file": "<ndk>/GLES3/gl32.h",
+        "offset": 2584
+      }
+    },
+    "GLenum": {
+      "name": "GLenum",
+      "kind": "UInt",
+      "size": 4,
+      "alignment": 4,
+      "const": false,
+      "aliases": [
+        "GLenum"
+      ],
+      "declaration": {
+        "file": "<ndk>/GLES3/gl32.h",
+        "offset": 2325
+      }
+    },
+    "GLint": {
+      "name": "GLint",
+      "kind": "Int",
+      "size": 4,
+      "alignment": 4,
+      "const": false,
+      "aliases": [
+        "GLint"
+      ],
+      "declaration": {
+        "file": "<ndk>/GLES3/gl32.h",
+        "offset": 2532
+      }
+    },
+    "void": {
+      "name": "void",
+      "kind": "Void",
+      "size": -2,
+      "alignment": -2,
+      "const": false
+    },
+    "void (GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, GLsizei, const void *)": {
+      "name": "void (GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, GLsizei, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLsizei",
+        "GLsizei",
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLsizei, GLboolean, GLuint, GLuint64, GLbitfield, GLbitfield, const void *)": {
+      "name": "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLsizei, GLboolean, GLuint, GLuint64, GLbitfield, GLbitfield, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLsizei",
+        "GLenum",
+        "GLsizei",
+        "GLsizei",
+        "GLsizei",
+        "GLboolean",
+        "GLuint",
+        "GLuint64",
+        "GLbitfield",
+        "GLbitfield",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "GLbitfield": {
+      "name": "GLbitfield",
+      "kind": "UInt",
+      "size": 4,
+      "alignment": 4,
+      "const": false,
+      "aliases": [
+        "GLbitfield"
+      ],
+      "declaration": {
+        "file": "<ndk>/GLES3/gl32.h",
+        "offset": 2508
+      }
+    },
+    "GLuint64": {
+      "name": "GLuint64",
+      "kind": "ULong",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "aliases": [
+        "GLuint64",
+        "khronos_uint64_t",
+        "uint64_t",
+        "__uint64_t"
+      ],
+      "declaration": {
+        "file": "<ndk>/GLES3/gl32.h",
+        "offset": 2294
+      }
+    },
+    "GLuint": {
+      "name": "GLuint",
+      "kind": "UInt",
+      "size": 4,
+      "alignment": 4,
+      "const": false,
+      "aliases": [
+        "GLuint"
+      ],
+      "declaration": {
+        "file": "<ndk>/GLES3/gl32.h",
+        "offset": 2354
+      }
+    },
+    "GLboolean": {
+      "name": "GLboolean",
+      "kind": "UChar",
+      "size": 1,
+      "alignment": 1,
+      "const": false,
+      "aliases": [
+        "GLboolean"
+      ],
+      "declaration": {
+        "file": "<ndk>/GLES3/gl32.h",
+        "offset": 2561
+      }
+    },
+    "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLsizei, GLuint, GLuint64, GLbitfield, GLbitfield, const void *)": {
+      "name": "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLsizei, GLuint, GLuint64, GLbitfield, GLbitfield, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLsizei",
+        "GLenum",
+        "GLsizei",
+        "GLsizei",
+        "GLsizei",
+        "GLuint",
+        "GLuint64",
+        "GLbitfield",
+        "GLbitfield",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLboolean, GLuint, GLuint64, GLbitfield, GLbitfield, const void *)": {
+      "name": "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLboolean, GLuint, GLuint64, GLbitfield, GLbitfield, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLsizei",
+        "GLenum",
+        "GLsizei",
+        "GLsizei",
+        "GLboolean",
+        "GLuint",
+        "GLuint64",
+        "GLbitfield",
+        "GLbitfield",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLuint, GLuint64, GLbitfield, GLbitfield, const void *)": {
+      "name": "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLuint, GLuint64, GLbitfield, GLbitfield, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLsizei",
+        "GLenum",
+        "GLsizei",
+        "GLsizei",
+        "GLuint",
+        "GLuint64",
+        "GLbitfield",
+        "GLbitfield",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLboolean)": {
+      "name": "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLboolean)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLsizei",
+        "GLenum",
+        "GLsizei",
+        "GLsizei",
+        "GLboolean"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLenum, GLsizei, const GLint *)": {
+      "name": "void (GLenum, GLenum, GLsizei, const GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "const GLint *"
+      ],
+      "variadic": false
+    },
+    "const GLint *": {
+      "name": "const GLint *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "const GLint"
+    },
+    "const GLint": {
+      "name": "const GLint",
+      "kind": "Int",
+      "size": 4,
+      "alignment": 4,
+      "const": true,
+      "aliases": [
+        "GLint"
+      ]
+    },
+    "void (GLenum, GLenum, GLsizei, const GLfloat *)": {
+      "name": "void (GLenum, GLenum, GLsizei, const GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "const GLfloat *"
+      ],
+      "variadic": false
+    },
+    "const GLfloat *": {
+      "name": "const GLfloat *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "const GLfloat"
+    },
+    "const GLfloat": {
+      "name": "const GLfloat",
+      "kind": "Float",
+      "size": 4,
+      "alignment": 4,
+      "const": true,
+      "aliases": [
+        "GLfloat",
+        "khronos_float_t"
+      ]
+    },
+    "void (GLenum, GLenum, GLsizei, const GLuint *)": {
+      "name": "void (GLenum, GLenum, GLsizei, const GLuint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "const GLuint *"
+      ],
+      "variadic": false
+    },
+    "const GLuint *": {
+      "name": "const GLuint *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "const GLuint"
+    },
+    "const GLuint": {
+      "name": "const GLuint",
+      "kind": "UInt",
+      "size": 4,
+      "alignment": 4,
+      "const": true,
+      "aliases": [
+        "GLuint"
+      ]
+    },
+    "void (GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum, GLsizei, const void *)": {
+      "name": "void (GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum, GLsizei, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLint",
+        "GLsizei",
+        "GLsizei",
+        "GLsizei",
+        "GLint",
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, GLsizei, const void *)": {
+      "name": "void (GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, GLsizei, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLint",
+        "GLsizei",
+        "GLsizei",
+        "GLint",
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum)": {
+      "name": "void (GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLint",
+        "GLsizei",
+        "GLsizei",
+        "GLint",
+        "GLenum",
+        "GLenum"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLenum, GLsizei, const GLint *)": {
+      "name": "void (GLuint, GLenum, GLsizei, const GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLenum",
+        "GLsizei",
+        "const GLint *"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLenum, GLsizei, const GLfloat *)": {
+      "name": "void (GLuint, GLenum, GLsizei, const GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLenum",
+        "GLsizei",
+        "const GLfloat *"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLenum, GLsizei, const GLuint *)": {
+      "name": "void (GLuint, GLenum, GLsizei, const GLuint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLenum",
+        "GLsizei",
+        "const GLuint *"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLbitfield)": {
+      "name": "void (GLuint, GLbitfield)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLbitfield"
+      ],
+      "variadic": false
+    },
+    "void (const GLchar *)": {
+      "name": "void (const GLchar *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "const GLchar *"
+      ],
+      "variadic": false
+    },
+    "const GLchar *": {
+      "name": "const GLchar *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "const GLchar"
+    },
+    "const GLchar": {
+      "name": "const GLchar",
+      "kind": "Char_U",
+      "size": 1,
+      "alignment": 1,
+      "const": true,
+      "aliases": [
+        "GLchar"
+      ]
+    },
+    "void (GLuint, const GLuint *, GLenum *)": {
+      "name": "void (GLuint, const GLuint *, GLenum *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "const GLuint *",
+        "GLenum *"
+      ],
+      "variadic": false
+    },
+    "GLenum *": {
+      "name": "GLenum *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "GLenum"
+    },
+    "void (GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, GLsizei, GLsizei *, GLsizei *, GLsizei *, void *)": {
+      "name": "void (GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, GLsizei, GLsizei *, GLsizei *, GLsizei *, void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLint",
+        "GLint",
+        "GLsizei",
+        "GLsizei",
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLsizei *",
+        "GLsizei *",
+        "void *"
+      ],
+      "variadic": false
+    },
+    "void *": {
+      "name": "void *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "void"
+    },
+    "GLsizei *": {
+      "name": "GLsizei *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "GLsizei"
+    },
+    "void (GLenum)": {
+      "name": "void (GLenum)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLenum)": {
+      "name": "void (GLenum, GLenum)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLenum"
+      ],
+      "variadic": false
+    },
+    "void (void)": {
+      "name": "void (void)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [],
+      "variadic": false
+    },
+    "void (GLenum, const GLsizei *, GLenum, const GLvoid *const *, const GLsizei *, const GLint *, const GLuint *, GLsizei)": {
+      "name": "void (GLenum, const GLsizei *, GLenum, const GLvoid *const *, const GLsizei *, const GLint *, const GLuint *, GLsizei)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "const GLsizei *",
+        "GLenum",
+        "const GLvoid *const *",
+        "const GLsizei *",
+        "const GLint *",
+        "const GLuint *",
+        "GLsizei"
+      ],
+      "variadic": false
+    },
+    "const GLsizei *": {
+      "name": "const GLsizei *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "const GLsizei"
+    },
+    "const GLsizei": {
+      "name": "const GLsizei",
+      "kind": "Int",
+      "size": 4,
+      "alignment": 4,
+      "const": true,
+      "aliases": [
+        "GLsizei"
+      ]
+    },
+    "const GLvoid *const *": {
+      "name": "const GLvoid *const *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "const GLvoid *const"
+    },
+    "const GLvoid *const": {
+      "name": "const GLvoid *const",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": true,
+      "element": "const GLvoid"
+    },
+    "const GLvoid": {
+      "name": "const GLvoid",
+      "kind": "Void",
+      "size": -2,
+      "alignment": -2,
+      "const": true,
+      "aliases": [
+        "GLvoid"
+      ]
+    },
+    "void (GLenum, const GLsizei *, GLenum, const GLvoid *const *, const GLsizei *, GLsizei)": {
+      "name": "void (GLenum, const GLsizei *, GLenum, const GLvoid *const *, const GLsizei *, GLsizei)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "const GLsizei *",
+        "GLenum",
+        "const GLvoid *const *",
+        "const GLsizei *",
+        "GLsizei"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, const GLsizei *, GLenum, const GLvoid *const *, GLsizei)": {
+      "name": "void (GLenum, const GLsizei *, GLenum, const GLvoid *const *, GLsizei)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "const GLsizei *",
+        "GLenum",
+        "const GLvoid *const *",
+        "GLsizei"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, const GLsizei *, const GLsizei *, const GLsizei *, const GLuint *, GLsizei)": {
+      "name": "void (GLenum, const GLsizei *, const GLsizei *, const GLsizei *, const GLuint *, GLsizei)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "const GLsizei *",
+        "const GLsizei *",
+        "const GLsizei *",
+        "const GLuint *",
+        "GLsizei"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, const GLint *, const GLsizei *, const GLsizei *, GLsizei)": {
+      "name": "void (GLenum, const GLint *, const GLsizei *, const GLsizei *, GLsizei)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "const GLint *",
+        "const GLsizei *",
+        "const GLsizei *",
+        "GLsizei"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, const GLint *, const GLsizei *, GLsizei)": {
+      "name": "void (GLenum, const GLint *, const GLsizei *, GLsizei)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "const GLint *",
+        "const GLsizei *",
+        "GLsizei"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, const GLfloat *)": {
+      "name": "void (GLenum, const GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "const GLfloat *"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLenum, GLuint)": {
+      "name": "void (GLuint, GLenum, GLuint)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLenum",
+        "GLuint"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLuint64, GLenum, GLuint)": {
+      "name": "void (GLuint, GLuint64, GLenum, GLuint)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLuint64",
+        "GLenum",
+        "GLuint"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLint, GLsizei, GLsizei *, GLuint *)": {
+      "name": "void (GLuint, GLint, GLsizei, GLsizei *, GLuint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLint",
+        "GLsizei",
+        "GLsizei *",
+        "GLuint *"
+      ],
+      "variadic": false
+    },
+    "GLuint *": {
+      "name": "GLuint *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "GLuint"
+    },
+    "void (GLuint, GLint, GLsizei, GLsizei *, GLint *)": {
+      "name": "void (GLuint, GLint, GLsizei, GLsizei *, GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLint",
+        "GLsizei",
+        "GLsizei *",
+        "GLint *"
+      ],
+      "variadic": false
+    },
+    "GLint *": {
+      "name": "GLint *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "GLint"
+    },
+    "void (GLuint, GLint, GLsizei, GLsizei *, GLfloat *)": {
+      "name": "void (GLuint, GLint, GLsizei, GLsizei *, GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLint",
+        "GLsizei",
+        "GLsizei *",
+        "GLfloat *"
+      ],
+      "variadic": false
+    },
+    "GLfloat *": {
+      "name": "GLfloat *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "GLfloat"
+    },
+    "GLfloat": {
+      "name": "GLfloat",
+      "kind": "Float",
+      "size": 4,
+      "alignment": 4,
+      "const": false,
+      "aliases": [
+        "GLfloat",
+        "khronos_float_t"
+      ],
+      "declaration": {
+        "file": "<ndk>/GLES3/gl32.h",
+        "offset": 2407
+      }
+    },
+    "void (GLuint, GLenum, GLsizei, GLsizei *, GLint *)": {
+      "name": "void (GLuint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLint *"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLenum, GLsizei, GLsizei *, GLfloat *)": {
+      "name": "void (GLuint, GLenum, GLsizei, GLsizei *, GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLfloat *"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLenum, GLsizei, GLsizei *, void **)": {
+      "name": "void (GLuint, GLenum, GLsizei, GLsizei *, void **)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "void **"
+      ],
+      "variadic": false
+    },
+    "void **": {
+      "name": "void **",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "void *"
+    },
+    "void (GLuint, GLenum, GLsizei, GLsizei *, GLuint *)": {
+      "name": "void (GLuint, GLenum, GLsizei, GLsizei *, GLuint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLuint *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLenum, GLsizei, GLsizei *, GLint *)": {
+      "name": "void (GLenum, GLenum, GLsizei, GLsizei *, GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLint *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLenum, GLsizei, GLsizei *, GLfloat *)": {
+      "name": "void (GLenum, GLenum, GLsizei, GLsizei *, GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLfloat *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLenum, GLsizei, GLsizei *, GLuint *)": {
+      "name": "void (GLenum, GLenum, GLsizei, GLsizei *, GLuint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLuint *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLint, GLenum, GLsizei, GLsizei *, GLint *)": {
+      "name": "void (GLenum, GLint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLint *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLint, GLenum, GLint *)": {
+      "name": "void (GLenum, GLint, GLenum, GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLenum",
+        "GLint *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLint, GLenum, GLsizei, GLsizei *, GLfloat *)": {
+      "name": "void (GLenum, GLint, GLenum, GLsizei, GLsizei *, GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLfloat *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLint, GLenum, GLfloat *)": {
+      "name": "void (GLenum, GLint, GLenum, GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLenum",
+        "GLfloat *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLint, GLenum, GLenum, void *)": {
+      "name": "void (GLenum, GLint, GLenum, GLenum, void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLenum",
+        "GLenum",
+        "void *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLenum, GLenum, void *)": {
+      "name": "void (GLenum, GLenum, GLenum, void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLenum",
+        "GLenum",
+        "void *"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLenum, GLsizei, GLsizei *, GLuint64 *)": {
+      "name": "void (GLuint, GLenum, GLsizei, GLsizei *, GLuint64 *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLuint64 *"
+      ],
+      "variadic": false
+    },
+    "GLuint64 *": {
+      "name": "GLuint64 *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "GLuint64"
+    },
+    "void (GLuint, GLenum, GLsizei, GLsizei *, GLint64 *)": {
+      "name": "void (GLuint, GLenum, GLsizei, GLsizei *, GLint64 *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLint64 *"
+      ],
+      "variadic": false
+    },
+    "GLint64 *": {
+      "name": "GLint64 *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "GLint64"
+    },
+    "GLint64": {
+      "name": "GLint64",
+      "kind": "Long",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "aliases": [
+        "GLint64",
+        "khronos_int64_t",
+        "int64_t",
+        "__int64_t"
+      ],
+      "declaration": {
+        "file": "<ndk>/GLES3/gl32.h",
+        "offset": 2260
+      }
+    },
+    "void (GLuint, GLenum, GLenum, GLsizei, GLsizei *, GLint *)": {
+      "name": "void (GLuint, GLenum, GLenum, GLsizei, GLsizei *, GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLint *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLsizei, GLsizei *, void **)": {
+      "name": "void (GLenum, GLsizei, GLsizei *, void **)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "void **"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, void **)": {
+      "name": "void (GLenum, void **)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "void **"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLuint, GLsizei, GLsizei *, GLfloat *)": {
+      "name": "void (GLenum, GLuint, GLsizei, GLsizei *, GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLuint",
+        "GLsizei",
+        "GLsizei *",
+        "GLfloat *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLuint, GLfloat *)": {
+      "name": "void (GLenum, GLuint, GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLuint",
+        "GLfloat *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLenum, GLenum, GLsizei, GLsizei *, GLint *)": {
+      "name": "void (GLenum, GLenum, GLenum, GLsizei, GLsizei *, GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLint *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLsizei, GLsizei *, GLint *)": {
+      "name": "void (GLenum, GLsizei, GLsizei *, GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLint *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLuint, GLsizei, GLsizei *, GLint *)": {
+      "name": "void (GLenum, GLuint, GLsizei, GLsizei *, GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLuint",
+        "GLsizei",
+        "GLsizei *",
+        "GLint *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLsizei, GLsizei *, GLint64 *)": {
+      "name": "void (GLenum, GLsizei, GLsizei *, GLint64 *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLint64 *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLuint, GLsizei, GLsizei *, GLint64 *)": {
+      "name": "void (GLenum, GLuint, GLsizei, GLsizei *, GLint64 *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLuint",
+        "GLsizei",
+        "GLsizei *",
+        "GLint64 *"
+      ],
+      "variadic": false
+    },
+    "void (GLint, GLenum, GLsizei, GLsizei *, GLint *)": {
+      "name": "void (GLint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLint",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLint *"
+      ],
+      "variadic": false
+    },
+    "void (GLint, GLenum, GLint *)": {
+      "name": "void (GLint, GLenum, GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLint",
+        "GLenum",
+        "GLint *"
+      ],
+      "variadic": false
+    },
+    "void (GLint, GLenum, GLsizei, GLsizei *, GLfloat *)": {
+      "name": "void (GLint, GLenum, GLsizei, GLsizei *, GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLint",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLfloat *"
+      ],
+      "variadic": false
+    },
+    "void (GLint, GLenum, GLfloat *)": {
+      "name": "void (GLint, GLenum, GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLint",
+        "GLenum",
+        "GLfloat *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLsizei, GLsizei *, GLfloat *)": {
+      "name": "void (GLenum, GLsizei, GLsizei *, GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLfloat *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLint, void *)": {
+      "name": "void (GLenum, GLint, void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "void *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLenum, GLsizei, GLsizei *, void **)": {
+      "name": "void (GLenum, GLenum, GLsizei, GLsizei *, void **)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "void **"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLenum, GLsizei, GLsizei *, GLint64 *)": {
+      "name": "void (GLenum, GLenum, GLsizei, GLsizei *, GLint64 *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLint64 *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLsizei, GLsizei *, GLboolean *)": {
+      "name": "void (GLenum, GLsizei, GLsizei *, GLboolean *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLboolean *"
+      ],
+      "variadic": false
+    },
+    "GLboolean *": {
+      "name": "GLboolean *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "GLboolean"
+    },
+    "void (GLenum, GLuint, GLsizei, GLsizei *, GLboolean *)": {
+      "name": "void (GLenum, GLuint, GLsizei, GLsizei *, GLboolean *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLuint",
+        "GLsizei",
+        "GLsizei *",
+        "GLboolean *"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLuint, GLenum, GLsizei, GLsizei *, GLint *)": {
+      "name": "void (GLuint, GLuint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLuint",
+        "GLenum",
+        "GLsizei",
+        "GLsizei *",
+        "GLint *"
+      ],
+      "variadic": false
+    },
+    "void (GLint, GLuint, GLint, GLint)": {
+      "name": "void (GLint, GLuint, GLint, GLint)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLint",
+        "GLuint",
+        "GLint",
+        "GLint"
+      ],
+      "variadic": false
+    },
+    "void (GLint, const GLuint *)": {
+      "name": "void (GLint, const GLuint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLint",
+        "const GLuint[]"
+      ],
+      "variadic": false
+    },
+    "const GLuint[]": {
+      "name": "const GLuint[]",
+      "kind": "IncompleteArray",
+      "size": -2,
+      "alignment": 4,
+      "const": true,
+      "element": "const GLuint",
+      "count": -1
+    },
+    "void (GLint, const GLint *)": {
+      "name": "void (GLint, const GLint *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLint",
+        "const GLint[]"
+      ],
+      "variadic": false
+    },
+    "const GLint[]": {
+      "name": "const GLint[]",
+      "kind": "IncompleteArray",
+      "size": -2,
+      "alignment": 4,
+      "const": true,
+      "element": "const GLint",
+      "count": -1
+    },
+    "void (GLint, const GLfloat *)": {
+      "name": "void (GLint, const GLfloat *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLint",
+        "const GLfloat[]"
+      ],
+      "variadic": false
+    },
+    "const GLfloat[]": {
+      "name": "const GLfloat[]",
+      "kind": "IncompleteArray",
+      "size": -2,
+      "alignment": 4,
+      "const": true,
+      "element": "const GLfloat",
+      "count": -1
+    },
+    "void (GLint, GLenum)": {
+      "name": "void (GLint, GLenum)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLint",
+        "GLenum"
+      ],
+      "variadic": false
+    },
+    "void (GLsizei, const GLenum *)": {
+      "name": "void (GLsizei, const GLenum *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLsizei",
+        "const GLenum[]"
+      ],
+      "variadic": false
+    },
+    "const GLenum[]": {
+      "name": "const GLenum[]",
+      "kind": "IncompleteArray",
+      "size": -2,
+      "alignment": 4,
+      "const": true,
+      "element": "const GLenum",
+      "count": -1
+    },
+    "const GLenum": {
+      "name": "const GLenum",
+      "kind": "UInt",
+      "size": 4,
+      "alignment": 4,
+      "const": true,
+      "aliases": [
+        "GLenum"
+      ]
+    },
+    "void (GLenum, GLsizei, GLenum, const GLvoid *, GLsizei, GLint, GLuint)": {
+      "name": "void (GLenum, GLsizei, GLenum, const GLvoid *, GLsizei, GLint, GLuint)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLsizei",
+        "GLenum",
+        "const GLvoid *",
+        "GLsizei",
+        "GLint",
+        "GLuint"
+      ],
+      "variadic": false
+    },
+    "const GLvoid *": {
+      "name": "const GLvoid *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "const GLvoid"
+    },
+    "void (GLenum, GLint, GLsizei, GLsizei, GLuint)": {
+      "name": "void (GLenum, GLint, GLsizei, GLsizei, GLuint)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLsizei",
+        "GLsizei",
+        "GLuint"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLint, GLenum, GLuint, GLint, GLint, GLenum, GLboolean, GLboolean, GLboolean)": {
+      "name": "void (GLuint, GLint, GLenum, GLuint, GLint, GLint, GLenum, GLboolean, GLboolean, GLboolean)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLint",
+        "GLenum",
+        "GLuint",
+        "GLint",
+        "GLint",
+        "GLenum",
+        "GLboolean",
+        "GLboolean",
+        "GLboolean"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLint, GLenum, GLuint, GLint, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLboolean, GLboolean, GLboolean)": {
+      "name": "void (GLuint, GLint, GLenum, GLuint, GLint, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLboolean, GLboolean, GLboolean)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLint",
+        "GLenum",
+        "GLuint",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLsizei",
+        "GLsizei",
+        "GLboolean",
+        "GLboolean",
+        "GLboolean"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLint, GLenum, GLuint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLboolean, GLboolean, GLboolean)": {
+      "name": "void (GLuint, GLint, GLenum, GLuint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLboolean, GLboolean, GLboolean)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLint",
+        "GLenum",
+        "GLuint",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLsizei",
+        "GLsizei",
+        "GLsizei",
+        "GLboolean",
+        "GLboolean",
+        "GLboolean"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLsizei, GLsizei, const void *)": {
+      "name": "void (GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLsizei, GLsizei, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLsizei",
+        "GLsizei",
+        "GLsizei",
+        "GLenum",
+        "GLsizei",
+        "GLsizei",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLsizei, GLsizei, const void *)": {
+      "name": "void (GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLsizei, GLsizei, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLint",
+        "GLint",
+        "GLsizei",
+        "GLsizei",
+        "GLenum",
+        "GLsizei",
+        "GLsizei",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLint, GLenum, GLsizei, GLsizei, GLsizei, GLint, GLsizei, GLsizei, const void *)": {
+      "name": "void (GLenum, GLint, GLenum, GLsizei, GLsizei, GLsizei, GLint, GLsizei, GLsizei, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLenum",
+        "GLsizei",
+        "GLsizei",
+        "GLsizei",
+        "GLint",
+        "GLsizei",
+        "GLsizei",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "void (GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei, GLsizei, const void *)": {
+      "name": "void (GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei, GLsizei, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLenum",
+        "GLint",
+        "GLenum",
+        "GLsizei",
+        "GLsizei",
+        "GLint",
+        "GLsizei",
+        "GLsizei",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLuint)": {
+      "name": "void (GLuint, GLuint)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLuint"
+      ],
+      "variadic": false
+    },
+    "void (GLSETBLOBPROCANGLE, GLGETBLOBPROCANGLE, const void *)": {
+      "name": "void (GLSETBLOBPROCANGLE, GLGETBLOBPROCANGLE, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLSETBLOBPROCANGLE",
+        "GLGETBLOBPROCANGLE",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "GLGETBLOBPROCANGLE": {
+      "name": "GLGETBLOBPROCANGLE",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "aliases": [
+        "GLGETBLOBPROCANGLE"
+      ],
+      "element": "long (const void *, long, void *, long, const void *)",
+      "declaration": {
+        "file": "<angle>/GLES2/gl2ext_angle.h",
+        "offset": 56518
+      }
+    },
+    "long (const void *, long, void *, long, const void *)": {
+      "name": "long (const void *, long, void *, long, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "long",
+      "parameters": [
+        "const void *",
+        "long",
+        "void *",
+        "long",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "long": {
+      "name": "long",
+      "kind": "Long",
+      "size": 8,
+      "alignment": 8,
+      "const": false
+    },
+    "GLSETBLOBPROCANGLE": {
+      "name": "GLSETBLOBPROCANGLE",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "aliases": [
+        "GLSETBLOBPROCANGLE"
+      ],
+      "element": "void (const void *, long, const void *, long, const void *)",
+      "declaration": {
+        "file": "<angle>/GLES2/gl2ext_angle.h",
+        "offset": 56661
+      }
+    },
+    "void (const void *, long, const void *, long, const void *)": {
+      "name": "void (const void *, long, const void *, long, const void *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "const void *",
+        "long",
+        "const void *",
+        "long",
+        "const void *"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, GLint, const GLchar *)": {
+      "name": "void (GLuint, GLint, const GLchar *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "GLint",
+        "const GLchar *"
+      ],
+      "variadic": false
+    },
+    "void (GLuint, const GLuint *, const GLenum *)": {
+      "name": "void (GLuint, const GLuint *, const GLenum *)",
+      "kind": "FunctionProto",
+      "size": 1,
+      "alignment": 4,
+      "const": false,
+      "result": "void",
+      "parameters": [
+        "GLuint",
+        "const GLuint *",
+        "const GLenum *"
+      ],
+      "variadic": false
+    },
+    "const GLenum *": {
+      "name": "const GLenum *",
+      "kind": "Pointer",
+      "size": 8,
+      "alignment": 8,
+      "const": false,
+      "element": "const GLenum"
+    }
+  },
+  "functions": {
+    "glAcquireTexturesANGLE": {
+      "name": "glAcquireTexturesANGLE",
+      "symbol": "glAcquireTexturesANGLE",
+      "type": "void (GLuint, const GLuint *, const GLenum *)",
+      "parameters": [
+        "numTexture",
+        "textures",
+        "layouts"
+      ],
+      "format": null
+    },
+    "glBeginPixelLocalStorageANGLE": {
+      "name": "glBeginPixelLocalStorageANGLE",
+      "symbol": "glBeginPixelLocalStorageANGLE",
+      "type": "void (GLsizei, const GLenum *)",
+      "parameters": [
+        "n",
+        "loadops"
+      ],
+      "format": null
+    },
+    "glBindUniformLocationCHROMIUM": {
+      "name": "glBindUniformLocationCHROMIUM",
+      "symbol": "glBindUniformLocationCHROMIUM",
+      "type": "void (GLuint, GLint, const GLchar *)",
+      "parameters": [
+        "program",
+        "location",
+        "name"
+      ],
+      "format": null
+    },
+    "glBlobCacheCallbacksANGLE": {
+      "name": "glBlobCacheCallbacksANGLE",
+      "symbol": "glBlobCacheCallbacksANGLE",
+      "type": "void (GLSETBLOBPROCANGLE, GLGETBLOBPROCANGLE, const void *)",
+      "parameters": [
+        "",
+        "",
+        ""
+      ],
+      "format": null
+    },
+    "glCompressedCopyTextureCHROMIUM": {
+      "name": "glCompressedCopyTextureCHROMIUM",
+      "symbol": "glCompressedCopyTextureCHROMIUM",
+      "type": "void (GLuint, GLuint)",
+      "parameters": [
+        "sourceId",
+        "destId"
+      ],
+      "format": null
+    },
+    "glCompressedTexImage2DRobustANGLE": {
+      "name": "glCompressedTexImage2DRobustANGLE",
+      "symbol": "glCompressedTexImage2DRobustANGLE",
+      "type": "void (GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei, GLsizei, const void *)",
+      "parameters": [
+        "target",
+        "level",
+        "internalformat",
+        "width",
+        "height",
+        "border",
+        "imageSize",
+        "bufSize",
+        "data"
+      ],
+      "format": null
+    },
+    "glCompressedTexImage3DRobustANGLE": {
+      "name": "glCompressedTexImage3DRobustANGLE",
+      "symbol": "glCompressedTexImage3DRobustANGLE",
+      "type": "void (GLenum, GLint, GLenum, GLsizei, GLsizei, GLsizei, GLint, GLsizei, GLsizei, const void *)",
+      "parameters": [
+        "target",
+        "level",
+        "internalformat",
+        "width",
+        "height",
+        "depth",
+        "border",
+        "imageSize",
+        "bufSize",
+        "data"
+      ],
+      "format": null
+    },
+    "glCompressedTexSubImage2DRobustANGLE": {
+      "name": "glCompressedTexSubImage2DRobustANGLE",
+      "symbol": "glCompressedTexSubImage2DRobustANGLE",
+      "type": "void (GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLsizei, GLsizei, const void *)",
+      "parameters": [
+        "target",
+        "level",
+        "xoffset",
+        "yoffset",
+        "width",
+        "height",
+        "format",
+        "imageSize",
+        "bufSize",
+        "data"
+      ],
+      "format": null
+    },
+    "glCompressedTexSubImage3DRobustANGLE": {
+      "name": "glCompressedTexSubImage3DRobustANGLE",
+      "symbol": "glCompressedTexSubImage3DRobustANGLE",
+      "type": "void (GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLsizei, GLsizei, const void *)",
+      "parameters": [
+        "target",
+        "level",
+        "xoffset",
+        "yoffset",
+        "zoffset",
+        "width",
+        "height",
+        "depth",
+        "format",
+        "imageSize",
+        "bufSize",
+        "data"
+      ],
+      "format": null
+    },
+    "glCopySubTexture3DANGLE": {
+      "name": "glCopySubTexture3DANGLE",
+      "symbol": "glCopySubTexture3DANGLE",
+      "type": "void (GLuint, GLint, GLenum, GLuint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLboolean, GLboolean, GLboolean)",
+      "parameters": [
+        "sourceId",
+        "sourceLevel",
+        "destTarget",
+        "destId",
+        "destLevel",
+        "xoffset",
+        "yoffset",
+        "zoffset",
+        "x",
+        "y",
+        "z",
+        "width",
+        "height",
+        "depth",
+        "unpackFlipY",
+        "unpackPremultiplyAlpha",
+        "unpackUnmultiplyAlpha"
+      ],
+      "format": null
+    },
+    "glCopySubTextureCHROMIUM": {
+      "name": "glCopySubTextureCHROMIUM",
+      "symbol": "glCopySubTextureCHROMIUM",
+      "type": "void (GLuint, GLint, GLenum, GLuint, GLint, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLboolean, GLboolean, GLboolean)",
+      "parameters": [
+        "sourceId",
+        "sourceLevel",
+        "destTarget",
+        "destId",
+        "destLevel",
+        "xoffset",
+        "yoffset",
+        "x",
+        "y",
+        "width",
+        "height",
+        "unpackFlipY",
+        "unpackPremultiplyAlpha",
+        "unpackUnmultiplyAlpha"
+      ],
+      "format": null
+    },
+    "glCopyTexture3DANGLE": {
+      "name": "glCopyTexture3DANGLE",
+      "symbol": "glCopyTexture3DANGLE",
+      "type": "void (GLuint, GLint, GLenum, GLuint, GLint, GLint, GLenum, GLboolean, GLboolean, GLboolean)",
+      "parameters": [
+        "sourceId",
+        "sourceLevel",
+        "destTarget",
+        "destId",
+        "destLevel",
+        "internalFormat",
+        "destType",
+        "unpackFlipY",
+        "unpackPremultiplyAlpha",
+        "unpackUnmultiplyAlpha"
+      ],
+      "format": null
+    },
+    "glCopyTextureCHROMIUM": {
+      "name": "glCopyTextureCHROMIUM",
+      "symbol": "glCopyTextureCHROMIUM",
+      "type": "void (GLuint, GLint, GLenum, GLuint, GLint, GLint, GLenum, GLboolean, GLboolean, GLboolean)",
+      "parameters": [
+        "sourceId",
+        "sourceLevel",
+        "destTarget",
+        "destId",
+        "destLevel",
+        "internalFormat",
+        "destType",
+        "unpackFlipY",
+        "unpackPremultiplyAlpha",
+        "unpackUnmultiplyAlpha"
+      ],
+      "format": null
+    },
+    "glCoverageModulationCHROMIUM": {
+      "name": "glCoverageModulationCHROMIUM",
+      "symbol": "glCoverageModulationCHROMIUM",
+      "type": "void (GLenum)",
+      "parameters": [
+        "components"
+      ],
+      "format": null
+    },
+    "glDisableExtensionANGLE": {
+      "name": "glDisableExtensionANGLE",
+      "symbol": "glDisableExtensionANGLE",
+      "type": "void (const GLchar *)",
+      "parameters": [
+        "name"
+      ],
+      "format": null
+    },
+    "glDrawArraysInstancedBaseInstanceANGLE": {
+      "name": "glDrawArraysInstancedBaseInstanceANGLE",
+      "symbol": "glDrawArraysInstancedBaseInstanceANGLE",
+      "type": "void (GLenum, GLint, GLsizei, GLsizei, GLuint)",
+      "parameters": [
+        "mode",
+        "first",
+        "count",
+        "instanceCount",
+        "baseInstance"
+      ],
+      "format": null
+    },
+    "glDrawElementsInstancedBaseVertexBaseInstanceANGLE": {
+      "name": "glDrawElementsInstancedBaseVertexBaseInstanceANGLE",
+      "symbol": "glDrawElementsInstancedBaseVertexBaseInstanceANGLE",
+      "type": "void (GLenum, GLsizei, GLenum, const GLvoid *, GLsizei, GLint, GLuint)",
+      "parameters": [
+        "mode",
+        "count",
+        "type",
+        "indices",
+        "instanceCount",
+        "baseVertex",
+        "baseInstance"
+      ],
+      "format": null
+    },
+    "glEndPixelLocalStorageANGLE": {
+      "name": "glEndPixelLocalStorageANGLE",
+      "symbol": "glEndPixelLocalStorageANGLE",
+      "type": "void (GLsizei, const GLenum *)",
+      "parameters": [
+        "n",
+        "storeops"
+      ],
+      "format": null
+    },
+    "glFramebufferMemorylessPixelLocalStorageANGLE": {
+      "name": "glFramebufferMemorylessPixelLocalStorageANGLE",
+      "symbol": "glFramebufferMemorylessPixelLocalStorageANGLE",
+      "type": "void (GLint, GLenum)",
+      "parameters": [
+        "plane",
+        "internalformat"
+      ],
+      "format": null
+    },
+    "glFramebufferPixelLocalClearValuefvANGLE": {
+      "name": "glFramebufferPixelLocalClearValuefvANGLE",
+      "symbol": "glFramebufferPixelLocalClearValuefvANGLE",
+      "type": "void (GLint, const GLfloat *)",
+      "parameters": [
+        "plane",
+        "value"
+      ],
+      "format": null
+    },
+    "glFramebufferPixelLocalClearValueivANGLE": {
+      "name": "glFramebufferPixelLocalClearValueivANGLE",
+      "symbol": "glFramebufferPixelLocalClearValueivANGLE",
+      "type": "void (GLint, const GLint *)",
+      "parameters": [
+        "plane",
+        "value"
+      ],
+      "format": null
+    },
+    "glFramebufferPixelLocalClearValueuivANGLE": {
+      "name": "glFramebufferPixelLocalClearValueuivANGLE",
+      "symbol": "glFramebufferPixelLocalClearValueuivANGLE",
+      "type": "void (GLint, const GLuint *)",
+      "parameters": [
+        "plane",
+        "value"
+      ],
+      "format": null
+    },
+    "glFramebufferPixelLocalStorageInterruptANGLE": {
+      "name": "glFramebufferPixelLocalStorageInterruptANGLE",
+      "symbol": "glFramebufferPixelLocalStorageInterruptANGLE",
+      "type": "void (void)",
+      "parameters": [],
+      "format": null
+    },
+    "glFramebufferPixelLocalStorageRestoreANGLE": {
+      "name": "glFramebufferPixelLocalStorageRestoreANGLE",
+      "symbol": "glFramebufferPixelLocalStorageRestoreANGLE",
+      "type": "void (void)",
+      "parameters": [],
+      "format": null
+    },
+    "glFramebufferTexturePixelLocalStorageANGLE": {
+      "name": "glFramebufferTexturePixelLocalStorageANGLE",
+      "symbol": "glFramebufferTexturePixelLocalStorageANGLE",
+      "type": "void (GLint, GLuint, GLint, GLint)",
+      "parameters": [
+        "plane",
+        "backingtexture",
+        "level",
+        "layer"
+      ],
+      "format": null
+    },
+    "glGetActiveUniformBlockivRobustANGLE": {
+      "name": "glGetActiveUniformBlockivRobustANGLE",
+      "symbol": "glGetActiveUniformBlockivRobustANGLE",
+      "type": "void (GLuint, GLuint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "program",
+        "uniformBlockIndex",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetBooleani_vRobustANGLE": {
+      "name": "glGetBooleani_vRobustANGLE",
+      "symbol": "glGetBooleani_vRobustANGLE",
+      "type": "void (GLenum, GLuint, GLsizei, GLsizei *, GLboolean *)",
+      "parameters": [
+        "target",
+        "index",
+        "bufSize",
+        "length",
+        "data"
+      ],
+      "format": null
+    },
+    "glGetBooleanvRobustANGLE": {
+      "name": "glGetBooleanvRobustANGLE",
+      "symbol": "glGetBooleanvRobustANGLE",
+      "type": "void (GLenum, GLsizei, GLsizei *, GLboolean *)",
+      "parameters": [
+        "pname",
+        "bufSize",
+        "length",
+        "data"
+      ],
+      "format": null
+    },
+    "glGetBufferParameteri64vRobustANGLE": {
+      "name": "glGetBufferParameteri64vRobustANGLE",
+      "symbol": "glGetBufferParameteri64vRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, GLsizei *, GLint64 *)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetBufferParameterivRobustANGLE": {
+      "name": "glGetBufferParameterivRobustANGLE",
+      "symbol": "glGetBufferParameterivRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetBufferPointervRobustANGLE": {
+      "name": "glGetBufferPointervRobustANGLE",
+      "symbol": "glGetBufferPointervRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, GLsizei *, void **)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetCompressedTexImageANGLE": {
+      "name": "glGetCompressedTexImageANGLE",
+      "symbol": "glGetCompressedTexImageANGLE",
+      "type": "void (GLenum, GLint, void *)",
+      "parameters": [
+        "target",
+        "level",
+        "pixels"
+      ],
+      "format": null
+    },
+    "glGetFloatvRobustANGLE": {
+      "name": "glGetFloatvRobustANGLE",
+      "symbol": "glGetFloatvRobustANGLE",
+      "type": "void (GLenum, GLsizei, GLsizei *, GLfloat *)",
+      "parameters": [
+        "pname",
+        "bufSize",
+        "length",
+        "data"
+      ],
+      "format": null
+    },
+    "glGetFramebufferAttachmentParameterivRobustANGLE": {
+      "name": "glGetFramebufferAttachmentParameterivRobustANGLE",
+      "symbol": "glGetFramebufferAttachmentParameterivRobustANGLE",
+      "type": "void (GLenum, GLenum, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "target",
+        "attachment",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetFramebufferParameterivRobustANGLE": {
+      "name": "glGetFramebufferParameterivRobustANGLE",
+      "symbol": "glGetFramebufferParameterivRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetFramebufferPixelLocalStorageParameterfvANGLE": {
+      "name": "glGetFramebufferPixelLocalStorageParameterfvANGLE",
+      "symbol": "glGetFramebufferPixelLocalStorageParameterfvANGLE",
+      "type": "void (GLint, GLenum, GLfloat *)",
+      "parameters": [
+        "plane",
+        "pname",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetFramebufferPixelLocalStorageParameterfvRobustANGLE": {
+      "name": "glGetFramebufferPixelLocalStorageParameterfvRobustANGLE",
+      "symbol": "glGetFramebufferPixelLocalStorageParameterfvRobustANGLE",
+      "type": "void (GLint, GLenum, GLsizei, GLsizei *, GLfloat *)",
+      "parameters": [
+        "plane",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetFramebufferPixelLocalStorageParameterivANGLE": {
+      "name": "glGetFramebufferPixelLocalStorageParameterivANGLE",
+      "symbol": "glGetFramebufferPixelLocalStorageParameterivANGLE",
+      "type": "void (GLint, GLenum, GLint *)",
+      "parameters": [
+        "plane",
+        "pname",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetFramebufferPixelLocalStorageParameterivRobustANGLE": {
+      "name": "glGetFramebufferPixelLocalStorageParameterivRobustANGLE",
+      "symbol": "glGetFramebufferPixelLocalStorageParameterivRobustANGLE",
+      "type": "void (GLint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "plane",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetInteger64i_vRobustANGLE": {
+      "name": "glGetInteger64i_vRobustANGLE",
+      "symbol": "glGetInteger64i_vRobustANGLE",
+      "type": "void (GLenum, GLuint, GLsizei, GLsizei *, GLint64 *)",
+      "parameters": [
+        "target",
+        "index",
+        "bufSize",
+        "length",
+        "data"
+      ],
+      "format": null
+    },
+    "glGetInteger64vRobustANGLE": {
+      "name": "glGetInteger64vRobustANGLE",
+      "symbol": "glGetInteger64vRobustANGLE",
+      "type": "void (GLenum, GLsizei, GLsizei *, GLint64 *)",
+      "parameters": [
+        "pname",
+        "bufSize",
+        "length",
+        "data"
+      ],
+      "format": null
+    },
+    "glGetIntegeri_vRobustANGLE": {
+      "name": "glGetIntegeri_vRobustANGLE",
+      "symbol": "glGetIntegeri_vRobustANGLE",
+      "type": "void (GLenum, GLuint, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "target",
+        "index",
+        "bufSize",
+        "length",
+        "data"
+      ],
+      "format": null
+    },
+    "glGetIntegervRobustANGLE": {
+      "name": "glGetIntegervRobustANGLE",
+      "symbol": "glGetIntegervRobustANGLE",
+      "type": "void (GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "pname",
+        "bufSize",
+        "length",
+        "data"
+      ],
+      "format": null
+    },
+    "glGetInternalformativRobustANGLE": {
+      "name": "glGetInternalformativRobustANGLE",
+      "symbol": "glGetInternalformativRobustANGLE",
+      "type": "void (GLenum, GLenum, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "target",
+        "internalformat",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetMultisamplefvANGLE": {
+      "name": "glGetMultisamplefvANGLE",
+      "symbol": "glGetMultisamplefvANGLE",
+      "type": "void (GLenum, GLuint, GLfloat *)",
+      "parameters": [
+        "pname",
+        "index",
+        "val"
+      ],
+      "format": null
+    },
+    "glGetMultisamplefvRobustANGLE": {
+      "name": "glGetMultisamplefvRobustANGLE",
+      "symbol": "glGetMultisamplefvRobustANGLE",
+      "type": "void (GLenum, GLuint, GLsizei, GLsizei *, GLfloat *)",
+      "parameters": [
+        "pname",
+        "index",
+        "bufSize",
+        "length",
+        "val"
+      ],
+      "format": null
+    },
+    "glGetPointervANGLE": {
+      "name": "glGetPointervANGLE",
+      "symbol": "glGetPointervANGLE",
+      "type": "void (GLenum, void **)",
+      "parameters": [
+        "pname",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetPointervRobustANGLERobustANGLE": {
+      "name": "glGetPointervRobustANGLERobustANGLE",
+      "symbol": "glGetPointervRobustANGLERobustANGLE",
+      "type": "void (GLenum, GLsizei, GLsizei *, void **)",
+      "parameters": [
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetProgramInterfaceivRobustANGLE": {
+      "name": "glGetProgramInterfaceivRobustANGLE",
+      "symbol": "glGetProgramInterfaceivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "program",
+        "programInterface",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetProgramivRobustANGLE": {
+      "name": "glGetProgramivRobustANGLE",
+      "symbol": "glGetProgramivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "program",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetQueryObjecti64vRobustANGLE": {
+      "name": "glGetQueryObjecti64vRobustANGLE",
+      "symbol": "glGetQueryObjecti64vRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLint64 *)",
+      "parameters": [
+        "id",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetQueryObjectivRobustANGLE": {
+      "name": "glGetQueryObjectivRobustANGLE",
+      "symbol": "glGetQueryObjectivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "id",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetQueryObjectui64vRobustANGLE": {
+      "name": "glGetQueryObjectui64vRobustANGLE",
+      "symbol": "glGetQueryObjectui64vRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLuint64 *)",
+      "parameters": [
+        "id",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetQueryObjectuivRobustANGLE": {
+      "name": "glGetQueryObjectuivRobustANGLE",
+      "symbol": "glGetQueryObjectuivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLuint *)",
+      "parameters": [
+        "id",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetQueryivRobustANGLE": {
+      "name": "glGetQueryivRobustANGLE",
+      "symbol": "glGetQueryivRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetRenderbufferImageANGLE": {
+      "name": "glGetRenderbufferImageANGLE",
+      "symbol": "glGetRenderbufferImageANGLE",
+      "type": "void (GLenum, GLenum, GLenum, void *)",
+      "parameters": [
+        "target",
+        "format",
+        "type",
+        "pixels"
+      ],
+      "format": null
+    },
+    "glGetRenderbufferParameterivRobustANGLE": {
+      "name": "glGetRenderbufferParameterivRobustANGLE",
+      "symbol": "glGetRenderbufferParameterivRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetSamplerParameterIivRobustANGLE": {
+      "name": "glGetSamplerParameterIivRobustANGLE",
+      "symbol": "glGetSamplerParameterIivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "sampler",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetSamplerParameterIuivRobustANGLE": {
+      "name": "glGetSamplerParameterIuivRobustANGLE",
+      "symbol": "glGetSamplerParameterIuivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLuint *)",
+      "parameters": [
+        "sampler",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetSamplerParameterfvRobustANGLE": {
+      "name": "glGetSamplerParameterfvRobustANGLE",
+      "symbol": "glGetSamplerParameterfvRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLfloat *)",
+      "parameters": [
+        "sampler",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetSamplerParameterivRobustANGLE": {
+      "name": "glGetSamplerParameterivRobustANGLE",
+      "symbol": "glGetSamplerParameterivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "sampler",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetShaderivRobustANGLE": {
+      "name": "glGetShaderivRobustANGLE",
+      "symbol": "glGetShaderivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "shader",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetTexImageANGLE": {
+      "name": "glGetTexImageANGLE",
+      "symbol": "glGetTexImageANGLE",
+      "type": "void (GLenum, GLint, GLenum, GLenum, void *)",
+      "parameters": [
+        "target",
+        "level",
+        "format",
+        "type",
+        "pixels"
+      ],
+      "format": null
+    },
+    "glGetTexLevelParameterfvANGLE": {
+      "name": "glGetTexLevelParameterfvANGLE",
+      "symbol": "glGetTexLevelParameterfvANGLE",
+      "type": "void (GLenum, GLint, GLenum, GLfloat *)",
+      "parameters": [
+        "target",
+        "level",
+        "pname",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetTexLevelParameterfvRobustANGLE": {
+      "name": "glGetTexLevelParameterfvRobustANGLE",
+      "symbol": "glGetTexLevelParameterfvRobustANGLE",
+      "type": "void (GLenum, GLint, GLenum, GLsizei, GLsizei *, GLfloat *)",
+      "parameters": [
+        "target",
+        "level",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetTexLevelParameterivANGLE": {
+      "name": "glGetTexLevelParameterivANGLE",
+      "symbol": "glGetTexLevelParameterivANGLE",
+      "type": "void (GLenum, GLint, GLenum, GLint *)",
+      "parameters": [
+        "target",
+        "level",
+        "pname",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetTexLevelParameterivRobustANGLE": {
+      "name": "glGetTexLevelParameterivRobustANGLE",
+      "symbol": "glGetTexLevelParameterivRobustANGLE",
+      "type": "void (GLenum, GLint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "target",
+        "level",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetTexParameterIivRobustANGLE": {
+      "name": "glGetTexParameterIivRobustANGLE",
+      "symbol": "glGetTexParameterIivRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetTexParameterIuivRobustANGLE": {
+      "name": "glGetTexParameterIuivRobustANGLE",
+      "symbol": "glGetTexParameterIuivRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, GLsizei *, GLuint *)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetTexParameterfvRobustANGLE": {
+      "name": "glGetTexParameterfvRobustANGLE",
+      "symbol": "glGetTexParameterfvRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, GLsizei *, GLfloat *)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetTexParameterivRobustANGLE": {
+      "name": "glGetTexParameterivRobustANGLE",
+      "symbol": "glGetTexParameterivRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetUniformfvRobustANGLE": {
+      "name": "glGetUniformfvRobustANGLE",
+      "symbol": "glGetUniformfvRobustANGLE",
+      "type": "void (GLuint, GLint, GLsizei, GLsizei *, GLfloat *)",
+      "parameters": [
+        "program",
+        "location",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetUniformivRobustANGLE": {
+      "name": "glGetUniformivRobustANGLE",
+      "symbol": "glGetUniformivRobustANGLE",
+      "type": "void (GLuint, GLint, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "program",
+        "location",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetUniformuivRobustANGLE": {
+      "name": "glGetUniformuivRobustANGLE",
+      "symbol": "glGetUniformuivRobustANGLE",
+      "type": "void (GLuint, GLint, GLsizei, GLsizei *, GLuint *)",
+      "parameters": [
+        "program",
+        "location",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetVertexAttribIivRobustANGLE": {
+      "name": "glGetVertexAttribIivRobustANGLE",
+      "symbol": "glGetVertexAttribIivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "index",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetVertexAttribIuivRobustANGLE": {
+      "name": "glGetVertexAttribIuivRobustANGLE",
+      "symbol": "glGetVertexAttribIuivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLuint *)",
+      "parameters": [
+        "index",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetVertexAttribPointervRobustANGLE": {
+      "name": "glGetVertexAttribPointervRobustANGLE",
+      "symbol": "glGetVertexAttribPointervRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, void **)",
+      "parameters": [
+        "index",
+        "pname",
+        "bufSize",
+        "length",
+        "pointer"
+      ],
+      "format": null
+    },
+    "glGetVertexAttribfvRobustANGLE": {
+      "name": "glGetVertexAttribfvRobustANGLE",
+      "symbol": "glGetVertexAttribfvRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLfloat *)",
+      "parameters": [
+        "index",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetVertexAttribivRobustANGLE": {
+      "name": "glGetVertexAttribivRobustANGLE",
+      "symbol": "glGetVertexAttribivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "index",
+        "pname",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetnUniformfvRobustANGLE": {
+      "name": "glGetnUniformfvRobustANGLE",
+      "symbol": "glGetnUniformfvRobustANGLE",
+      "type": "void (GLuint, GLint, GLsizei, GLsizei *, GLfloat *)",
+      "parameters": [
+        "program",
+        "location",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetnUniformivRobustANGLE": {
+      "name": "glGetnUniformivRobustANGLE",
+      "symbol": "glGetnUniformivRobustANGLE",
+      "type": "void (GLuint, GLint, GLsizei, GLsizei *, GLint *)",
+      "parameters": [
+        "program",
+        "location",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glGetnUniformuivRobustANGLE": {
+      "name": "glGetnUniformuivRobustANGLE",
+      "symbol": "glGetnUniformuivRobustANGLE",
+      "type": "void (GLuint, GLint, GLsizei, GLsizei *, GLuint *)",
+      "parameters": [
+        "program",
+        "location",
+        "bufSize",
+        "length",
+        "params"
+      ],
+      "format": null
+    },
+    "glImportMemoryZirconHandleANGLE": {
+      "name": "glImportMemoryZirconHandleANGLE",
+      "symbol": "glImportMemoryZirconHandleANGLE",
+      "type": "void (GLuint, GLuint64, GLenum, GLuint)",
+      "parameters": [
+        "memory",
+        "size",
+        "handleType",
+        "handle"
+      ],
+      "format": null
+    },
+    "glImportSemaphoreZirconHandleANGLE": {
+      "name": "glImportSemaphoreZirconHandleANGLE",
+      "symbol": "glImportSemaphoreZirconHandleANGLE",
+      "type": "void (GLuint, GLenum, GLuint)",
+      "parameters": [
+        "memory",
+        "handleType",
+        "handle"
+      ],
+      "format": null
+    },
+    "glInvalidateTextureANGLE": {
+      "name": "glInvalidateTextureANGLE",
+      "symbol": "glInvalidateTextureANGLE",
+      "type": "void (GLenum)",
+      "parameters": [
+        "target"
+      ],
+      "format": null
+    },
+    "glLogicOpANGLE": {
+      "name": "glLogicOpANGLE",
+      "symbol": "glLogicOpANGLE",
+      "type": "void (GLenum)",
+      "parameters": [
+        ""
+      ],
+      "format": null
+    },
+    "glLoseContextCHROMIUM": {
+      "name": "glLoseContextCHROMIUM",
+      "symbol": "glLoseContextCHROMIUM",
+      "type": "void (GLenum, GLenum)",
+      "parameters": [
+        "current",
+        "other"
+      ],
+      "format": null
+    },
+    "glMatrixLoadIdentityEXT": {
+      "name": "glMatrixLoadIdentityEXT",
+      "symbol": "glMatrixLoadIdentityEXT",
+      "type": "void (GLenum)",
+      "parameters": [
+        "mode"
+      ],
+      "format": null
+    },
+    "glMatrixLoadfEXT": {
+      "name": "glMatrixLoadfEXT",
+      "symbol": "glMatrixLoadfEXT",
+      "type": "void (GLenum, const GLfloat *)",
+      "parameters": [
+        "mode",
+        "m"
+      ],
+      "format": null
+    },
+    "glMultiDrawArraysANGLE": {
+      "name": "glMultiDrawArraysANGLE",
+      "symbol": "glMultiDrawArraysANGLE",
+      "type": "void (GLenum, const GLint *, const GLsizei *, GLsizei)",
+      "parameters": [
+        "mode",
+        "firsts",
+        "counts",
+        "drawcount"
+      ],
+      "format": null
+    },
+    "glMultiDrawArraysInstancedANGLE": {
+      "name": "glMultiDrawArraysInstancedANGLE",
+      "symbol": "glMultiDrawArraysInstancedANGLE",
+      "type": "void (GLenum, const GLint *, const GLsizei *, const GLsizei *, GLsizei)",
+      "parameters": [
+        "mode",
+        "firsts",
+        "counts",
+        "instanceCounts",
+        "drawcount"
+      ],
+      "format": null
+    },
+    "glMultiDrawArraysInstancedBaseInstanceANGLE": {
+      "name": "glMultiDrawArraysInstancedBaseInstanceANGLE",
+      "symbol": "glMultiDrawArraysInstancedBaseInstanceANGLE",
+      "type": "void (GLenum, const GLsizei *, const GLsizei *, const GLsizei *, const GLuint *, GLsizei)",
+      "parameters": [
+        "mode",
+        "firsts",
+        "counts",
+        "instanceCounts",
+        "baseInstances",
+        "drawCount"
+      ],
+      "format": null
+    },
+    "glMultiDrawElementsANGLE": {
+      "name": "glMultiDrawElementsANGLE",
+      "symbol": "glMultiDrawElementsANGLE",
+      "type": "void (GLenum, const GLsizei *, GLenum, const GLvoid *const *, GLsizei)",
+      "parameters": [
+        "mode",
+        "counts",
+        "type",
+        "indices",
+        "drawcount"
+      ],
+      "format": null
+    },
+    "glMultiDrawElementsInstancedANGLE": {
+      "name": "glMultiDrawElementsInstancedANGLE",
+      "symbol": "glMultiDrawElementsInstancedANGLE",
+      "type": "void (GLenum, const GLsizei *, GLenum, const GLvoid *const *, const GLsizei *, GLsizei)",
+      "parameters": [
+        "mode",
+        "counts",
+        "type",
+        "indices",
+        "instanceCounts",
+        "drawcount"
+      ],
+      "format": null
+    },
+    "glMultiDrawElementsInstancedBaseVertexBaseInstanceANGLE": {
+      "name": "glMultiDrawElementsInstancedBaseVertexBaseInstanceANGLE",
+      "symbol": "glMultiDrawElementsInstancedBaseVertexBaseInstanceANGLE",
+      "type": "void (GLenum, const GLsizei *, GLenum, const GLvoid *const *, const GLsizei *, const GLint *, const GLuint *, GLsizei)",
+      "parameters": [
+        "mode",
+        "counts",
+        "type",
+        "indices",
+        "instanceCounts",
+        "baseVertices",
+        "baseInstances",
+        "drawCount"
+      ],
+      "format": null
+    },
+    "glPixelLocalStorageBarrierANGLE": {
+      "name": "glPixelLocalStorageBarrierANGLE",
+      "symbol": "glPixelLocalStorageBarrierANGLE",
+      "type": "void (void)",
+      "parameters": [],
+      "format": null
+    },
+    "glPolygonModeANGLE": {
+      "name": "glPolygonModeANGLE",
+      "symbol": "glPolygonModeANGLE",
+      "type": "void (GLenum, GLenum)",
+      "parameters": [
+        "face",
+        "mode"
+      ],
+      "format": null
+    },
+    "glProvokingVertexANGLE": {
+      "name": "glProvokingVertexANGLE",
+      "symbol": "glProvokingVertexANGLE",
+      "type": "void (GLenum)",
+      "parameters": [
+        "provokeMode"
+      ],
+      "format": null
+    },
+    "glReadPixelsRobustANGLE": {
+      "name": "glReadPixelsRobustANGLE",
+      "symbol": "glReadPixelsRobustANGLE",
+      "type": "void (GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, GLsizei, GLsizei *, GLsizei *, GLsizei *, void *)",
+      "parameters": [
+        "x",
+        "y",
+        "width",
+        "height",
+        "format",
+        "type",
+        "bufSize",
+        "length",
+        "columns",
+        "rows",
+        "pixels"
+      ],
+      "format": null
+    },
+    "glReadnPixelsRobustANGLE": {
+      "name": "glReadnPixelsRobustANGLE",
+      "symbol": "glReadnPixelsRobustANGLE",
+      "type": "void (GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, GLsizei, GLsizei *, GLsizei *, GLsizei *, void *)",
+      "parameters": [
+        "x",
+        "y",
+        "width",
+        "height",
+        "format",
+        "type",
+        "bufSize",
+        "length",
+        "columns",
+        "rows",
+        "data"
+      ],
+      "format": null
+    },
+    "glReleaseTexturesANGLE": {
+      "name": "glReleaseTexturesANGLE",
+      "symbol": "glReleaseTexturesANGLE",
+      "type": "void (GLuint, const GLuint *, GLenum *)",
+      "parameters": [
+        "numTexture",
+        "textures",
+        "layouts"
+      ],
+      "format": null
+    },
+    "glRequestExtensionANGLE": {
+      "name": "glRequestExtensionANGLE",
+      "symbol": "glRequestExtensionANGLE",
+      "type": "void (const GLchar *)",
+      "parameters": [
+        "name"
+      ],
+      "format": null
+    },
+    "glSampleMaskiANGLE": {
+      "name": "glSampleMaskiANGLE",
+      "symbol": "glSampleMaskiANGLE",
+      "type": "void (GLuint, GLbitfield)",
+      "parameters": [
+        "maskNumber",
+        "mask"
+      ],
+      "format": null
+    },
+    "glSamplerParameterIivRobustANGLE": {
+      "name": "glSamplerParameterIivRobustANGLE",
+      "symbol": "glSamplerParameterIivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, const GLint *)",
+      "parameters": [
+        "sampler",
+        "pname",
+        "bufSize",
+        "param"
+      ],
+      "format": null
+    },
+    "glSamplerParameterIuivRobustANGLE": {
+      "name": "glSamplerParameterIuivRobustANGLE",
+      "symbol": "glSamplerParameterIuivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, const GLuint *)",
+      "parameters": [
+        "sampler",
+        "pname",
+        "bufSize",
+        "param"
+      ],
+      "format": null
+    },
+    "glSamplerParameterfvRobustANGLE": {
+      "name": "glSamplerParameterfvRobustANGLE",
+      "symbol": "glSamplerParameterfvRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, const GLfloat *)",
+      "parameters": [
+        "sampler",
+        "pname",
+        "bufSize",
+        "param"
+      ],
+      "format": null
+    },
+    "glSamplerParameterivRobustANGLE": {
+      "name": "glSamplerParameterivRobustANGLE",
+      "symbol": "glSamplerParameterivRobustANGLE",
+      "type": "void (GLuint, GLenum, GLsizei, const GLint *)",
+      "parameters": [
+        "sampler",
+        "pname",
+        "bufSize",
+        "param"
+      ],
+      "format": null
+    },
+    "glTexImage2DExternalANGLE": {
+      "name": "glTexImage2DExternalANGLE",
+      "symbol": "glTexImage2DExternalANGLE",
+      "type": "void (GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum)",
+      "parameters": [
+        "target",
+        "level",
+        "internalformat",
+        "width",
+        "height",
+        "border",
+        "format",
+        "type"
+      ],
+      "format": null
+    },
+    "glTexImage2DRobustANGLE": {
+      "name": "glTexImage2DRobustANGLE",
+      "symbol": "glTexImage2DRobustANGLE",
+      "type": "void (GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, GLsizei, const void *)",
+      "parameters": [
+        "target",
+        "level",
+        "internalformat",
+        "width",
+        "height",
+        "border",
+        "format",
+        "type",
+        "bufSize",
+        "pixels"
+      ],
+      "format": null
+    },
+    "glTexImage3DRobustANGLE": {
+      "name": "glTexImage3DRobustANGLE",
+      "symbol": "glTexImage3DRobustANGLE",
+      "type": "void (GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum, GLsizei, const void *)",
+      "parameters": [
+        "target",
+        "level",
+        "internalformat",
+        "width",
+        "height",
+        "depth",
+        "border",
+        "format",
+        "type",
+        "bufSize",
+        "pixels"
+      ],
+      "format": null
+    },
+    "glTexParameterIivRobustANGLE": {
+      "name": "glTexParameterIivRobustANGLE",
+      "symbol": "glTexParameterIivRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, const GLint *)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "params"
+      ],
+      "format": null
+    },
+    "glTexParameterIuivRobustANGLE": {
+      "name": "glTexParameterIuivRobustANGLE",
+      "symbol": "glTexParameterIuivRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, const GLuint *)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "params"
+      ],
+      "format": null
+    },
+    "glTexParameterfvRobustANGLE": {
+      "name": "glTexParameterfvRobustANGLE",
+      "symbol": "glTexParameterfvRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, const GLfloat *)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "params"
+      ],
+      "format": null
+    },
+    "glTexParameterivRobustANGLE": {
+      "name": "glTexParameterivRobustANGLE",
+      "symbol": "glTexParameterivRobustANGLE",
+      "type": "void (GLenum, GLenum, GLsizei, const GLint *)",
+      "parameters": [
+        "target",
+        "pname",
+        "bufSize",
+        "params"
+      ],
+      "format": null
+    },
+    "glTexStorage2DMultisampleANGLE": {
+      "name": "glTexStorage2DMultisampleANGLE",
+      "symbol": "glTexStorage2DMultisampleANGLE",
+      "type": "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLboolean)",
+      "parameters": [
+        "target",
+        "samples",
+        "internalformat",
+        "width",
+        "height",
+        "fixedsamplelocations"
+      ],
+      "format": null
+    },
+    "glTexStorageMemFlags2DANGLE": {
+      "name": "glTexStorageMemFlags2DANGLE",
+      "symbol": "glTexStorageMemFlags2DANGLE",
+      "type": "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLuint, GLuint64, GLbitfield, GLbitfield, const void *)",
+      "parameters": [
+        "target",
+        "levels",
+        "internalFormat",
+        "width",
+        "height",
+        "memory",
+        "offset",
+        "createFlags",
+        "usageFlags",
+        "imageCreateInfoPNext"
+      ],
+      "format": null
+    },
+    "glTexStorageMemFlags2DMultisampleANGLE": {
+      "name": "glTexStorageMemFlags2DMultisampleANGLE",
+      "symbol": "glTexStorageMemFlags2DMultisampleANGLE",
+      "type": "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLboolean, GLuint, GLuint64, GLbitfield, GLbitfield, const void *)",
+      "parameters": [
+        "target",
+        "samples",
+        "internalFormat",
+        "width",
+        "height",
+        "fixedSampleLocations",
+        "memory",
+        "offset",
+        "createFlags",
+        "usageFlags",
+        "imageCreateInfoPNext"
+      ],
+      "format": null
+    },
+    "glTexStorageMemFlags3DANGLE": {
+      "name": "glTexStorageMemFlags3DANGLE",
+      "symbol": "glTexStorageMemFlags3DANGLE",
+      "type": "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLsizei, GLuint, GLuint64, GLbitfield, GLbitfield, const void *)",
+      "parameters": [
+        "target",
+        "levels",
+        "internalFormat",
+        "width",
+        "height",
+        "depth",
+        "memory",
+        "offset",
+        "createFlags",
+        "usageFlags",
+        "imageCreateInfoPNext"
+      ],
+      "format": null
+    },
+    "glTexStorageMemFlags3DMultisampleANGLE": {
+      "name": "glTexStorageMemFlags3DMultisampleANGLE",
+      "symbol": "glTexStorageMemFlags3DMultisampleANGLE",
+      "type": "void (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLsizei, GLboolean, GLuint, GLuint64, GLbitfield, GLbitfield, const void *)",
+      "parameters": [
+        "target",
+        "samples",
+        "internalFormat",
+        "width",
+        "height",
+        "depth",
+        "fixedSampleLocations",
+        "memory",
+        "offset",
+        "createFlags",
+        "usageFlags",
+        "imageCreateInfoPNext"
+      ],
+      "format": null
+    },
+    "glTexSubImage2DRobustANGLE": {
+      "name": "glTexSubImage2DRobustANGLE",
+      "symbol": "glTexSubImage2DRobustANGLE",
+      "type": "void (GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, GLsizei, const void *)",
+      "parameters": [
+        "target",
+        "level",
+        "xoffset",
+        "yoffset",
+        "width",
+        "height",
+        "format",
+        "type",
+        "bufSize",
+        "pixels"
+      ],
+      "format": null
+    },
+    "glTexSubImage3DRobustANGLE": {
+      "name": "glTexSubImage3DRobustANGLE",
+      "symbol": "glTexSubImage3DRobustANGLE",
+      "type": "void (GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLenum, GLsizei, const void *)",
+      "parameters": [
+        "target",
+        "level",
+        "xoffset",
+        "yoffset",
+        "zoffset",
+        "width",
+        "height",
+        "depth",
+        "format",
+        "type",
+        "bufSize",
+        "pixels"
+      ],
+      "format": null
+    }
+  }
+}

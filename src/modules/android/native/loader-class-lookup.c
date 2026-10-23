@@ -13,6 +13,7 @@ typedef struct ImageLoader {
     uintptr_t base,end;
     jobject loader;
     int ambiguous;
+    const void *lifetime;int (*active)(const void *);
     struct ImageLoader *next;
 } ImageLoader;
 static pthread_mutex_t lookup_mutex=PTHREAD_MUTEX_INITIALIZER;
@@ -52,6 +53,7 @@ static int loader_for_address(JNIEnv *env,uintptr_t address,jobject *loader){
     int owned=0;*loader=NULL;
     pthread_mutex_lock(&lookup_mutex);
     for(ImageLoader *entry=image_loaders;entry;entry=entry->next){
+        if(entry->active&&!entry->active(entry->lifetime))continue;
         if(address>=entry->base&&address<entry->end){
             if(!entry->ambiguous){owned=1;*loader=(*env)->NewLocalRef(env,entry->loader);}
             break;
@@ -143,25 +145,29 @@ int klj_class_lookup_prepare(JNIEnv *env,jniNativeInterface *table){
     return 1;
 }
 
-int klj_class_lookup_bind(JNIEnv *env,void *runtime,void *image,jclass entry_class){
-    void *(*base)(void *)=dlsym(runtime,"kl_base");
-    size_t (*span)(void *)=dlsym(runtime,"kl_span");
-    uintptr_t start=base?(uintptr_t)base(image):0;size_t length=span?span(image):0;
+int klj_class_lookup_bind_range(JNIEnv *env,uintptr_t start,size_t length,jclass entry_class,const void *lifetime,int(*active)(const void *)){
     if(!class_type||!start||!length||length>UINTPTR_MAX-start)return 0;
     jobject loader=(*env)->CallObjectMethodA(env,entry_class,class_loader,NULL);
     if((*env)->ExceptionCheck(env))return 0;
     pthread_mutex_lock(&lookup_mutex);
     for(ImageLoader *entry=image_loaders;entry;entry=entry->next){
-        if(entry->base!=start||entry->end!=start+length)continue;
+        if(entry->base!=start||entry->end!=start+length||entry->lifetime!=lifetime)continue;
         if(!(*env)->IsSameObject(env,entry->loader,loader))entry->ambiguous=1;
         pthread_mutex_unlock(&lookup_mutex);(*env)->DeleteLocalRef(env,loader);return 1;
     }
     ImageLoader *entry=calloc(1,sizeof(*entry));
     if(entry){
         entry->loader=loader?(*env)->NewGlobalRef(env,loader):NULL;
-        if(entry->loader||!loader){entry->base=start;entry->end=start+length;entry->next=image_loaders;image_loaders=entry;}
+        if(entry->loader||!loader){entry->base=start;entry->end=start+length;entry->lifetime=lifetime;entry->active=active;entry->next=image_loaders;image_loaders=entry;}
         else{free(entry);entry=NULL;}
     }
     pthread_mutex_unlock(&lookup_mutex);(*env)->DeleteLocalRef(env,loader);
     return entry!=NULL;
+}
+
+int klj_class_lookup_bind(JNIEnv *env,void *runtime,void *image,jclass entry_class){
+    void *(*base)(void *)=dlsym(runtime,"kl_base");
+    size_t (*span)(void *)=dlsym(runtime,"kl_span");
+    uintptr_t start=base?(uintptr_t)base(image):0;size_t length=span?span(image):0;
+    return klj_class_lookup_bind_range(env,start,length,entry_class,NULL,NULL);
 }

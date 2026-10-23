@@ -5,7 +5,7 @@
 
 /* Retain the original DT_NEEDED order before constructors can replace the
  * mapped dynamic/string tables. The existing image owns these names. */
-typedef struct {char **names;size_t count;} KlImageDependencies;
+typedef struct {char **names;size_t count;uint64_t flags_1;} KlImageDependencies;
 static void klj_image_dependencies_release(KlImageDependencies *value){
     for(size_t i=0;i<value->count;i++)free(value->names[i]);
     free(value->names);*value=(KlImageDependencies){0};
@@ -23,6 +23,7 @@ static int klj_image_dependencies_capture(KlImageDependencies *out,const void *b
     }
     if(end==entries||string_bytes>span-(text-first)||count>SIZE_MAX/sizeof(char *))return 0;
     KlImageDependencies next={0};
+    for(size_t i=0;i<end;i++)if(dynamic[2*i]==0x6ffffffb)next.flags_1=dynamic[2*i+1]; /* DT_FLAGS_1 */
     if(count&&!(next.names=calloc(count,sizeof(char *))))return 0;
     for(size_t i=0;i<end;i++)if(dynamic[2*i]==1){
         uint64_t offset=dynamic[2*i+1];

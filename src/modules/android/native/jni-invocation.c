@@ -3,22 +3,60 @@
 #include <stdatomic.h>
 #include <stddef.h>
 #include <setjmp.h>
+#include <pthread.h>
 
 _Static_assert(sizeof(KljJniInvocation)==64,"JNI assembly invocation storage");
 _Static_assert(offsetof(KljJniInvocation,exitContext)==40,"JNI assembly exit continuation");
 _Static_assert(sizeof(jmp_buf)<=192,"JNI assembly continuation storage");
 static _Thread_local KljJniInvocation *current;
 static _Thread_local unsigned vm_retirement;
+static _Thread_local unsigned metadata_attachment;
+static _Thread_local KljJniAttachScope *attachment;
 static _Atomic(const KljJniThreadLifecycle *) thread_lifecycle;
+static _Atomic(KljJniThreadObserver *) retirement_observers;
+static pthread_mutex_t retirement_mutex=PTHREAD_MUTEX_INITIALIZER;
+int klj_jni_thread_observe(KljJniThreadObserver *owner){
+    if(!owner||(!owner->javaEnd&&!owner->physicalEnd))return 0;
+    pthread_mutex_lock(&retirement_mutex);KljJniThreadObserver *head=atomic_load_explicit(&retirement_observers,memory_order_acquire);
+    for(KljJniThreadObserver *entry=head;entry;entry=entry->next)if(entry==owner){pthread_mutex_unlock(&retirement_mutex);return 1;}
+    owner->next=head;atomic_store_explicit(&retirement_observers,owner,memory_order_release);pthread_mutex_unlock(&retirement_mutex);return 1;
+}
 void klj_jni_thread_lifecycle(const KljJniThreadLifecycle *owner){atomic_store_explicit(&thread_lifecycle,owner,memory_order_release);}
 void klj_jni_thread_retire(void){
+    if(metadata_attachment)return;
     ++vm_retirement;
+    for(KljJniThreadObserver *entry=atomic_load_explicit(&retirement_observers,memory_order_acquire);entry;entry=entry->next)if(entry->javaEnd)entry->javaEnd(entry->owner);
     const KljJniThreadLifecycle *owner=atomic_load_explicit(&thread_lifecycle,memory_order_acquire);
     if(owner&&owner->javaEnd)owner->javaEnd();
     --vm_retirement;
 }
+jint klj_jni_borrow_attachment(JavaVM *vm,KljJniBorrowedAttachment *scope){
+    if(!vm||!scope)return JNI_EINVAL;
+    *scope=(KljJniBorrowedAttachment){.vm=vm};
+    jint status=(*vm)->GetEnv(vm,(void**)&scope->environment,JNI_VERSION_1_6);
+    if(status==JNI_OK)return status;
+    if(status!=JNI_EDETACHED)return status;
+    metadata_attachment++;
+    status=(*vm)->AttachCurrentThreadAsDaemon(vm,(void**)&scope->environment,NULL);
+    if(status!=JNI_OK||!scope->environment){
+        if(status==JNI_OK)(void)(*vm)->DetachCurrentThread(vm);
+        metadata_attachment--;*scope=(KljJniBorrowedAttachment){0};
+        return status==JNI_OK?JNI_ERR:status;
+    }
+    scope->borrowed=1;return JNI_OK;
+}
+jint klj_jni_return_attachment(KljJniBorrowedAttachment *scope){
+    if(!scope||!scope->vm)return JNI_EINVAL;
+    jint status=JNI_OK;
+    if(scope->borrowed){
+        status=(*scope->vm)->DetachCurrentThread(scope->vm);
+        metadata_attachment--;
+    }
+    *scope=(KljJniBorrowedAttachment){0};return status;
+}
 int klj_jni_thread_retiring(void){return vm_retirement!=0;}
 void klj_jni_physical_thread_retire(void){
+    for(KljJniThreadObserver *entry=atomic_load_explicit(&retirement_observers,memory_order_acquire);entry;entry=entry->next)if(entry->physicalEnd)entry->physicalEnd(entry->owner);
     const KljJniThreadLifecycle *owner=atomic_load_explicit(&thread_lifecycle,memory_order_acquire);
     if(owner&&owner->physicalEnd)owner->physicalEnd();
 }
@@ -107,4 +145,19 @@ void klj_jni_invocation_leave(KljJniInvocation *scope){
 const KljJniInvocationApi *klj_jni_invocation_api(void){
     static const KljJniInvocationApi api={klj_jni_invocation_enter,klj_jni_invocation_leave,klj_jni_before_java,klj_jni_after_java,klj_jni_defer_thread_exit,klj_jni_thread_exit_requested,klj_jni_thread_retiring,klj_jni_detach_current_thread,klj_jni_physical_thread_retire};
     return &api;
+}
+
+void klj_jni_attach_scope_enter(KljJniAttachScope *scope,int(*prepare)(void *),void *owner){
+    *scope=(KljJniAttachScope){.previous=attachment,.owner=owner,.prepare=prepare};attachment=scope;
+}
+void klj_jni_attach_scope_leave(KljJniAttachScope *scope){if(attachment==scope)attachment=scope->previous;}
+int klj_jni_attach_prepare(void){return !attachment?0:(!attachment->prepare||!attachment->prepare(attachment->owner)?1:-1);}
+int klj_jni_invocation_enter_owned(KljJniInvocation *scope,JNIEnv *env,int(*enter)(void *),void *owner){
+    *scope=(KljJniInvocation){.previous=current,.environment=env,.exitDeferred=1};current=scope;
+    int error=enter?enter(owner):0;
+    if(error&&env&&!(*env)->ExceptionCheck(env)){
+        jclass type=(*env)->FindClass(env,"java/lang/IllegalStateException");
+        if(type)(*env)->ThrowNew(env,type,"Android native thread could not initialize");
+    }
+    return error==0;
 }

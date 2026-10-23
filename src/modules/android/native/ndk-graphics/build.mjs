@@ -13,7 +13,7 @@ const pins=JSON.parse(fs.readFileSync(new URL('../source-pins.json',import.meta.
 const catalog=JSON.parse(fs.readFileSync(new URL('./sources.json',import.meta.url)));
 const run=(command,args)=>execFileSync(command,args,{stdio:'inherit'});
 const read=(command,args)=>execFileSync(command,args,{encoding:'utf8',maxBuffer:32<<20}).trim();
-const units=['native/graphics/jni/bitmap.cpp','libs/hwui/apex/android_bitmap.cpp','native/android/asset_manager.cpp','native/android/configuration.cpp'];
+const units=['native/graphics/jni/bitmap.cpp','libs/hwui/apex/android_bitmap.cpp','native/android/asset_manager.cpp','native/android/configuration.cpp','native/graphics/jni/imagedecoder.cpp','native/graphics/jni/aassetstreamadaptor.cpp'];
 
 export function prepareNdkGraphicsSources({frameworkSource,skiaSource,nativeSource,incfsSource,ziparchiveSource,output}) {
   const sources=Object.fromEntries(['framework','skia','native','incfs','ziparchive'].map(name=>[name,path.join(output,'source',name)]));
@@ -21,7 +21,7 @@ export function prepareNdkGraphicsSources({frameworkSource,skiaSource,nativeSour
     .split('\n').filter(file=>/\.(h|hpp|inc)$/.test(file)||units.includes(file)||file==='NOTICE');
   exportSources(frameworkSource,framework.declarationSource.revision,files,sources.framework);
   exportSources(skiaSource,catalog[0].revision,catalog[0].trees,sources.skia);
-  exportSources(nativeSource,pins.aospNative,['include','libs/nativewindow/include'],sources.native);
+  exportSources(nativeSource,pins.aospNative,['include','libs/nativewindow/include','libs/arect/include'],sources.native);
   for(const [name,checkout]of [['incfs',incfsSource],['ziparchive',ziparchiveSource]]){
     const dependency=catalog.find(entry=>entry.name===name);
     exportSources(checkout,dependency.revision,dependency.trees,sources[name]);
@@ -44,7 +44,7 @@ export function buildNdkGraphics({output,frameworkSource,skiaSource,nativeSource
     path.join(sources.framework,'native/graphics/jni'),path.join(sources.framework,'native/android/include'),path.join(sources.framework,'core/jni/include'),path.join(sources.framework,'libs/androidfw/include'),
     path.join(sources.incfs,'incfs/util/include'),path.join(sources.incfs,'incfs/include'),path.join(sources.ziparchive,'include'),path.join(fmtSource,'include'),sources.skia,
     ...new Set(fs.globSync('include/**/*.h',{cwd:sources.skia}).map(file=>path.join(sources.skia,path.dirname(file)))),
-    path.join(sources.native,'include'),path.join(sources.native,'libs/nativewindow/include'),path.join(native,'include'),path.join(binder.output,'source/libbase/include'),path.join(core,'libcutils/include'),path.join(core,'libsystem/include'),path.join(core,'libutils/include'),
+    path.join(sources.native,'include'),path.join(sources.native,'libs/nativewindow/include'),path.join(sources.native,'libs/arect/include'),path.join(native,'include'),path.join(binder.output,'source/libbase/include'),path.join(core,'libcutils/include'),path.join(core,'libsystem/include'),path.join(core,'libutils/include'),
     path.join(core,'libutils/binder/include'),path.join(binder.output,'source/nativehelper/include'),path.join(binder.output,'source/nativehelper/include_platform'),
     path.join(binder.output,'source/nativehelper/header_only_include'),logging];
   const flags=['-std=c++20','-O2','-DNDEBUG','-fno-rtti','-arch','arm64','-mmacosx-version-min=13.0',
@@ -71,13 +71,29 @@ export function buildNdkGraphics({output,frameworkSource,skiaSource,nativeSource
   fs.writeFileSync(assets,'#include '+JSON.stringify(path.join(root,'asset-files.h'))+'\n'+originalAssets
     .replace(fromJava,'    return NdkAssetManagerForJavaObject(env,assetManager);')
     .replace(open,'    if (!asset) asset=klj_asset_file(filename,amMode);\n    klj_asset_opened(filename,mode,asset?asset->getLength():-1,asset?0:errno);\n    if (!asset) return nullptr;\n    return new AAsset(std::move(asset));'));
+  // Keep the original decoder and Asset stream owner. The host publisher uses
+  // BGRA storage; the NDK buffer boundary retains its public RGBA layout.
+  let decoder=fs.readFileSync(path.join(sources.framework,units[4]),'utf8');
+  const decode='    const auto result = ResultToErrorCode(imageDecoder->decode(pixels, stride));';
+  if(decoder.split('#ifdef __ANDROID__').length!==2||decoder.split(decode).length!==2)throw Error('Original NDK decoder boundary changed');
+  decoder='#if defined(__APPLE__)\n#define lseek64 lseek\n#endif\n'+decoder.replace('#ifdef __ANDROID__','#if defined(__ANDROID__) || defined(__APPLE__)')
+    .replace('#include <SkImageInfo.h>','#include <SkImageInfo.h>\n#include <src/core/SkConvertPixels.h>')
+    .replace(decode,[
+      '    const bool publicRgba = info.colorType() == kBGRA_8888_SkColorType;',
+      '    const auto rgbaInfo = info.makeColorType(kRGBA_8888_SkColorType);',
+      '    if (publicRgba && imageDecoder->currentFrame() != 0 &&',
+      '        !SkConvertPixels(info, pixels, stride, rgbaInfo, pixels, stride))',
+      '        return ANDROID_IMAGE_DECODER_INTERNAL_ERROR;',decode,
+      '    if (publicRgba && !SkConvertPixels(rgbaInfo, pixels, stride, info, pixels, stride))',
+      '        return ANDROID_IMAGE_DECODER_INTERNAL_ERROR;'].join('\n'));
+  const decoderSource=path.join(output,'imagedecoder.cpp');fs.writeFileSync(decoderSource,decoder);
   // GraphicsJNI declares Canvas only by pointer and already forward-declares it.
   // Its incidental Canvas implementation include pulls device-only resource
   // headers into this host NDK module; retain every declaration without it.
   const graphicsHeader=fs.readFileSync(path.join(hwui,'jni/GraphicsJNI.h'),'utf8');
   fs.writeFileSync(path.join(output,'GraphicsJNI.h'),graphicsHeader.replace('#include <hwui/Canvas.h>','#include <SkRegion.h>'));
   const objects=[];
-  for(const [index,source]of [ndk,adapted,path.join(root,'pixel-layout.cpp'),assets,path.join(sources.framework,units[3]),path.join(root,'asset-files.cpp')].entries()){
+  for(const [index,source]of [ndk,adapted,path.join(root,'pixel-layout.cpp'),assets,path.join(sources.framework,units[3]),path.join(root,'asset-files.cpp'),decoderSource,path.join(sources.framework,units[5])].entries()){
     const object=path.join(output,`bitmap-${index}.o`);run('clang++',[...flags,'-c',source,'-o',object]);objects.push(object);
   }
   const definitions=new Set(objects.flatMap(object=>read('nm',['-gjU',object]).split('\n')));
@@ -89,7 +105,7 @@ export function buildNdkGraphics({output,frameworkSource,skiaSource,nativeSource
   const available=publisherFunctions(publisher);
   const bindings=undefinedNames.filter(name=>available.has(name)&&!system.has(name)).sort().map(name=>({name,offset:available.get(name)}));
   for(const binding of bindings)if(binding.offset===null)throw Error('Ambiguous publisher dependency: '+binding.name);
-  const exports=[...definitions].filter(name=>/^_(AndroidBitmap|ABitmap|AAsset|AConfiguration)/.test(name)&&!name.endsWith('_original')).sort();
+  const exports=[...definitions].filter(name=>/^_(AndroidBitmap|ABitmap|AAsset|AConfiguration|AImageDecoder)/.test(name)&&!name.endsWith('_original')).sort();
   const header=[
     'extern "C" uintptr_t publisherTargets[];',
     `static constexpr uintptr_t publisherOffsets[]={${bindings.map(binding=>binding.offset).join(',')}};`,

@@ -19,6 +19,8 @@ function member(root, value) {
 }
 
 function validateManifest(manifest) {
+  if (manifest.binderSenderIdentityVersion !== undefined && manifest.binderSenderIdentityVersion !== 1)
+    throw new Error("The Android Binder identity version is unsupported.");
   if (manifest.schemaVersion !== 1 || manifest.execution !== "art" ||
       manifest.supplier !== definition.id || manifest.hostcallVersion !== definition.hostcallVersion ||
       manifest.android?.imageSha256 !== definition.android.imageSha256 ||

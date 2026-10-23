@@ -69,6 +69,8 @@ public final class HostFilesystem {
     /** A fused module remains in its containing APK; no second APK is installed. */
     public static synchronized void installNativeMappings(List<Path> sourceApks,Path assets,android.content.pm.ApplicationInfo info)throws IOException{
         var current=current();Path root=assets.toRealPath();var mappings=new ArrayList<>(current.mappings);mappings.removeAll(packageMappings);
+        if(info!=null&&info.packageName!=null&&!current.packageName.equals(info.packageName))
+            throw new IllegalArgumentException("Installed code namespace differs from the current package");
         var archives=new ArrayList<Mapping>();
         for(Path source:sourceApks){
             Path original=source.toAbsolutePath().normalize(),actual=source.toRealPath();
@@ -76,14 +78,24 @@ public final class HostFilesystem {
             archives.add(new Mapping(original.resolve("assets"),root));
             if(!original.equals(actual))archives.add(new Mapping(actual.resolve("assets"),root));
         }
-        // ApplicationInfo already exposes these installed code locations.
-        // Preserve that identity for native descriptor and ELF mapping views,
-        // without exposing an enclosing preparation or another app's data root.
-        if(info!=null)for(String directory:new String[]{info.nativeLibraryDir,info.secondaryNativeLibraryDir}){
-            if(directory==null)continue;
-            Path original=Path.of(directory).toAbsolutePath().normalize();
-            archives.add(new Mapping(original,original.toRealPath()));
+        // Linux memory-map names belong to the installed Android package;
+        // physical directories remain valid I/O and native-load identities.
+        var nativeAliases=new LinkedHashMap<Path,Path>();
+        if(info!=null){
+            String[] directories={info.nativeLibraryDir,info.secondaryNativeLibraryDir};
+            String[] abis={info.primaryCpuAbi,info.secondaryCpuAbi};
+            for(int i=0;i<directories.length;i++){
+                if(directories[i]==null)continue;
+                Path original=Path.of(directories[i]).toAbsolutePath().normalize(),actual=original.toRealPath();
+                archives.add(new Mapping(original,original));
+                String isa=nativeInstructionSet(abis[i],actual);
+                if(isa==null)continue;
+                Path alias=Path.of("/data/app",current.packageName,"lib",isa);
+                Path previous=nativeAliases.putIfAbsent(alias,actual);
+                if(previous!=null&&!previous.equals(actual))throw new IOException("Installed native directories share an instruction-set path");
+            }
         }
+        nativeAliases.forEach((alias,actual)->archives.add(new Mapping(alias,actual)));
         for(var alias:fusedArchivePaths(sourceApks,info).entrySet()){
             archives.add(new Mapping(alias.getKey(),alias.getValue()));
             archives.add(new Mapping(alias.getKey().resolve("assets"),root));
@@ -96,6 +108,20 @@ public final class HostFilesystem {
         installNativePaths(prefixes,targets);
         paths=new PathsState(current.runtime,current.partitions,current.data,current.files,current.cache,current.packageName,current.environment,List.copyOf(mappings));
         packageMappings=List.copyOf(archives);
+    }
+    private static String nativeInstructionSet(String abi,Path directory){
+        if(abi!=null)return dalvik.system.VMRuntime.getInstructionSet(abi);
+        String name=directory.getFileName().toString();
+        try{return dalvik.system.VMRuntime.getInstructionSet(name);}
+        catch(IllegalArgumentException unknownDirectory){
+            for(String supported:android.os.Build.SUPPORTED_ABIS){
+                String isa=dalvik.system.VMRuntime.getInstructionSet(supported);
+                if(isa.equals(name))return isa;
+            }
+            // Older callers can supply an unclassified secondary directory.
+            // Its physical identity remains usable without inventing an ABI.
+            return null;
+        }
     }
     /** Fused module names resolve to original APKs in either VM's filesystem. */
     public static Map<Path,Path> fusedArchivePaths(List<Path> sourceApks,android.content.pm.ApplicationInfo info)throws IOException{

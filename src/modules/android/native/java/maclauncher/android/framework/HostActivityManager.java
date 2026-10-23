@@ -197,6 +197,10 @@ public final class HostActivityManager {
         if(HostPermissions.check(android.Manifest.permission.ACCESS_COARSE_LOCATION,uid,Context.DEVICE_ID_DEFAULT)==android.content.pm.PackageManager.PERMISSION_GRANTED||HostPermissions.check(android.Manifest.permission.ACCESS_FINE_LOCATION,uid,Context.DEVICE_ID_DEFAULT)==android.content.pm.PackageManager.PERMISSION_GRANTED)result|=ActivityManager.PROCESS_CAPABILITY_FOREGROUND_LOCATION;
         return result;
     }
+    public static boolean hostIsAppForeground(Object receiver,int uid){
+        if(receiver instanceof android.app.ActivityManagerInternal service)return service.isAppForeground(uid);
+        int state=hostUidProcessState(null,uid);return state>=0&&state<=android.app.ActivityManager.PROCESS_STATE_TOP;
+    }
     public static void hostEnforceCallingPermission(Object receiver,String permission,String operation){
         if(receiver instanceof android.app.ActivityManagerInternal service){service.enforceCallingPermission(permission,operation);return;}
         if(HostPermissions.check(permission,android.os.Binder.getCallingUid(),Context.DEVICE_ID_DEFAULT)!=android.content.pm.PackageManager.PERMISSION_GRANTED)

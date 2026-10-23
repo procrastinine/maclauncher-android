@@ -25,6 +25,14 @@ public final class NativeBinding {
         catch(InvocationTargetException failure){Throwable cause=failure.getCause();if(cause instanceof Error error)throw error;if(cause instanceof RuntimeException error)throw error;throw new IllegalStateException(cause);}
         catch(IllegalAccessException failure){throw new IllegalStateException(failure);}
     }
+    /** Preparation and constructors may reenter Java or bind from another thread. */
+    static long loadPreparedIn(Method entry,String runtime,String file,String soname,java.util.function.LongConsumer preparation){
+        Objects.requireNonNull(preparation);
+        try{return (long)entry.getDeclaringClass().getMethod("loadPrepared",String.class,String.class,String.class,java.util.function.LongConsumer.class)
+                .invoke(null,runtime,file,soname,preparation);}
+        catch(InvocationTargetException failure){Throwable cause=failure.getCause();if(cause instanceof Error error)throw error;if(cause instanceof RuntimeException error)throw error;throw new IllegalStateException(cause);}
+        catch(ReflectiveOperationException failure){throw new IllegalStateException("Native preparation entry is unavailable",failure);}
+    }
     static void constructIn(Method method,long image){invokeImage(method,"construct",image);}
     static void rejectIn(Method method,long image){invokeImage(method,"reject",image);}
     static void initializeIn(Method method,long image){invokeImage(method,"initialize",image);}

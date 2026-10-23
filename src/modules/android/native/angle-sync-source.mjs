@@ -54,11 +54,75 @@ export function adaptAngleMetalSync(source) {
     switch (result)
     {
         case GL_ALREADY_SIGNALED:`);
-  return source;
+  return adaptAngleMetalSyncAllocation(source);
 }
 
 export function adaptAngleMetalSyncHeader(source) {
   const before = '    angle::ObjCPtr<id<MTLSharedEvent>> mSharedEvent;\n\n    std::unique_ptr<mtl::SyncImpl> mSync;';
   if (source.split(before).length !== 2) throw Error('ANGLE Metal synchronization header changed');
   return source.replace(before, before.replace('std::unique_ptr', 'std::shared_ptr'));
+}
+
+
+// A sync must refer to a real command buffer. Objective-C messages to nil do
+// nothing; a queue serial alone cannot establish that its event will signal.
+export function adaptAngleMetalSyncAllocation(source) {
+  const replace = (before, after) => {
+    if (source.split(before).length !== 2) throw Error('ANGLE Metal sync allocation source changed');
+    source = source.replace(before, after);
+  };
+  replace('        mMetalSharedEvent = std::move(sharedEvent);',
+    '        if (!sharedEvent)\n        {\n            return angle::Result::Stop;\n        }\n        mMetalSharedEvent = std::move(sharedEvent);');
+  replace('            contextMtl->queueEventSignal(mMetalSharedEvent, mSignalValue);',
+    '            if (contextMtl->queueEventSignal(mMetalSharedEvent, mSignalValue) == 0)\n            {\n                return angle::Result::Stop;\n            }');
+  replace('        mEncodedCommandBufferSerial = contextMtl->queueEventSignal(mMetalEvent, kEventSignalValue);\n        return angle::Result::Continue;',
+    '        if (!mMetalEvent)\n        {\n            return angle::Result::Stop;\n        }\n        mEncodedCommandBufferSerial = contextMtl->queueEventSignal(mMetalEvent, kEventSignalValue);\n        return mEncodedCommandBufferSerial == 0 ? angle::Result::Stop : angle::Result::Continue;');
+  return source;
+}
+
+export function adaptAngleMetalSyncContext(source) {
+  const before = 'uint64_t ContextMtl::queueEventSignal(id<MTLEvent> event, uint64_t value)\n{\n    ensureCommandBufferReady();';
+  if (source.split(before).length !== 2) throw Error('ANGLE Metal sync context source changed');
+  return source.replace(before, `uint64_t ContextMtl::queueEventSignal(id<MTLEvent> event, uint64_t value)
+{
+    if (!event)
+    {
+        return 0;
+    }
+    // Unlike ordinary draw preparation, sync creation can report allocation
+    // failure before exporting a fence. Do not treat an unbacked serial as work.
+    flushCommandBufferIfNeeded();
+    if (!mCmdBuffer.ready())
+    {
+        mCmdBuffer.restart();
+    }
+    if (!mCmdBuffer.ready())
+    {
+        return 0;
+    }`);
+}
+
+export function adaptAngleMetalCommandBuffers(source) {
+  const replace = (before, after) => {
+    if (source.split(before).length !== 2) throw Error('ANGLE Metal command buffer allocation source changed');
+    source = source.replace(before, after);
+  };
+  replace('        angle::ObjCPtr<id<MTLCommandBuffer>> metalCmdBuffer = [get() commandBuffer];\n\n        std::lock_guard<std::mutex> lg(mLock);',
+    `        angle::ObjCPtr<id<MTLCommandBuffer>> metalCmdBuffer = [get() commandBuffer];
+        if (!metalCmdBuffer)
+        {
+            // No command buffer exists to complete this serial or its events.
+            mCmdBufferError.store(MTLCommandBufferErrorOutOfMemory);
+            *queueSerialOut = 0;
+            return metalCmdBuffer;
+        }
+
+        std::lock_guard<std::mutex> lg(mLock);`);
+  replace('    mLastWaitOp  = mtl::NoWait;\n\n    for (std::string &marker : mDebugGroups)',
+    '    mLastWaitOp  = mtl::NoWait;\n    if (!metalCmdBuffer)\n    {\n        clearResourceListAndSize();\n        return;\n    }\n\n    for (std::string &marker : mDebugGroups)');
+  replace('    ASSERT(readyImpl());\n\n    CommandEncoder *currentEncoder = getPendingCommandEncoder();',
+    '    if (!readyImpl() || !event)\n    {\n        return 0;\n    }\n\n    maclauncher::observeNativeFenceCompletion(get(), event, value);\n    CommandEncoder *currentEncoder = getPendingCommandEncoder();');
+  replace('#include "libANGLE/renderer/metal/mtl_command_buffer.h"',
+    '#include "libANGLE/renderer/metal/mtl_command_buffer.h"\n#include "angle-fence-completion.h"');
+  return source;
 }

@@ -19,6 +19,7 @@ import java.util.zip.*;
 /** Local DEX conversion owned by the dedicated Android process. */
 public final class DynamicDex {
     private static final long CACHE_TARGET=128L*1024*1024;
+    private static final long PLATFORM_HEADER_TARGET=4L*1024*1024;
     private static final long PERSISTENT_CACHE_TARGET=256L*1024*1024;
     private static final java.util.regex.Pattern PERSISTENT_ENTRY=java.util.regex.Pattern.compile("[a-f0-9]{64}-[a-f0-9]{64}");
     private static final java.util.regex.Pattern SESSION_ENTRY=java.util.regex.Pattern.compile("session-[0-9]+");
@@ -320,7 +321,11 @@ public final class DynamicDex {
      * a loader which is neither its parent nor the owner of its resources. */
     private static ResolvedHeader parentHeader(ClassLoader parent,String name)throws IOException{
         try{
-            Class<?> type=Class.forName(name.replace('/','.'),false,parent);
+            // Class.forName can reuse a JVM initiating-loader association even
+            // after a wrapper changes delegation. Query the loader's actual
+            // current resolution; neither path initializes the resolved class.
+            String binaryName=name.replace('/','.');
+            Class<?> type=parent==null?Class.forName(binaryName,false,null):parent.loadClass(binaryName);
             return RESOLVED_HEADERS.get(type);
         }catch(ClassNotFoundException|LinkageError unavailable){return ABSENT_HEADER;}
     }
@@ -348,6 +353,7 @@ public final class DynamicDex {
         private List<JarFile> metadataArchives;
         final ReentrantLock lock=new ReentrantLock(),publicationLock=new ReentrantLock();
         final Map<Path,byte[]> fixedHashes=new ConcurrentHashMap<>();
+        final Map<String,ResolvedHeader> platformHeaders=new HashMap<>();long platformHeaderBytes;
         final LinkedHashMap<String,Artifact> artifacts=new LinkedHashMap<>(16,.75f,true);long cacheBytes;
         final IdentityHashMap<HeaderFacts,Integer> headerOwners=new IdentityHashMap<>();
         final Map<String,Set<Artifact>> byInputKey=new HashMap<>();
@@ -411,7 +417,20 @@ public final class DynamicDex {
          * unresolved parent falls back to the ordered complete metadata archive;
          * record that actual resource, rather than every unrelated declaration. */
         ResolvedHeader conversionHeader(ClassLoader parent,String name)throws IOException{
-            ResolvedHeader resolved=parentHeader(parent,name);if(resolved.bytes.length!=0)return resolved;
+            boolean platform=parent==maclauncher.android.framework.HostDexFiles.bootClassLoader(null);
+            // The exact boot loader has an immutable class path. Positive
+            // resolutions retain their original defining Class's hierarchy;
+            // arbitrary delegating loaders and absent/metadata facts still
+            // resolve on every request. Never hold this lock while loading.
+            if(platform)synchronized(platformHeaders){var cached=platformHeaders.get(name);if(cached!=null)return cached;}
+            ResolvedHeader resolved=parentHeader(parent,name);
+            if(resolved.bytes.length!=0){
+                if(platform)synchronized(platformHeaders){
+                    long weight=128L+name.length()*2L+resolved.bytes.length+resolved.hash.length;
+                    if(!closed&&!platformHeaders.containsKey(name)&&weight<=PLATFORM_HEADER_TARGET-platformHeaderBytes){platformHeaders.put(name,resolved);platformHeaderBytes+=weight;}
+                }
+                return resolved;
+            }
             for(var archive:metadataArchives()){
                 var entry=archive.getJarEntry(name+".class");if(entry==null)continue;
                 var digest=sha();digest.update("metadata-class-resource-v1".getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -745,7 +764,10 @@ public final class DynamicDex {
                 for(Process child:children)try{if(!child.waitFor(5,TimeUnit.SECONDS))throw new IllegalStateException("Dynamic DEX converter did not stop");}
                     catch(InterruptedException error){Thread.currentThread().interrupt();throw new IllegalStateException("Interrupted while stopping dynamic DEX conversion",error);}
                 for(Demand demand:active)demand.close();
-            }finally{synchronized(this){if(metadataArchives!=null){for(var archive:metadataArchives)try{archive.close();}catch(IOException ignored){}metadataArchives=null;}}}
+            }finally{
+                synchronized(platformHeaders){platformHeaders.clear();platformHeaderBytes=0;}
+                synchronized(this){if(metadataArchives!=null){for(var archive:metadataArchives)try{archive.close();}catch(IOException ignored){}metadataArchives=null;}}
+            }
         }
     }
     private static MessageDigest sha(){return HostDigests.sha256();}

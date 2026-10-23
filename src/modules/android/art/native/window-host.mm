@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include "host-packets.h"
 #import <QuartzCore/CATransaction.h>
 #include <cstdio>
 #include "bridge.h"
@@ -19,6 +20,7 @@ extern "C" int klj_art_webkit_poll();
 extern "C" void klj_art_webkit_close();
 namespace {
 void retireFrames();
+const char*prepareFrameLibrary();
 struct Window {KLSession session{};KLApplicationSleep*sleep=nullptr;SDL_Window*window=nullptr;SDL_MetalView layer=nullptr;};
 Window state;
 struct Mode {int width=0,height=0,pointsWidth=0,pointsHeight=0;};
@@ -62,10 +64,12 @@ const KLSessionOps ops={video,window,layer,drawable,bind,claim,stop,unbind,destr
 }
 extern "C" int64_t maclauncher_art_window(uint64_t address,uint64_t size){@autoreleasepool{
  if(!address||size!=sizeof(KljArtWindow))return -22;
+ int64_t packet_error=klj_art_resolve_packet(address,size,KLJ_ART_PACKET_ALIGN(KljArtWindow),KLJ_ART_PACKET_READ_WRITE,&address);if(packet_error)return packet_error;
  auto p=(KljArtWindow*)(uintptr_t)address;uintptr_t owner=(uintptr_t)pthread_self();
  if(!pthread_main_np()){snprintf(p->error,sizeof(p->error),"Window requires its main thread");return -1;}
  if(p->operation==1){
   if(state.window){snprintf(p->error,sizeof(p->error),"Window is already open");return -1;}
+  if(const char*error=prepareFrameLibrary()){snprintf(p->error,sizeof(p->error),"%s",error);return -1;}
   if(!kl_session_init(&state.session,&ops,&state,owner)||!kl_session_open(&state.session,owner,p->width,p->height)){
    snprintf(p->error,sizeof(p->error),"%s",SDL_GetError());kl_session_close(&state.session,owner);return -1;
   }
@@ -86,20 +90,85 @@ extern "C" int64_t maclauncher_art_window(uint64_t address,uint64_t size){@autor
 #include "../../native/frame-observation.hpp"
 #include <dlfcn.h>
 #include <unistd.h>
+#include <cmath>
+#include <memory>
+#include <mutex>
+#include <new>
 namespace {
+struct PresentationClock {
+ std::mutex mutex;
+ bool active=true;
+ uint64_t frame=0;
+ double time=0;
+};
 struct FrameOwner {
  void*library=nullptr,*presenter=nullptr;
  id<MTLCommandQueue> queue;
  void*(*create)(void*,void*,const RSPresenterOptions*,RSPresenterError*)=nullptr;
  int(*submit)(void*,const RSPresenterSubmission*,RSFrameResult*)=nullptr;
  int(*status)(void*,RSPresenterStatus*)=nullptr;
- int(*submitAt)(void*,const RSPresenterSubmission*,const RSPresentationTarget*,RSFrameResult*)=nullptr;
- int(*submitObserved)(void*,const RSPresenterSubmission*,const RSPresentationTarget*,const RSPresentationObserver*,RSFrameResult*)=nullptr;
+ int(*submitObserved)(void*,const RSPresenterSubmission*,const RSPresentationObserver*,RSFrameResult*)=nullptr;
  int(*timing)(void*,RSPresentationTiming*)=nullptr;
  void(*destroy)(void*)=nullptr;
  uint64_t next=0,generation=0,accepted=0,busy=0;
+ std::shared_ptr<PresentationClock> clock;
  klj_timing::Reporter observation;
 } frames;
+// Bind the complete required API before a window or guest producer is started.
+// Older targeted-only observation cannot retire a generated frame sequence.
+const char*prepareFrameLibrary(){
+ if(frames.library)return nullptr;
+ const char*path=getenv("KLEPTON_FRAME_LIBRARY");if(!path)return "Shared frame library is not configured";
+ void*library=dlopen(path,RTLD_NOW|RTLD_LOCAL);if(!library)return dlerror();
+ frames.create=(decltype(frames.create))dlsym(library,"rsCreateFramePresenter");
+ frames.submit=(decltype(frames.submit))dlsym(library,"rsSubmitFramePresenter");
+ frames.submitObserved=(decltype(frames.submitObserved))dlsym(library,"rsSubmitFramePresenterObserved");
+ frames.status=(decltype(frames.status))dlsym(library,"rsGetFramePresenterStatus");
+ frames.timing=(decltype(frames.timing))dlsym(library,"rsGetFramePresenterTiming");
+ frames.destroy=(decltype(frames.destroy))dlsym(library,"rsDestroyFramePresenter");
+ if(!frames.create||!frames.submit||!frames.submitObserved||!frames.status||!frames.timing||!frames.destroy){
+  dlclose(library);return "Shared graphics runtime lacks observed frame presentation support";
+ }
+ frames.library=library;return nullptr;
+}
+struct DisplayedPresentation {uint64_t frame=0,nanos=0;};
+static DisplayedPresentation displayedPresentation(){
+ const auto clock=frames.clock;if(!clock)return {};
+ std::lock_guard<std::mutex> lock(clock->mutex);
+ return clock->active?DisplayedPresentation{clock->frame,uint64_t(clock->time*1e9)}:DisplayedPresentation{};
+}
+static void retirePresentationClock(){
+ auto clock=std::move(frames.clock);if(!clock)return;
+ std::lock_guard<std::mutex> lock(clock->mutex);clock->active=false;clock->frame=0;clock->time=0;
+}
+struct PresentationRetirement {
+ std::shared_ptr<PresentationClock> clock;
+ RSPresentationObserver original;
+ uint64_t frame;
+};
+static void presentationRetired(void*context,uint64_t frame,double presentedTime,double retiredTime,uint32_t outcome){
+ std::unique_ptr<PresentationRetirement> receipt(static_cast<PresentationRetirement*>(context));
+ const auto&clock=receipt->clock;
+ if(clock&&frame==receipt->frame&&outcome==RS_PRESENTED&&std::isfinite(presentedTime)&&presentedTime>0&&presentedTime<double(UINT64_MAX)/1e9){
+  std::lock_guard<std::mutex> lock(clock->mutex);
+  if(clock->active&&(presentedTime>clock->time||(presentedTime==clock->time&&frame>clock->frame))){clock->frame=frame;clock->time=presentedTime;}
+ }
+ // The original owner may reenter poll, Stop or replacement here. No clock or
+ // presenter lock is held; the accepted receipt retains its old generation.
+ receipt->original.retired(receipt->original.context,frame,presentedTime,retiredTime,outcome);
+}
+static int submitPresentationFrame(const RSPresenterSubmission&submission,const RSPresentationObserver*observer,RSFrameResult&result){
+ if(!observer)return frames.submit(frames.presenter,&submission,&result);
+ if(!observer->retired)return frames.submitObserved(frames.presenter,&submission,observer,&result);
+ auto*receipt=new(std::nothrow) PresentationRetirement{frames.clock,*observer,submission.frameId};
+ if(!receipt){snprintf(result.reason,sizeof(result.reason),"Presentation retirement allocation failed");return RS_FRAME_ENCODE_FAILED;}
+ RSPresentationObserver wrapped=*observer;wrapped.context=receipt;wrapped.retired=presentationRetired;
+ const int status=frames.submitObserved(frames.presenter,&submission,&wrapped,&result);
+ // Rejection never transfers the observer. On success it may already have run
+ // synchronously, so do not inspect the receipt after the call returns.
+ if(status!=RS_FRAME_OK)delete receipt;
+ return status;
+}
 struct FrameMeasurement {
  const KljArtFrame *frame;
  uint64_t started=uint64_t(CACurrentMediaTime()*1e9);
@@ -122,11 +191,11 @@ void tracePixels(const KljArtFrame*p){
  NSData*png=[image representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
  if(png&&![png writeToFile:[NSString stringWithUTF8String:file] atomically:YES])fprintf(stderr,"ART imported-frame capture failed\n");
 }
-void retireFrames(){if(frames.presenter){RSPresenterStatus status{sizeof(status),RS_PRESENTER_ABI_VERSION};RSPresentationTiming time{sizeof(time),RS_TARGET_ABI_VERSION};frames.status(frames.presenter,&status);frames.timing(frames.presenter,&time);NSWindow*window=(__bridge NSWindow*)SDL_GetPointerProperty(SDL_GetWindowProperties(state.window),SDL_PROP_WINDOW_COCOA_WINDOW_POINTER,nullptr);CAMetalLayer*layer=(__bridge CAMetalLayer*)SDL_Metal_GetLayer(state.layer);fprintf(stderr,"Shared presentation retirement: encoded=%llu completed=%llu presented=%llu dropped=%llu skipped=%llu pending=%u visible=%d occluded=%d transaction=%d reason=%s\n",status.encoded,status.completedReal,status.presentedReal,status.dropped,time.skipped,status.pending,window.visible,!(window.occlusionState&NSWindowOcclusionStateVisible),layer.presentsWithTransaction,status.reason);frames.destroy(frames.presenter);frames.presenter=nullptr;}frames.queue=nil;}
+void retireFrames(){retirePresentationClock();if(frames.presenter){RSPresenterStatus status{sizeof(status),RS_PRESENTER_ABI_VERSION};RSPresentationTiming time{sizeof(time),RS_TARGET_ABI_VERSION};frames.status(frames.presenter,&status);frames.timing(frames.presenter,&time);NSWindow*window=(__bridge NSWindow*)SDL_GetPointerProperty(SDL_GetWindowProperties(state.window),SDL_PROP_WINDOW_COCOA_WINDOW_POINTER,nullptr);CAMetalLayer*layer=(__bridge CAMetalLayer*)SDL_Metal_GetLayer(state.layer);fprintf(stderr,"Shared presentation retirement: encoded=%llu completed=%llu presented=%llu dropped=%llu skipped=%llu pending=%u visible=%d occluded=%d transaction=%d reason=%s\n",status.encoded,status.completedReal,status.presentedReal,status.dropped,time.skipped,status.pending,window.visible,!(window.occlusionState&NSWindowOcclusionStateVisible),layer.presentsWithTransaction,status.reason);frames.destroy(frames.presenter);frames.presenter=nullptr;}frames.queue=nil;}
 }
 static int commitViewport(uint32_t width,uint32_t height);
 static int64_t submitFrame(uint64_t address,uint64_t size,void*token,void(*release)(void*),bool wait,const RSPresentationObserver*observer=nullptr){@autoreleasepool{
- if(!address||size!=sizeof(KljArtFrame))return -22;auto*p=reinterpret_cast<KljArtFrame*>(address);
+ if(!address||size!=sizeof(KljArtFrame))return -22;int64_t packet_error=klj_art_resolve_packet(address,size,KLJ_ART_PACKET_ALIGN(KljArtFrame),KLJ_ART_PACKET_READ_WRITE,&address);if(packet_error)return packet_error;auto*p=reinterpret_cast<KljArtFrame*>(address);
  auto fail=[&](const char*message){snprintf(p->error,sizeof(p->error),"%s",message);return int64_t(-1);};
  if(!pthread_main_np()||!state.layer)return fail("Frame requires the existing main-thread window");
  if(p->format!=1||!p->width||!p->height||p->stride<p->width||p->stride>UINT32_MAX/4)return fail("Unsupported source buffer descriptor");
@@ -135,13 +204,9 @@ static int64_t submitFrame(uint64_t address,uint64_t size,void*token,void(*relea
  if(bytes/row!=p->height||bytes>p->length||p->pixels%getpagesize()||p->length%getpagesize())return fail("Shared buffer mapping is invalid");
  tracePixels(p);
  CAMetalLayer*layer=(__bridge CAMetalLayer*)SDL_Metal_GetLayer(state.layer);id<MTLDevice> device=layer.device;
- if(!frames.library){const char*path=getenv("KLEPTON_FRAME_LIBRARY");if(!path)return fail("Shared frame library is not configured");frames.library=dlopen(path,RTLD_NOW|RTLD_LOCAL);if(!frames.library)return fail(dlerror());
-  frames.create=(decltype(frames.create))dlsym(frames.library,"rsCreateFramePresenter");frames.submit=(decltype(frames.submit))dlsym(frames.library,"rsSubmitFramePresenter");frames.status=(decltype(frames.status))dlsym(frames.library,"rsGetFramePresenterStatus");frames.destroy=(decltype(frames.destroy))dlsym(frames.library,"rsDestroyFramePresenter");
-  frames.submitAt=(decltype(frames.submitAt))dlsym(frames.library,"rsSubmitFramePresenterAtTime");frames.timing=(decltype(frames.timing))dlsym(frames.library,"rsGetFramePresenterTiming");
-  frames.submitObserved=(decltype(frames.submitObserved))dlsym(frames.library,"rsSubmitFramePresenterAtTimeObserved");
-  if(!frames.create||!frames.submit||!frames.status||!frames.destroy||!frames.submitAt||!frames.timing)return fail("Shared presenter ABI is unavailable");}
+ if(const char*error=prepareFrameLibrary())return fail(error);
  if(state.session.state==KL_SESSION_READY&&!kl_session_claim(&state.session,(uintptr_t)pthread_self(),KL_SESSION_NATIVE,state.session.width,state.session.height))return fail("Shared session cannot adopt this producer");
- if(!frames.presenter){RSPresenterOptions options{sizeof(options),RS_PRESENTER_ABI_VERSION,RS_FRAME_TOP_LEFT,0,0};RSPresenterError error{sizeof(error),RS_PRESENTER_ABI_VERSION,{}};frames.presenter=frames.create((__bridge void*)layer,&state,&options,&error);if(!frames.presenter)return fail(error.reason);frames.queue=[device newCommandQueue];++frames.generation;}
+ if(!frames.presenter){try{frames.clock=std::make_shared<PresentationClock>();}catch(const std::bad_alloc&){return fail("Presentation clock allocation failed");}RSPresenterOptions options{sizeof(options),RS_PRESENTER_ABI_VERSION,RS_FRAME_TOP_LEFT,0,0};RSPresenterError error{sizeof(error),RS_PRESENTER_ABI_VERSION,{}};frames.presenter=frames.create((__bridge void*)layer,&state,&options,&error);if(!frames.presenter){frames.clock.reset();return fail(error.reason);}frames.queue=[device newCommandQueue];++frames.generation;}
  // The guest holds the original acquired Image/HardwareBuffer until this bounded
  // proof completes. The same memory is sampled by Metal; no JNI/pixel copy loop.
  id<MTLBuffer> memory=[device newBufferWithBytesNoCopy:reinterpret_cast<void*>(p->pixels) length:p->length options:MTLResourceStorageModeShared deallocator:nil];if(!memory)return fail("Metal cannot import the shared buffer mapping");
@@ -149,9 +214,7 @@ static int64_t submitFrame(uint64_t address,uint64_t size,void*token,void(*relea
  id<MTLTexture> texture=[memory newTextureWithDescriptor:descriptor offset:0 bytesPerRow:row];if(!texture)return fail("Metal cannot import the original allocator layout");
  if(commitViewport(p->width,p->height))return fail("Native display mode could not commit its rendered buffer");
  id<MTLCommandBuffer> command=[frames.queue commandBuffer];RSPresenterSubmission submission{sizeof(submission),RS_PRESENTER_ABI_VERSION,(__bridge void*)command,(__bridge void*)texture,++frames.next,CACurrentMediaTime(),token,release};RSFrameResult result{sizeof(result),RS_FRAME_ABI_VERSION};
- RSPresentationTarget target{sizeof(target),RS_TARGET_ABI_VERSION,CACurrentMediaTime()};
- if(observer&&!frames.submitObserved)return fail("Shared presentation retirement API is unavailable");
- int status=observer?frames.submitObserved(frames.presenter,&submission,&target,observer,&result):frames.submitAt(frames.presenter,&submission,&target,&result);if(status!=RS_FRAME_OK){if(status==RS_FRAME_BUSY)++frames.busy;return fail(result.reason);}
+ int status=submitPresentationFrame(submission,observer,result);if(status!=RS_FRAME_OK){if(status==RS_FRAME_BUSY)++frames.busy;return fail(result.reason);}
  if(result.encoded)++frames.accepted;
  [command commit];if(wait)[command waitUntilCompleted];if(wait&&command.status!=MTLCommandBufferStatusCompleted)return fail(command.error.localizedDescription.UTF8String?:"Metal frame failed");
  // Synchronous wait is confined to this one-frame proof. Normal frame ownership
@@ -231,7 +294,8 @@ extern "C" int maclauncher_art_compositor_poll(KLDisplayTick*tick,KljArtComposit
   input=sendInput(value,decoded.text,decoded.start,decoded.length);if(input<0)return -1;
  }
  [CATransaction flush];
- if(frames.presenter){RSPresentationTiming time{sizeof(time),RS_TARGET_ABI_VERSION};RSPresenterStatus status{sizeof(status),RS_PRESENTER_ABI_VERSION};frames.timing(frames.presenter,&time);frames.status(frames.presenter,&status);out->frame=time.lastPresentedFrame;out->presentedNanos=uint64_t(time.lastPresentedTime*1000000000.0);out->completed=status.completedReal;}
+ const auto displayed=displayedPresentation();out->frame=displayed.frame;out->presentedNanos=displayed.nanos;
+ if(frames.presenter){RSPresenterStatus status{sizeof(status),RS_PRESENTER_ABI_VERSION};frames.status(frames.presenter,&status);out->completed=status.completedReal;}
  traceFrames();
  out->width=displayInfo.width;out->height=displayInfo.height;
  return kl_display_clock_poll(displayClock,tick);

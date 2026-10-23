@@ -21,7 +21,7 @@ export function buildArtHostLibrary({output,klepton,sdl,jni,ninja,python,arm32,m
  const common=['-O2','-fPIC',deployment,'-I'+native,'-I'+source,'-I'+path.join(klepton,'runtime'),'-I'+path.join(klepton,'runtime/media'),'-I'+path.join(jni,'include'),'-I'+path.join(jni,'include/darwin'),'-F'+path.dirname(sdl),...audioFlags];
  common.push('-fblocks','-I'+policy);
  if(arm32)common.push('-DKLJ_ART_ARM32=1');
- const units=[...['audio-host.c','web-links-host.c','network-host.c','media-host.c','host-module.c','window-host.mm','webkit-server.mm'].map(file=>path.join(source,file)),
+ const units=[...['audio-host.c','web-links-host.c','network-host.c','media-host.c','host-module.c','host-packets.c','window-host.mm','webkit-server.mm'].map(file=>path.join(source,file)),
   ...['application-sleep.mm','process-memory.c','process-ids.c','thread-identity.c','audio-device.c','web-links-platform.c','audio-capture.c','media-platform.mm','webkit-platform.mm','webkit-binding.mm','audio-pause-overlay.c','audio-pcm.c','audio-volume.c','network-policy.c','display-snapshot.mm','clock/display-clock.mm','session-core.c'].map(file=>path.join(native,file)),path.join(klepton,'runtime/kl_env.c')];
  if(arm32)units.push(path.join(source,'arm32-host.cpp'));
  units.push(path.join(native,'android-log.c'));

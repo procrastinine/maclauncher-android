@@ -23,10 +23,29 @@ struct KljJniInvocation {
     uintptr_t reserved;
 };
 int klj_jni_invocation_enter(KljJniInvocation *,JNIEnv *);
+/* Returning foreign providers defer native exit until their original dispatcher
+ * and host-import cleanup have returned; no setjmp continuation is installed. */
+int klj_jni_invocation_enter_owned(KljJniInvocation *,JNIEnv *,int(*)(void *),void *);
+typedef struct {void *previous;void *owner;int(*prepare)(void *);} KljJniAttachScope;
+void klj_jni_attach_scope_enter(KljJniAttachScope *,int(*)(void *),void *);
+void klj_jni_attach_scope_leave(KljJniAttachScope *);
+int klj_jni_attach_prepare(void);
+/* Internal metadata may borrow JNI on a live native thread. Its temporary
+ * JavaThread attachment owns none of that physical thread's Android state. */
+typedef struct {JavaVM *vm;JNIEnv *environment;unsigned borrowed;} KljJniBorrowedAttachment;
+jint klj_jni_borrow_attachment(JavaVM *,KljJniBorrowedAttachment *);
+jint klj_jni_return_attachment(KljJniBorrowedAttachment *);
 /* Borrowed immutable operations from the initialized original process owner.
  * ThreadEnd retires foreign Android TLS while the real JVM environment lives. */
 typedef struct {int (*enter)(void);void (*javaEnd)(void);void (*physicalEnd)(void);} KljJniThreadLifecycle;
 void klj_jni_thread_lifecycle(const KljJniThreadLifecycle *);
+/* Additional VM-lifetime providers retire while the real JNIEnv still exists;
+ * they never replace the legacy thread owner or install another JVMTI agent. */
+typedef struct KljJniThreadObserver {
+    void (*javaEnd)(void *);void (*physicalEnd)(void *);void *owner;
+    struct KljJniThreadObserver *next;
+} KljJniThreadObserver;
+int klj_jni_thread_observe(KljJniThreadObserver *);
 void klj_jni_thread_retire(void);
 void klj_jni_physical_thread_retire(void);
 /* The VM owns attachment retirement. A callback made by its ThreadEnd event

@@ -1,0 +1,123 @@
+{
+  "source": "host-ast.json",
+  "sha256": "39cd02ebe09de8f803494576d0d1940eb7e733168df9046cf513b71929651b92",
+  "header": "android/choreographer.h",
+  "headerSha256": "a181b276d0672cae53111845fa5c8a8197e3cc0b9eadd1f7d46e0ff9cb6bc03a",
+  "functions": [
+    {
+      "name": "AChoreographerFrameCallbackData_getFrameTimeNanos",
+      "result": "int64_t",
+      "parameters": [
+        "const AChoreographerFrameCallbackData *"
+      ]
+    },
+    {
+      "name": "AChoreographerFrameCallbackData_getFrameTimelineDeadlineNanos",
+      "result": "int64_t",
+      "parameters": [
+        "const AChoreographerFrameCallbackData *",
+        "size_t"
+      ]
+    },
+    {
+      "name": "AChoreographerFrameCallbackData_getFrameTimelineExpectedPresentationTimeNanos",
+      "result": "int64_t",
+      "parameters": [
+        "const AChoreographerFrameCallbackData *",
+        "size_t"
+      ]
+    },
+    {
+      "name": "AChoreographerFrameCallbackData_getFrameTimelineVsyncId",
+      "result": "AVsyncId",
+      "parameters": [
+        "const AChoreographerFrameCallbackData *",
+        "size_t"
+      ]
+    },
+    {
+      "name": "AChoreographerFrameCallbackData_getFrameTimelinesLength",
+      "result": "size_t",
+      "parameters": [
+        "const AChoreographerFrameCallbackData *"
+      ]
+    },
+    {
+      "name": "AChoreographerFrameCallbackData_getPreferredFrameTimelineIndex",
+      "result": "size_t",
+      "parameters": [
+        "const AChoreographerFrameCallbackData *"
+      ]
+    },
+    {
+      "name": "AChoreographer_getInstance",
+      "result": "AChoreographer *",
+      "parameters": []
+    },
+    {
+      "name": "AChoreographer_postFrameCallback",
+      "result": "void",
+      "parameters": [
+        "AChoreographer *",
+        "AChoreographer_frameCallback",
+        "void *"
+      ]
+    },
+    {
+      "name": "AChoreographer_postFrameCallback64",
+      "result": "void",
+      "parameters": [
+        "AChoreographer *",
+        "AChoreographer_frameCallback64",
+        "void *"
+      ]
+    },
+    {
+      "name": "AChoreographer_postFrameCallbackDelayed",
+      "result": "void",
+      "parameters": [
+        "AChoreographer *",
+        "AChoreographer_frameCallback",
+        "void *",
+        "long"
+      ]
+    },
+    {
+      "name": "AChoreographer_postFrameCallbackDelayed64",
+      "result": "void",
+      "parameters": [
+        "AChoreographer *",
+        "AChoreographer_frameCallback64",
+        "void *",
+        "uint32_t"
+      ]
+    },
+    {
+      "name": "AChoreographer_postVsyncCallback",
+      "result": "void",
+      "parameters": [
+        "AChoreographer *",
+        "AChoreographer_vsyncCallback",
+        "void *"
+      ]
+    },
+    {
+      "name": "AChoreographer_registerRefreshRateCallback",
+      "result": "void",
+      "parameters": [
+        "AChoreographer *",
+        "AChoreographer_refreshRateCallback",
+        "void *"
+      ]
+    },
+    {
+      "name": "AChoreographer_unregisterRefreshRateCallback",
+      "result": "void",
+      "parameters": [
+        "AChoreographer *",
+        "AChoreographer_refreshRateCallback",
+        "void *"
+      ]
+    }
+  ]
+}

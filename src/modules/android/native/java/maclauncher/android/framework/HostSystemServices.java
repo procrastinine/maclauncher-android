@@ -16,6 +16,7 @@ public final class HostSystemServices implements AutoCloseable {
      * upstream service. Local ActivityManager remains process-owned; explicit
      * shared-directory queries use the same system process key separately. */
     public static Map<String,String> declarations(){return Map.ofEntries(
+        Map.entry(android.content.Context.LOCALE_SERVICE,android.app.ILocaleManager.DESCRIPTOR),
         Map.entry(android.content.Context.DROPBOX_SERVICE,com.android.internal.os.IDropBoxManagerService.class.getName()),
         Map.entry("statsmanager",android.os.IStatsManagerService.class.getName()),
         Map.entry("statscompanion",android.os.IStatsCompanionService.class.getName()),
@@ -39,6 +40,7 @@ public final class HostSystemServices implements AutoCloseable {
     private HostAudioPermissions audioPermissions;
     private HostNativePackages nativePackages;
     private HostTrustService trust;
+    private com.android.server.locales.HostLocaleService locales;
     private com.android.server.appwidget.HostWidgetService widgets;
     private com.android.server.HostSchedulingPolicy schedulingPolicy;
     private boolean closed;
@@ -87,6 +89,7 @@ public final class HostSystemServices implements AutoCloseable {
         var owner=new HostSystemServices(context,providers,diagnosticStore,new HostStats(context),new HostUsb(context));
         HostStartupTiming.mark("system-stats-usb");
         try {
+            owner.locales=new com.android.server.locales.HostLocaleService(context);
             owner.permissions=new HostPermissionController(context);
             owner.trust=new HostTrustService(context);
             HostStartupTiming.mark("system-permissions-trust");
@@ -138,6 +141,7 @@ public final class HostSystemServices implements AutoCloseable {
         if(audioPermissions!=null)audioPermissions.close();
         if(nativePackages!=null)nativePackages.close();
         if(trust!=null)trust.close();
+        if(locales!=null)locales.close();
         HostServices.unregisterLazy(android.content.Context.APPWIDGET_SERVICE);
         HostServices.unregisterLazy(android.content.Context.SENSOR_PRIVACY_SERVICE);
         if(widgets!=null){

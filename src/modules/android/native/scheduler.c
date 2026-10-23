@@ -142,7 +142,9 @@ int kl_host_scheduler_quiesce_pump(JNIEnv* env,KLHostScheduler* s,unsigned timeo
   active=active||klj_ndk_choreographer_inflight();
   if((!javaRetired||!active)&&(!s->threadStarted||atomic_load(&s->exited))){drained=javaRetired;break;}
   if(kl_display_clock_monotonic_now()-began>=budget){fail(env,"Android frame callback or dispatcher remained active during window shutdown");capture(env,s->callbacks,&primary);break;}
-  if(pump){pump(env,context);capture(env,s->callbacks,&primary);}sleep_one_ms();}
+  // Only an executing callback can need owner work. Waiting for the native
+  // dispatcher to detach must not dispatch unrelated application messages.
+  if(active&&pump){pump(env,context);capture(env,s->callbacks,&primary);}sleep_one_ms();}
  if(s->threadStarted&&atomic_load(&s->exited)){if(pthread_join(s->dispatcher,NULL)){fail(env,"Android display dispatcher join failed");capture(env,s->callbacks,&primary);}else s->threadStarted=0;}
  /* Dispatcher can no longer enqueue. No owner pointer ever entered SDL's
   * queue; flush only the reserved event, preserving all unrelated events. */

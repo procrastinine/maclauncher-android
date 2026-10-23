@@ -65,6 +65,9 @@ hidden-API metadata and resources. The WebView provider factory delegates to the
 shared WebKit provider while original provider access and lifecycle checks remain
 in Android's calling framework.
 
+ART compiler diagnostics use stable source and build prefixes for C, C++ and
+assembly inputs, including fetched source aliases.
+
 The ART supplier can include a boot image compiled by its matching `dex2oat64`.
 AIM's original producer receives the complete runtime boot class path, including
 the adapted framework, services and platform delegates. The compiler, ART
@@ -180,6 +183,30 @@ an object target used by both the JVM adapter and a standalone CPU archive.
 ART's typed host-call binding uses that same implementation; callbacks return
 through the Linux execution context to the original ART JNI frame. The CPU
 archive contains no VM, platform-service resolver or alternative libc.
+
+`prepareHostcallMemory` binds typed Rust arguments and native C packets to the
+same scoped memory owner. The optional versioned C resolver distinguishes read
+access from read/write access and retains shared backing until the enclosing
+host call returns, including synchronous callbacks. Packet size and alignment checks run before resolution. Embedded pointers, handles and offsets
+retain their original values and separate ownership; resolving an outer packet
+does not grant access to nested or persistent buffers. Older host libraries
+without the optional resolver retain their original binding.
+
+`prepareNativeWriter` adds a separate continuation for foreign Darwin CPU stores into owned mutable mappings. The original signal frame retains registers, native thread state and masks while a preallocated blocking queue transfers execution to the precise CPU under a mapping lease. The helper starts when the first mapping is prepared; signal admission is inactive when no mappings exist. Bounded slots live for the process and are not freed while signal handlers can reference them. Raw Darwin fork children decline inherited queues; fresh executable children create independent owners. A native Darwin syscall stop resumes its original instruction on the calling thread. Native callers must preserve Darwin's reserved x18 register. Kernel copyout can return `EFAULT` without a CPU fault, and GPU or DMA access requires its original buffer and synchronization owner. This continuation does not resolve those accesses or nested pointer lifetimes.
+
+`prepareSharedCode` retains original shared file and memory objects for executable Linux mappings. Executable shared pages remain non-executable in the native view and fetch their original bytes through the precise CPU, since another alias or process can change their instructions. Writable aliases preserve the original maximum permissions; read-only sources retain write refusal. Fixed mappings prepare the shared object and aliases before publishing the target. File offsets, shared inheritance, writeback and truncation remain with the original backing. Fork entries retain the original shared aliases and access limits; fault-contained CPU accesses preserve original pager errors as Linux signals. Shared discard and remap keep that backing instead of creating a private source copy.
+
+ART's mutable-code continuation retains bounded translations for owned read-only
+executable source between CPU intervals. Every interval reacquires the complete
+mapping lease and checks its backing, bounds, permissions and original bytes
+before using those translations. Source writes invalidate changed translations;
+replacement, permission removal and retirement discard the old mapping. Native
+and syscall boundaries clear the retained views and exclusive state.
+Non-executable I/O tables can also remain inert between intervals, with current
+mapping permissions reacquired before use and live bytes read by scoped callbacks.
+Table reuse preserves source-store barriers for shared or aliased data; only a
+separate unique-private-data classification permits that barrier to be omitted.
+
 Each CPU run holds the address space's read guard and an eight-entry borrowed
 mapping cache. Dynarmic's original page table handles full writable pages and
 compact buffer entries. Compact accesses check the existing mapping's exact byte
@@ -682,6 +709,9 @@ own namespace and returns control for other symbols. Registration is idempotent
 by resolver identity; lookup uses an immutable snapshot without allocation or a
 hot-path lock. Native library constructors and JNI initialization retain their
 library and class-loader lifetime.
+The JVM native binding includes one JNI image-provider registry in both ordinary
+and Bionic configurations. Active image ranges and their original ABI owner
+determine native registration; each configuration links the registry once.
 Native ABI adaptations precede generic host forwarding; symbols outside those
 adaptations retain their original providers. Imported functions, dynamic libc
 lookups and raw Linux syscall delegates use that same dispatcher.
@@ -1133,7 +1163,8 @@ for full and component builds, including original framework GLES JNI bindings
 and the typed guest ABI adapters. Component builds regenerate the same Ninja
 graph from those inputs before reusing cached objects.
 
-Compiler prefix maps keep developer paths out of delivered binaries. Published
+Compiler prefix maps keep developer paths out of delivered binaries, including
+ANGLE source projections, generated files and absolute header paths. Published
 native libraries use relocatable loader paths; notices retain source revisions
 and licenses. Runtime staging installs a complete version and updates its
 ordinary launcher declaration atomically.

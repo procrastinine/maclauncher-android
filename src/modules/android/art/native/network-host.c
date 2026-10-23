@@ -1,4 +1,5 @@
 #include "bridge.h"
+#include "host-packets.h"
 #include "connectivity-core.h"
 #include "network-policy.h"
 #include <stdatomic.h>
@@ -10,7 +11,13 @@ static int64_t network_error(int value){return -(value==ECANCELED?KLJ_ART_NETWOR
 static atomic_int networkAccess=-1;
 int64_t maclauncher_art_network(uint64_t address,uint64_t size){
  if(!address||size!=sizeof(struct KljArtNetwork))return -EINVAL;
+ uint64_t original_address=address;
+ int64_t packet_error=klj_art_resolve_packet(address,size,KLJ_ART_PACKET_ALIGN(struct KljArtNetwork),KLJ_ART_PACKET_READ,&address);if(packet_error)return packet_error;
  struct KljArtNetwork *value=(void*)(uintptr_t)address;
+ if(value->operation!=4&&value->operation!=5&&value->operation!=8){
+  packet_error=klj_art_resolve_packet(original_address,size,KLJ_ART_PACKET_ALIGN(struct KljArtNetwork),KLJ_ART_PACKET_READ_WRITE,&address);if(packet_error)return packet_error;
+  value=(void*)(uintptr_t)address;
+ }
  if(value->operation==8){int unset=-1,allowed=value->allowed!=0;if(!atomic_compare_exchange_strong(&networkAccess,&unset,allowed)&&unset!=allowed)return -EPERM;return 0;}
  if(value->operation==9){int allowed=atomic_load(&networkAccess);if(allowed<0)return -ENXIO;value->allowed=(unsigned)allowed;return 0;}
  if(value->operation==5)return klj_network_configure_ads(value->allowed!=0)?0:-EPERM;

@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {adaptAngleMetalSync, adaptAngleMetalSyncHeader} from './angle-sync-source.mjs';
+import {adaptAngleMetalSync, adaptAngleMetalSyncHeader, adaptAngleMetalSyncContext, adaptAngleMetalCommandBuffers} from './angle-sync-source.mjs';
+import {adaptAngleCurrentBindings} from './angle-current-source.mjs';
+import {adaptAngleDebugCallbackOwner} from './angle-debug-source.mjs';
+import {adaptAngleBlobCallbackOwner} from './angle-blob-source.mjs';
 import {prepareAngleDithering} from './angle-dither-source.mjs';
 import {copyChanged} from './upstream/source-files.mjs';
 
@@ -8,6 +11,14 @@ import {copyChanged} from './upstream/source-files.mjs';
 // render targets; expose that format for the IOSurface window owner as well.
 export function prepareAngleRgb565(source, output) {
   prepareAngleDithering(source, output);
+  const current = path.join(output, 'src/libANGLE/Display.cpp');
+  fs.mkdirSync(path.dirname(current), {recursive: true});
+  fs.writeFileSync(current, adaptAngleCurrentBindings(
+    fs.readFileSync(path.join(source, 'src/libANGLE/Display.cpp'), 'utf8')));
+  fs.writeFileSync(path.join(output,'src/libANGLE/Debug.cpp'),adaptAngleDebugCallbackOwner(fs.readFileSync(path.join(source,'src/libANGLE/Debug.cpp'),'utf8')));
+  copyChanged(new URL('./angle-debug-callback.h',import.meta.url),path.join(output,'src/libANGLE/angle-debug-callback.h'));
+  fs.writeFileSync(path.join(output,'src/libANGLE/Context.cpp'),adaptAngleBlobCallbackOwner(fs.readFileSync(path.join(source,'src/libANGLE/Context.cpp'),'utf8')));
+  copyChanged(new URL('./angle-blob-callback.h',import.meta.url),path.join(output,'src/libANGLE/angle-blob-callback.h'));
   const directory='src/libANGLE/renderer/metal';
   const patch=(name,changes)=>{
     let text=fs.readFileSync(path.join(source,directory,name),'utf8');
@@ -96,6 +107,12 @@ export function prepareAngleRgb565(source, output) {
     }));
   fs.writeFileSync(path.join(output,directory,'SyncMtl.mm'),adaptAngleMetalSync(fs.readFileSync(path.join(source,directory,'SyncMtl.mm'),'utf8')));
   fs.writeFileSync(path.join(output,directory,'SyncMtl.h'),adaptAngleMetalSyncHeader(fs.readFileSync(path.join(source,directory,'SyncMtl.h'),'utf8')));
+  // Dithering already adapted ContextMtl in this projection. Compose the sync
+  // change with that owned output rather than replacing its upstream edits.
+  const contextFile=path.join(output,directory,'ContextMtl.mm');
+  fs.writeFileSync(contextFile,adaptAngleMetalSyncContext(fs.readFileSync(contextFile,'utf8')));
+  fs.writeFileSync(path.join(output,directory,'mtl_command_buffer.mm'),adaptAngleMetalCommandBuffers(fs.readFileSync(path.join(source,directory,'mtl_command_buffer.mm'),'utf8')));
+  copyChanged(new URL('./angle-fence-completion.h', import.meta.url),path.join(output,directory,'angle-fence-completion.h'));
   // Keep ANGLE's native build-time internal shader compilation. Xcode's Metal
   // tools can live in a separately installed toolchain; xcrun resolves that
   // owner without requiring metallib beside the selected C++ compiler.

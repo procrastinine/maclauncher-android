@@ -18,7 +18,8 @@ static uint64_t klj_identity_word(const unsigned char *bytes,unsigned width) {
 static int klj_identity_range(uint64_t offset,uint64_t length,size_t size) {
     return offset<=size && length<=size-offset;
 }
-static char *klj_elf_soname_bytes(const unsigned char *bytes,size_t size) {
+static char *klj_elf_identity_bytes(const unsigned char *bytes,size_t size,uint64_t *flags_1) {
+    if(flags_1)*flags_1=0;
     if(size<52 || memcmp(bytes,"\177ELF",4) || bytes[5]!=1 ||
        (bytes[4]!=1 && bytes[4]!=2))return NULL;
     unsigned width=bytes[4]==2?8:4;
@@ -42,6 +43,7 @@ static char *klj_elf_soname_bytes(const unsigned char *bytes,size_t size) {
             if(tag==5)strings=value;      /* DT_STRTAB */
             if(tag==10)string_size=value; /* DT_STRSZ */
             if(tag==14)name=value;        /* DT_SONAME */
+            if(tag==0x6ffffffb && flags_1)*flags_1=value; /* DT_FLAGS_1 */
         }
     }
     if(name>=string_size)return NULL;
@@ -63,12 +65,14 @@ static char *klj_elf_soname_bytes(const unsigned char *bytes,size_t size) {
     }
     return NULL;
 }
-static char *klj_elf_soname(const char *path) {
+static char *klj_elf_identity(const char *path,uint64_t *flags_1) {
     int fd=open(path,O_RDONLY|O_CLOEXEC);if(fd<0)return NULL;
     struct stat st;
     if(fstat(fd,&st) || st.st_size<=0 || (uint64_t)st.st_size>SIZE_MAX){close(fd);return NULL;}
     size_t size=(size_t)st.st_size;
     void *bytes=mmap(NULL,size,PROT_READ,MAP_PRIVATE,fd,0);close(fd);
     if(bytes==MAP_FAILED)return NULL;
-    char *name=klj_elf_soname_bytes(bytes,size);munmap(bytes,size);return name;
+    char *name=klj_elf_identity_bytes(bytes,size,flags_1);munmap(bytes,size);return name;
 }
+static inline char *klj_elf_soname_bytes(const unsigned char *bytes,size_t size){return klj_elf_identity_bytes(bytes,size,NULL);}
+static inline char *klj_elf_soname(const char *path){return klj_elf_identity(path,NULL);}
