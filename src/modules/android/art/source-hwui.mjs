@@ -50,28 +50,26 @@ export function exportHwuiSources({sources,registry,registryCache}={},destinatio
  try{
   fs.mkdirSync(destination,{recursive:true});const projects=[];
   for(const record of manifest.sources){
-   const verified=verifyHwuiSource(record,sources[record.key]);
+   const input=sources[record.key],hasParts=record.checks.some(check=>check.path==='.')&&typeof input==='object'&&input?.parts?.length;
+   const verified=verifyHwuiSource(record,hasParts?input.root:input);
+   if(hasParts)verified.roots=verifyHwuiSource({...record,checks:[]},input).roots;
    if(record.noticeChecks?.length)verifyHwuiSource({...record,checks:record.noticeChecks},sources[record.key]);
    const licenses=(record.licensePaths||[]).filter(name=>original(verified,name,true));
    const names=[...new Set([...selection(record,verified),...licenses,...(record.noticeChecks||[]).map(check=>check.path)])].map(relative).sort();
    const selected=names.filter(name=>!names.some(parent=>name!==parent&&name.startsWith(parent+'/')));
    let exported;
-   try{for(const name of selected){
-    let input=original(verified,name,true);
-    if(!input){
+   try{
+    if(record.key==='frameworkLegacy'){
      const checkout=verified.checks.find(check=>check.path==='.')?.file;
-     if(!checkout)original(verified,name);
-     // A clean sparse checkout authenticates the original tree but may not
-     // materialize consumed headers. Export only those pinned local objects.
-     if(!exported){
-      let members=selected;
-      if(record.key==='frameworkLegacy')members=execFileSync('git',['-C',checkout,'ls-tree','-r','--name-only','-z',record.revision,'--',...selected],{encoding:'utf8',env:{...process.env,GIT_NO_LAZY_FETCH:'1'}}).split('\0').filter(file=>file&&!Content.excludedReason(file)&&(selected.includes(file)||/\.(?:h|hpp|inc)$/.test(file))&&!file.split('/').includes('fuzz'));
-      exported=fs.mkdtempSync(path.join(path.dirname(destination),'.hwui-source-'));exportSources(checkout,record.revision,members,exported,{offline:true});
-     }
-     input=path.join(exported,name);if(!fs.existsSync(input))original(verified,name);
-    }
-    copySource(input,path.join(destination,'sources',record.key,name),name);
-   }}finally{if(exported)fs.rmSync(exported,{recursive:true,force:true});}
+     const members=execFileSync('git',['-C',checkout,'ls-tree','-r','-z',record.revision,'--',...selected],{encoding:'utf8',env:{...process.env,GIT_NO_LAZY_FETCH:'1'}}).split('\0').filter(Boolean).map(line=>{const at=line.indexOf('\t'),[mode,type,object]=line.slice(0,at).split(' ');return {path:line.slice(at+1),mode:parseInt(mode,8),type,object};}).filter(file=>file.type==='blob'&&!Content.excludedReason(file.path)&&(selected.includes(file.path)||/\.(?:h|hpp|inc)$/.test(file.path))&&!file.path.split('/').includes('fuzz')&&file.path!=='native/android/include/android/multinetwork.h');
+     // The network forwarding alias is unrelated to the HWUI header consumers.
+     // Supplied archive parts authenticate against each original Git object;
+     // sparse checkout metadata authenticates the original project root.
+     const missing=[];
+     for(const member of members){const file=original(verified,member.path,true);if(!file){missing.push(member);continue;}const proof=verifyHwuiSource({...record,checks:[member]},input).checks[0];copySource(proof.file,path.join(destination,'sources',record.key,member.path),member.path);}
+     if(missing.length){exported=fs.mkdtempSync(path.join(path.dirname(destination),'.hwui-source-'));exportSources(checkout,record.revision,missing.map(member=>member.path),exported,{offline:true});for(const member of missing)copySource(path.join(exported,member.path),path.join(destination,'sources',record.key,member.path),member.path);}
+    }else for(const name of selected)copySource(original(verified,name),path.join(destination,'sources',record.key,name),name);
+   }finally{if(exported)fs.rmSync(exported,{recursive:true,force:true});}
    projects.push({key:record.key,project:record.project,repository:record.repository,revision:record.revision,paths:selected,checks:record.checks});
   }
   const locked=lockedRegistry(),dependencies=[],seen=new Set(),cacheDirs=[registryCache,...fs.readdirSync(registryCache,{withFileTypes:true}).filter(item=>item.isDirectory()).map(item=>path.join(registryCache,item.name))];

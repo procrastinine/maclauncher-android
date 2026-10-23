@@ -104,6 +104,7 @@ test('HWUI source export narrows legacy trees and authenticates selected registr
  const checkout=path.join(root,'original');write('original/core/jni/include/required.h','original declaration\n');write('original/unrelated/unused.txt','unrelated original source\n');write('original/NOTICE','required original notice\n');
  execFileSync('git',['-C',checkout,'init','-q']);execFileSync('git',['-C',checkout,'add','.']);execFileSync('git',['-C',checkout,'-c','user.name=Source test','-c','user.email=test@example.invalid','commit','-qm','Pinned source']);
  const git=args=>execFileSync('git',['-C',checkout,...args],{encoding:'utf8'}).trim(),revision=git(['rev-parse','HEAD']);
+ git(['sparse-checkout','set','--no-cone','/NOTICE']);assert.equal(fs.existsSync(path.join(checkout,'core/jni/include/required.h')),false);
  write('src/modules/android/native/hwui/sources.json',JSON.stringify({sources:[{key:'frameworkLegacy',project:'platform/frameworks/base',repository:'https://example.invalid/framework',revision,licensePaths:['NOTICE','ALTERNATIVE-LICENSE'],checks:[{path:'.',type:'tree',object:git(['rev-parse','HEAD^{tree}']),mode:16384}]}],includes:[{source:'frameworkLegacy',path:'core/jni/include'}]}));
  write('crate/mini-1.0/src/lib.rs','pub fn original() {}\n');write('crate/mini-1.0/tests/unused.rs','unused test\n');write('crate/mini-1.0/LICENSE','original crate license\n');
  const cache=path.join(root,'cache');fs.mkdirSync(cache);const crate=path.join(cache,'mini-1.0.crate');execFileSync('/usr/bin/tar',['-czf',crate,'-C',path.join(root,'crate'),'mini-1.0']);
