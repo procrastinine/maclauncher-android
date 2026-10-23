@@ -88,6 +88,10 @@ test('ART source export preserves locked AOSP and notices while omitting unused 
  fs.symlinkSync('runtime.cc',path.join(root,'aosp/art/runtime/original-link.h'));
  const header='original bionic declaration\n';write('aosp/bionic/libc/include/header.h',header);write('aosp/unselected-note.json','unselected data');
  const lock='AOSP_TAG=android-16.0.0_r1\nSOURCE_TREES=(\n "platform/art|runtime|'+treeHash+'"\n)\nSOURCE_FILES=(\n "platform/bionic|libc/include/header.h|'+hash(header)+'"\n)\n';
+ const plugin='original JVMTI source\n';write('aosp/art/openjdkjvmti/plugin.cc',plugin);
+ const pluginHash=hash(hash(plugin)+'  ./plugin.cc\n');
+ write('src/modules/android/art/adapters/art-android-sources.lock',lock.replace('SOURCE_TREES=(\n','SOURCE_TREES=(\n "platform/art|openjdkjvmti|'+pluginHash+'"\n'));
+
  const projects=[];
  for(const [id,contents]of Object.entries({aim:{'patches/art-android/sources.lock':lock,'licensing/third-party/art-NOTICE':'original ART notice\n','src/original.rs':'original Rust\n'},klepton:{'runtime/original.c':'original host source\n'},'android-gles-headers':{'include/EGL/egl.h':'original header\n','scripts/gl.xml':'original registry\n'},unicorn:{'src/original.c':'original CPU source\n'},'aosp-native':{'libs/binder/Parcel.cpp':'original Binder source\n'}})){
   const checkout=path.join(root,'checkouts',id);for(const [name,bytes]of Object.entries({...contents,LICENSE:'required license\n','tests/unused.c':'unused upstream test\n','src/build.ninja':'generated graph\n'}))write(path.relative(root,path.join(checkout,name)),bytes);
@@ -100,6 +104,7 @@ test('ART source export preserves locked AOSP and notices while omitting unused 
  assert.equal(exportArtSourceArchive(options),options.output);
  const first=fs.readFileSync(options.output),time=fs.statSync(options.output).mtimeMs;await new Promise(resolve=>setTimeout(resolve,1100));assert.equal(exportArtSourceArchive(options),options.output);assert.deepEqual(fs.readFileSync(options.output),first);assert.equal(fs.statSync(options.output).mtimeMs,time,'An unchanged retry retains the generated archive.');
  const extracted=path.join(root,'extracted');fs.mkdirSync(extracted);execFileSync('/usr/bin/tar',['-xf',options.output,'-C',extracted]);
+ assert.equal(fs.readFileSync(path.join(extracted,'upstream/aim-aosp/art/openjdkjvmti/plugin.cc'),'utf8'),plugin);
  assert.equal(fs.readFileSync(path.join(extracted,'upstream/aim-aosp/art/runtime/runtime.cc'),'utf8'),runtime['runtime.cc']);assert.equal(fs.existsSync(path.join(extracted,'upstream/aim-aosp/art/runtime/runtime_test.cc')),false);assert.equal(fs.existsSync(path.join(extracted,'upstream/aim-aosp/unselected-note.json')),false);assert.equal(fs.existsSync(path.join(extracted,'integration-notes.json')),false);assert.equal(fs.existsSync(path.join(extracted,'src/modules/android/native/original_test.c')),false);
  assert.equal(fs.readlinkSync(path.join(extracted,'upstream/aim-aosp/art/runtime/original-link.h')),'runtime.cc');
  const names=execFileSync('/usr/bin/tar',['-tf',path.join(extracted,'upstream/aim.tar')],{encoding:'utf8'});assert.match(names,/licensing\/third-party\/art-NOTICE/);assert.match(names,/LICENSE/);assert.doesNotMatch(names,/tests\/|build\.ninja/);assert.equal(fs.readFileSync(path.join(extracted,'source-inputs.json'),'utf8').includes(root),false);

@@ -67,6 +67,12 @@ in Android's calling framework.
 
 ART compiler diagnostics use stable source and build prefixes for C, C++ and
 assembly inputs, including fetched source aliases.
+The compiler decodes nullable array references before implicit null checks in
+array loads, stores and length operations. Explicit null-check paths retain
+non-null decoding. The ART producer builds `libopenjdkjvmti.so` from the matching
+Android 16 source module alongside the rebuilt `libart.so`; JVMTI plugins use
+those same internal interfaces. Compiler preparation and source export consume
+the same public AOSP source lock, including the original JVMTI source tree.
 
 The ART supplier can include a boot image compiled by its matching `dex2oat64`.
 AIM's original producer receives the complete runtime boot class path, including

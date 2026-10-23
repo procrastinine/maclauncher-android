@@ -35,7 +35,7 @@ export function buildArtElfs({aim,fetched,sdk,work,jdk,python,jobs=4,cargo='carg
   cwd:aim,env:{...environment,CARGO_BUILD_JOBS:String(jobs),CARGO_TARGET_DIR:work},stdio:'inherit'});
  }finally{if(!wasMounted&&fs.existsSync(path.join(mount,'root.identity')))execFileSync('hdiutil',['detach',mount],{stdio:'inherit'});}
  const art=path.join(work,'aim/art/stripped');
- for(const file of ['bin/dex2oat64',...['libartbase','libdexfile','libprofile','libart','libopenjdkjvm','libadbconnection'].map(name=>'lib64/'+name+'.so')])
+ for(const file of ['bin/dex2oat64',...['libartbase','libdexfile','libprofile','libart','libopenjdkjvm','libadbconnection','libopenjdkjvmti'].map(name=>'lib64/'+name+'.so')])
   if(!fs.statSync(path.join(art,file)).isFile())throw Error('Original ART producer did not produce '+file);
  return {art};
 }

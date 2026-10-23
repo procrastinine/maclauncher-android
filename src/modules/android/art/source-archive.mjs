@@ -35,7 +35,7 @@ function archiveCheckout(record,checkout,output,trees=['.']){
 function normalizeSource(directory){for(const entry of fs.readdirSync(directory,{withFileTypes:true})){const file=path.join(directory,entry.name);if(entry.isDirectory())normalizeSource(file);if(entry.isSymbolicLink())fs.lutimesSync(file,0,0);else fs.utimesSync(file,0,0);}fs.utimesSync(directory,0,0);}
 function lockedArtSources(aim,aosp,destination){
  if(typeof aosp!=='string'||!path.isAbsolute(aosp)||!fs.existsSync(aosp))throw Error('Default ART source export requires sources.aosp with the original AOSP inputs from patches/art-android/sources.lock, or an explicit sourceArchive.');
- const text=git(aim,['show','HEAD:patches/art-android/sources.lock']),tag=text.match(/^AOSP_TAG=([^\s#]+)/m)?.[1],records=[];
+ const text=fs.readFileSync(new URL('./adapters/art-android-sources.lock',import.meta.url),'utf8'),tag=text.match(/^AOSP_TAG=([^\s#]+)/m)?.[1],records=[];
  if(!tag)throw Error('ART source lock has no AOSP tag.');
  function regularFiles(directory){const result=[];function walk(at,relative=''){for(const item of fs.readdirSync(at,{withFileTypes:true})){if(item.name==='.fetched')continue;const name=path.posix.join(relative,item.name),file=path.join(at,item.name);if(item.isDirectory())walk(file,name);else if(item.isFile())result.push(name);else if(!item.isSymbolicLink())throw Error('ART AOSP source must be a regular file: '+name);}}walk(directory);return result.sort((a,b)=>Buffer.compare(Buffer.from(a),Buffer.from(b)));}
  for(const [section,tree]of [['SOURCE_TREES',true],['SOURCE_FILES',false]]){
