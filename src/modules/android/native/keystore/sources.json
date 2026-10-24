@@ -23,7 +23,7 @@
     "name": "libcppbor",
     "checkout": "aosp-libcppbor",
     "url": "https://android.googlesource.com/platform/system/libcppbor",
-    "revision": "a1cda453ee51c4bbf20b30c6cf00796c983d23ce",
+    "revision": "93f3967a33aaba470449728abdb972834537b223",
     "trees": [
       "."
     ]

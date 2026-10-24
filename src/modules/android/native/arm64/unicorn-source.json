@@ -1,6 +1,6 @@
 {
   "url": "https://github.com/unicorn-engine/unicorn.git",
-  "revision": "8028ec436f2d9376525352dd38ed9ed6b9f6be10",
+  "revision": "7c5db94191defc1e04a4f66f4eb1220903cba837",
   "version": "2.1.4",
   "license": "GPL-2.0 with upstream component notices",
   "hostArchitecture": "arm64",

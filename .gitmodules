@@ -122,7 +122,7 @@
 [submodule "android-gles-headers"]
 	path = src/external/android-gles-headers
 	url = https://github.com/krkrz/angle.git
-	maclauncher-revision = f82b1b4dc548dc8325ec83c11cd2363f3656a894
+	maclauncher-revision = 7dbabd125373889681e0f4169e2a2496a789e5dc
 	maclauncher-role = source
 
 [submodule "aosp-aidl"]
@@ -134,7 +134,7 @@
 [submodule "aosp-apache-http"]
 	path = src/external/aosp-apache-http
 	url = https://android.googlesource.com/platform/external/apache-http
-	maclauncher-revision = 4c955170a0e8eafbb61bfe440c365a7539e84e4c
+	maclauncher-revision = 818f4b36e61315f2ae27fa05cf6b5b293f349c8c
 	maclauncher-role = source
 
 [submodule "aosp-apex"]
@@ -182,13 +182,13 @@
 [submodule "aosp-compiler-rt"]
 	path = src/external/aosp-compiler-rt
 	url = https://android.googlesource.com/platform/external/compiler-rt
-	maclauncher-revision = 9f188da05921b58660238d25bea57d7cf4977602
+	maclauncher-revision = a36a1bcac7ec7ac9be29d8b0b5e669d53f7886f7
 	maclauncher-role = source
 
 [submodule "aosp-conscrypt"]
 	path = src/external/aosp-conscrypt
 	url = https://android.googlesource.com/platform/external/conscrypt
-	maclauncher-revision = 156a72a6cf2c27ff27ca526942258af8ae6b13fd
+	maclauncher-revision = 771401e90ac8728487b599e5b87e0628ed528ea0
 	maclauncher-role = source
 
 [submodule "aosp-fmt"]
@@ -212,31 +212,31 @@
 [submodule "aosp-google-fonts-carrois-gothic-sc"]
 	path = src/external/aosp-google-fonts-carrois-gothic-sc
 	url = https://android.googlesource.com/platform/external/google-fonts/carrois-gothic-sc
-	maclauncher-revision = 317d5aad96dac8c1c6ac70fe7f1f77aa0a0bc178
+	maclauncher-revision = 34e696f9dd9272607c3089a24bdd19b9f0e99e3c
 	maclauncher-role = source
 
 [submodule "aosp-google-fonts-coming-soon"]
 	path = src/external/aosp-google-fonts-coming-soon
 	url = https://android.googlesource.com/platform/external/google-fonts/coming-soon
-	maclauncher-revision = e72d9ee22b601fd4e4ae56adc3b74a3d455364e3
+	maclauncher-revision = d4dc7bbf8f7560c16016d920413bca6f0f62df81
 	maclauncher-role = source
 
 [submodule "aosp-google-fonts-cutive-mono"]
 	path = src/external/aosp-google-fonts-cutive-mono
 	url = https://android.googlesource.com/platform/external/google-fonts/cutive-mono
-	maclauncher-revision = f9e9dbc9604e91245765ba59c405712f618ac9bd
+	maclauncher-revision = 670e926c3f6f8a9f0dcfe0174f2ec138124424ed
 	maclauncher-role = source
 
 [submodule "aosp-google-fonts-dancing-script"]
 	path = src/external/aosp-google-fonts-dancing-script
 	url = https://android.googlesource.com/platform/external/google-fonts/dancing-script
-	maclauncher-revision = 56d6ed7d67ef97d12eae22d95aea33aab2270e1d
+	maclauncher-revision = dc191e60cf6b573e4e280b75c39343a2a70b1175
 	maclauncher-role = source
 
 [submodule "aosp-google-fonts-source-sans-pro"]
 	path = src/external/aosp-google-fonts-source-sans-pro
 	url = https://android.googlesource.com/platform/external/google-fonts/source-sans-pro
-	maclauncher-revision = ea777a6c3d98a14c34605c56e1cf36251fd8040b
+	maclauncher-revision = c099ab73c712ed9c67f87e1caa32a231c6897351
 	maclauncher-role = source
 
 [submodule "aosp-hardware-interfaces"]
@@ -266,7 +266,7 @@
 [submodule "aosp-libcppbor"]
 	path = src/external/aosp-libcppbor
 	url = https://android.googlesource.com/platform/system/libcppbor
-	maclauncher-revision = a1cda453ee51c4bbf20b30c6cf00796c983d23ce
+	maclauncher-revision = 93f3967a33aaba470449728abdb972834537b223
 	maclauncher-role = source
 
 [submodule "aosp-libhardware"]
@@ -308,7 +308,7 @@
 [submodule "aosp-roboto-flex-fonts"]
 	path = src/external/aosp-roboto-flex-fonts
 	url = https://android.googlesource.com/platform/external/roboto-flex-fonts
-	maclauncher-revision = e9deeba80f18a1348a113f8ce954f0e5248fabde
+	maclauncher-revision = 458ec4e262a822f055206ae4630fd0cb7fab9ea9
 	maclauncher-role = source
 
 [submodule "aosp-roboto-fonts"]
@@ -386,13 +386,13 @@
 [submodule "aosp-xmlpull"]
 	path = src/external/aosp-xmlpull
 	url = https://android.googlesource.com/platform/libcore
-	maclauncher-revision = a996d969fdd17c6707b84544e5d1c35e0c25b5cb
+	maclauncher-revision = 1c599b67bcd3de5c50c79d0622e40b6de99b4cb4
 	maclauncher-role = source
 
 [submodule "dex2jvm"]
 	path = src/external/dex2jvm
 	url = https://github.com/kksimp/dex2jvm
-	maclauncher-revision = 4c666fdc49fee8f61166fa943980e92a1368a15f
+	maclauncher-revision = b563cf8ee837348efa13c71797387345c9f3de5c
 	maclauncher-role = source
 
 [submodule "dynarmic"]
@@ -428,25 +428,25 @@
 [submodule "libvpx"]
 	path = src/external/libvpx
 	url = https://github.com/webmproject/libvpx
-	maclauncher-revision = 6df3ec34557879fff673706f4a1d9fbd0f3a6f0e
+	maclauncher-revision = 8c9ef99ff058c2059395cab9637dc52ca223a520
 	maclauncher-role = source
 
 [submodule "ninja"]
 	path = src/external/ninja
 	url = https://github.com/ninja-build/ninja
-	maclauncher-revision = 2daa09ba270b0a43e1929d29b073348aa985dfaa
+	maclauncher-revision = 3441b633c2fe2c494e958780ba0f4227b1327634
 	maclauncher-role = source
 
 [submodule "robolectric"]
 	path = src/external/robolectric
 	url = https://github.com/robolectric/robolectric
-	maclauncher-revision = 83b71974f00edaef78b72e212d60168b4bc4a70a
+	maclauncher-revision = 872a2e0d448af694b3a61e40ed0a62728ca4b784
 	maclauncher-role = reference
 	maclauncher-init = false
 [submodule "unicorn"]
 	path = src/external/unicorn
 	url = https://github.com/unicorn-engine/unicorn.git
-	maclauncher-revision = 8028ec436f2d9376525352dd38ed9ed6b9f6be10
+	maclauncher-revision = 7c5db94191defc1e04a4f66f4eb1220903cba837
 	maclauncher-role = source
 
 [submodule "aosp-hwui-av"]
@@ -536,7 +536,7 @@
 [submodule "aosp-hwui-piex"]
 	path = src/external/aosp-hwui/piex
 	url = https://android.googlesource.com/platform/external/piex
-	maclauncher-revision = 6d3d1e7dc6e4b0d348c60160f5a9397a28eae630
+	maclauncher-revision = c7c1d44ab9b98e9e51baf1e5d02f65ba03fbed28
 	maclauncher-role = source
 
 [submodule "aosp-hwui-libpng"]
@@ -566,7 +566,7 @@
 [submodule "aosp-hwui-libultrahdr"]
 	path = src/external/aosp-hwui/libultrahdr
 	url = https://android.googlesource.com/platform/external/libultrahdr
-	maclauncher-revision = 8ca5f9daff887eb2fd412bb66e00f850f582a3f5
+	maclauncher-revision = 4a5906659019f5b73b211759d0bfca0375fc6300
 	maclauncher-role = source
 
 [submodule "aosp-hwui-webp"]
@@ -578,13 +578,13 @@
 [submodule "aosp-hwui-wuffs-mirror-release-c"]
 	path = src/external/aosp-hwui/wuffs-mirror-release-c
 	url = https://android.googlesource.com/platform/external/wuffs-mirror-release-c
-	maclauncher-revision = ecaeabeb59e4fb29313f893ead3c9d90dc2fb586
+	maclauncher-revision = 0e0e6e4100c92d5ae42759ec93221b1c91903029
 	maclauncher-role = source
 
 [submodule "aosp-hwui-googletest"]
 	path = src/external/aosp-hwui/googletest
 	url = https://android.googlesource.com/platform/external/googletest
-	maclauncher-revision = ed43ae9f2f62df2b77e2400da414c126e7203e7a
+	maclauncher-revision = cbeab5d01811d23ea488efc07f2c31f7c53024e2
 	maclauncher-role = source
 
 [submodule "aosp-hwui-soong"]
@@ -603,4 +603,10 @@
 	path = src/external/aosp-llvm-libc
 	url = https://android.googlesource.com/platform/external/llvm-libc
 	maclauncher-revision = 549bb629f8325dc9f5221bb16a3de908a753c304
+	maclauncher-role = source
+
+[submodule "aim-native-memory"]
+	path = src/external/aim-native-memory
+	url = https://github.com/hahnlee/aim
+	maclauncher-revision = 3136fe473714ec5cf8ad34323313174761d95139
 	maclauncher-role = source

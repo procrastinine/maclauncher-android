@@ -18,10 +18,10 @@ export async function buildKeyMintFoundation({sources,boringssl,bionic,output,ni
 const out=path.resolve(output);
 const source=name=>sources[name];
 const records=[
-  {id:'keymaster',path:source('keymaster'),url:'https://android.googlesource.com/platform/system/keymaster',revision:'1d26bd0ab27ccf3ed1af84e6514026ea4167bf3f',licenses:['NOTICE']},
-  {id:'libcppbor',path:source('libcppbor'),url:'https://android.googlesource.com/platform/system/libcppbor',revision:'a1cda453ee51c4bbf20b30c6cf00796c983d23ce',licenses:['LICENSE']},
-  {id:'libhardware',path:source('libhardware'),url:'https://android.googlesource.com/platform/hardware/libhardware',revision:'cd2b68d71a1dd9a45668ddd9a507000ccd7ff114',licenses:['NOTICE']},
-  {id:'logging',path:source('logging'),url:'https://android.googlesource.com/platform/system/logging',revision:'d78b713380007d3c0dde14712cbcbec27f491ad9',licenses:['liblog/NOTICE']},
+  {id:'keymaster',path:source('keymaster'),url:'https://android.googlesource.com/platform/system/keymaster',revision:suppliers.find(supplier=>supplier.name==='keymaster').revision,licenses:['NOTICE']},
+  {id:'libcppbor',path:source('libcppbor'),url:'https://android.googlesource.com/platform/system/libcppbor',revision:suppliers.find(supplier=>supplier.name==='libcppbor').revision,licenses:['LICENSE']},
+  {id:'libhardware',path:source('libhardware'),url:'https://android.googlesource.com/platform/hardware/libhardware',revision:suppliers.find(supplier=>supplier.name==='libhardware').revision,licenses:['NOTICE']},
+  {id:'logging',path:source('logging'),url:'https://android.googlesource.com/platform/system/logging',revision:suppliers.find(supplier=>supplier.name==='logging').revision,licenses:['liblog/NOTICE']},
   {id:'libbase',path:sources.libbase,url:'https://android.googlesource.com/platform/system/libbase',revision:pins.aospLibbase,licenses:['NOTICE'],export:['Android.bp','include','NOTICE','.']},
   {id:'fmt',path:sources.fmt,url:'https://android.googlesource.com/platform/external/fmtlib',revision:pins.aospFmt,licenses:['NOTICE','LICENSE'],export:['Android.bp','include','src','NOTICE','LICENSE']},
   {id:'core',path:sources.core,url:'https://android.googlesource.com/platform/system/core',revision:pins.aospSystemCore,licenses:['libcutils/NOTICE','libutils/NOTICE'],export:['libcutils/include','libprocessgroup/include','libsystem/include','libutils/include','libutils/binder/include','libcutils/NOTICE','libutils/NOTICE']},
