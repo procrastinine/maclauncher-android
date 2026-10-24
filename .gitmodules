@@ -188,7 +188,7 @@
 [submodule "aosp-conscrypt"]
 	path = src/external/aosp-conscrypt
 	url = https://android.googlesource.com/platform/external/conscrypt
-	maclauncher-revision = 771401e90ac8728487b599e5b87e0628ed528ea0
+	maclauncher-revision = 156a72a6cf2c27ff27ca526942258af8ae6b13fd
 	maclauncher-role = source
 
 [submodule "aosp-fmt"]
