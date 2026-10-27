@@ -46,11 +46,16 @@ static int initial_state(void){
  struct sockaddr_in ipv4={.sin_len=sizeof(ipv4),.sin_family=AF_INET};
  struct sockaddr_in6 ipv6={.sin6_len=sizeof(ipv6),.sin6_family=AF_INET6};
  const struct sockaddr *addresses[]={(const struct sockaddr *)&ipv4,(const struct sockaddr *)&ipv6};
+ /* NWPathMonitor has no synchronous query, so the deprecated reachability
+  * read stays the initial-state source. */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
  for(unsigned i=0;i<sizeof(addresses)/sizeof(*addresses);i++){
   SCNetworkReachabilityRef route=SCNetworkReachabilityCreateWithAddress(NULL,addresses[i]);
   SCNetworkReachabilityFlags flags=0;
   if(route){if(SCNetworkReachabilityGetFlags(route,&flags)&&(flags&kSCNetworkReachabilityFlagsReachable)&&!(flags&kSCNetworkReachabilityFlagsConnectionRequired))value|=1;CFRelease(route);}
  }
+#pragma clang diagnostic pop
  SCDynamicStoreRef store=SCDynamicStoreCreate(NULL,CFSTR("MacLauncher Android connectivity"),NULL,NULL);
  if(store){
   CFStringRef keys[]={CFSTR("State:/Network/Global/IPv4"),CFSTR("State:/Network/Global/IPv6")};

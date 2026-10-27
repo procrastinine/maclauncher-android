@@ -91,4 +91,5 @@ int main(){@autoreleasepool{
  // loop. A dispatch-only loop can leave foreground ownership stale, preventing
  // the gesture observer from following the Android window after activation.
  CFRunLoopRun();
+ return 0;
 }}

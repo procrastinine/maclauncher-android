@@ -1449,7 +1449,7 @@ owner and optional sensor publication; service policy remains in the common
 implementation. The native presenter reports buffer retirement independently of
 physical display, including occluded windows.
 ART passes its present-fence observer to the shared graphics library through
-`rsSubmitFramePresenterAtTimeObserved`; source-buffer release and presentation
+`rsSubmitFramePresenterObserved`; source-buffer release and presentation
 retirement retain separate callbacks.
 Both VM builds compile the same CoreAudio device discovery, format, latency,
 route-monitor lifetime, PCM mixing, volume and pause implementation. JNI and
