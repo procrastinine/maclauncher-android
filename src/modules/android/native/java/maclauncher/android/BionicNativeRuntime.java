@@ -24,7 +24,7 @@ final class BionicNativeRuntime {
   if(!map.startsWith(config.directory("cacheRoot"))||!Files.isRegularFile(map))throw new SecurityException("Android native namespace is outside its private cache");
   Path resolved=state.resolve("bootstrap.json").toRealPath();
   if(!resolved.startsWith(config.directory("cacheRoot"))||Files.size(resolved)>16384)throw new SecurityException("Android native bootstrap is outside its private cache");
-  JSONObject local=new JSONObject(Files.readString(resolved));
+  JSONObject local=new JSONObject(StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(Files.readAllBytes(resolved))).toString());
   if(local.getInt("schemaVersion")!=1||!local.getString("imageSha256").equals(profile.getJSONObject("systemImage").getJSONObject("acquisition").getString("sha256")))throw new SecurityException("Android native system image differs from its runtime");
   Path root=Path.of(local.getString("systemRoot")).toRealPath();
   String bootstrapName=profile.getString("inodeBootstrap");
@@ -34,7 +34,7 @@ final class BionicNativeRuntime {
   // This original metadata helper has no JVM or graphics entry. The parent VM
   // retains its complete ordinary preload and sandbox environment.
   metadata.environment().keySet().removeIf(key->key.startsWith("DYLD_"));
-  metadata.redirectError(ProcessBuilder.Redirect.INHERIT);metadata.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+  metadata.redirectError(ProcessBuilder.Redirect.INHERIT);metadata.redirectOutput(new java.io.File("/dev/null"));
   if(metadata.start().waitFor()!=0)throw new IllegalStateException("Android native storage metadata could not be prepared");
   if(invalidIdentity(authority.self.processName())||invalidIdentity(authority.self.securityContext()))throw new SecurityException("Android native identity contains invalid control characters");
   String identity="service\t"+authority.self.processName()+"\nuid\t"+authority.self.uid()+"\ngid\t"+authority.self.uid()+"\ncap_effective\t0\ncap_permitted\t0\ncap_bounding\t0\nseclabel\t"+authority.self.securityContext()+"\n";

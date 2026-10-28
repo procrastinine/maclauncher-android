@@ -16,10 +16,13 @@ export function packageArtDex({classes,dex,jar,target}){
 /** Common adapters use the same Android core declarations as ART entry code. */
 export function compileArtSources({jdk,core,api,sharedClasses,classes,sources}){
  // Android's SDK module contains public libcore declarations. The original
- // capability structs and methods are hidden framework APIs; retain their
+ // capability structs and VMRuntime methods are hidden framework APIs; retain their
  // complete original class declarations for compilation, outside program output.
  const declarations=classes+'.platform-declarations';fs.mkdirSync(declarations,{recursive:true});
- execFileSync(path.join(jdk,'bin/jar'),['--extract','--file',path.resolve(api),'android/system/Os.class','android/system/OsConstants.class','android/system/StructCapUserHeader.class','android/system/StructCapUserData.class'],{cwd:declarations,stdio:'inherit'});
+ const hidden=['android/system/Os.class','android/system/OsConstants.class','android/system/StructCapUserHeader.class','android/system/StructCapUserData.class'];
+ const runtime=execFileSync(path.join(jdk,'bin/jar'),['--list','--file',path.resolve(api),'dalvik/system/VMRuntime'],{encoding:'utf8'}).split(/\r?\n/).filter(name=>/^dalvik\/system\/VMRuntime(?:\$[^/]+)?\.class$/.test(name));
+ if(!runtime.includes('dalvik/system/VMRuntime.class'))throw Error('The original VMRuntime compile declaration is unavailable');
+ execFileSync(path.join(jdk,'bin/jar'),['--extract','--file',path.resolve(api),...hidden,...runtime],{cwd:declarations,stdio:'inherit'});
  execFileSync(path.join(jdk,'bin/javac'),['--system',core,'--patch-module','java.base='+declarations,'-source','21','-target','21','-cp',[api,sharedClasses].join(path.delimiter),'-d',classes,...sources],{stdio:'inherit'});
 }
 
