@@ -11,11 +11,13 @@
 #include "audio-hardware.h"
 /* SOURCE_PROGRESS_STATE_BEGIN */
 struct KljAudioSourceProgress {
-    _Atomic uint64_t sequence,epoch,committed,end,source_frames,device_frames,seen;
+    _Atomic uint64_t sequence,epoch,committed,end,source_frames,device_frames,seen,carried;
     _Atomic int retired;
+    struct KljAudioSourceProgress *next;
 };
 _Static_assert(ATOMIC_LONG_LOCK_FREE==2&&ATOMIC_LLONG_LOCK_FREE==2,"Audio progress requires lock-free native counters");
 static _Atomic uint64_t owned_audio_epoch=1;
+static KljAudioSourceProgress *owned_audio_progress;
 struct OwnedAudioWrite {
     KljAudioSourceProgress *progress;
     uint64_t frames,base,epoch;
@@ -23,6 +25,7 @@ struct OwnedAudioWrite {
 };
 static _Thread_local struct OwnedAudioWrite *owned_audio_write;
 static void owned_audio_commit(uint64_t end,uint64_t written,uint64_t total);
+static void owned_audio_reset_progress(void);
 /* SOURCE_PROGRESS_STATE_END */
 static _Atomic int owned_paused;
 static _Atomic uint32_t owned_capture_device;
@@ -47,12 +50,14 @@ static void owned_note_source(const void *source){
 }
 #define render_cb owned_original_render
 #define kl_audio_play owned_original_play
+#define kl_audio_open owned_original_open
 #define kl_audio_close owned_original_close
 #define kl_audio_write_src owned_original_write_src
 #define kl_audio_mic_read_i16 owned_original_mic_read_i16
 #include KLEPTON_AUDIO_PAUSE_SOURCE
 #undef render_cb
 #undef kl_audio_play
+#undef kl_audio_open
 #undef kl_audio_close
 #undef kl_audio_write_src
 #undef kl_audio_mic_read_i16
@@ -131,8 +136,15 @@ int kl_audio_pause_exclusive(const void *source){
 }
 void kl_audio_play(void){atomic_store_explicit(&owned_paused,0,memory_order_release);owned_original_play();}
 size_t kl_audio_write_src(const void *source,const void *pcm,size_t bytes){return owned_original_write_src(source,pcm,bytes);}
+int kl_audio_open(unsigned rate,unsigned channels,unsigned bits){
+    pthread_mutex_lock(&g_wlock);
+    int result=owned_original_open(rate,channels,bits);
+    pthread_mutex_unlock(&g_wlock);return result;
+}
 void kl_audio_close(void){
+    pthread_mutex_lock(&g_wlock);
     owned_original_close();
+    pthread_mutex_unlock(&g_wlock);
     pthread_mutex_lock(&owned_sources_lock);
     owned_source=NULL;owned_source_seen=owned_source_mixed=0;
     atomic_store_explicit(&owned_paused,0,memory_order_release);
@@ -173,8 +185,31 @@ KljAudioSourceProgress *klj_audio_source_create(void){
     atomic_init(&value->sequence,0);atomic_init(&value->epoch,0);
     atomic_init(&value->committed,0);atomic_init(&value->end,0);
     atomic_init(&value->source_frames,0);atomic_init(&value->device_frames,0);
-    atomic_init(&value->seen,0);atomic_init(&value->retired,0);
+    atomic_init(&value->seen,0);atomic_init(&value->carried,0);atomic_init(&value->retired,0);
+    pthread_mutex_lock(&g_wlock);value->next=owned_audio_progress;owned_audio_progress=value;pthread_mutex_unlock(&g_wlock);
     return value;
+}
+
+static uint64_t owned_audio_consumed(uint64_t committed,uint64_t end,uint64_t source,uint64_t device,uint64_t read){
+    if(!device)return 0;
+    __uint128_t pending=end>read?((__uint128_t)(end-read)*source+device-1)/device:0;
+    return pending>=committed?0:committed-(uint64_t)pending;
+}
+
+// Device open/close holds g_wlock before the original lifecycle lock. The old
+// AudioUnit has stopped here; preserve consumption even if nobody queried it.
+static void owned_audio_reset_progress(void){
+    uint64_t epoch=atomic_load_explicit(&owned_audio_epoch,memory_order_relaxed);
+    uint64_t read=atomic_load_explicit(&g_r,memory_order_acquire);
+    for(KljAudioSourceProgress *value=owned_audio_progress;value;value=value->next){
+        if(atomic_load_explicit(&value->epoch,memory_order_relaxed)!=epoch)continue;
+        uint64_t consumed=owned_audio_consumed(atomic_load_explicit(&value->committed,memory_order_relaxed),
+            atomic_load_explicit(&value->end,memory_order_relaxed),atomic_load_explicit(&value->source_frames,memory_order_relaxed),
+            atomic_load_explicit(&value->device_frames,memory_order_relaxed),read);
+        uint64_t seen=atomic_load_explicit(&value->seen,memory_order_acquire);
+        atomic_store_explicit(&value->carried,consumed>seen?consumed:seen,memory_order_relaxed);
+    }
+    atomic_fetch_add_explicit(&owned_audio_epoch,1,memory_order_acq_rel);
 }
 
 // The original writer holds g_wlock here, only after copying/mixing this range.
@@ -187,7 +222,7 @@ static void owned_audio_commit(uint64_t end,uint64_t written,uint64_t total){
     if(!write->initialized||write->epoch!=epoch){
         write->base=atomic_load_explicit(&value->epoch,memory_order_relaxed)==epoch
             ?atomic_load_explicit(&value->committed,memory_order_relaxed)
-            :atomic_load_explicit(&value->seen,memory_order_relaxed);
+            :atomic_load_explicit(&value->carried,memory_order_relaxed);
         write->epoch=epoch;write->initialized=1;
     }
     __uint128_t count=(__uint128_t)write->frames*written/total+write->base;
@@ -223,12 +258,13 @@ uint64_t klj_audio_source_frames_read(KljAudioSourceProgress *value,uint64_t max
     uint64_t producedEpoch=atomic_load_explicit(&value->epoch,memory_order_relaxed);
     uint64_t read=atomic_load_explicit(&g_r,memory_order_acquire);
     atomic_thread_fence(memory_order_acquire);
-    // An in-progress publication or device reset returns the last observation;
-    // it never waits for a paced writer or touches mutable mixer slots.
-    if(sequence!=atomic_load_explicit(&value->sequence,memory_order_acquire)||
-       epoch!=atomic_load_explicit(&owned_audio_epoch,memory_order_acquire)||producedEpoch!=epoch||!device)return previous;
-    __uint128_t pending=end>read?((__uint128_t)(end-read)*source+device-1)/device:0;
-    uint64_t consumed=pending>=committed?0:committed-(uint64_t)pending;
+    // Publication overlap returns the last observation; a retired device epoch
+    // supplies its final consumed count without waiting for a paced writer.
+    if(sequence!=atomic_load_explicit(&value->sequence,memory_order_acquire))return previous;
+    uint64_t consumed;
+    if(epoch!=atomic_load_explicit(&owned_audio_epoch,memory_order_acquire)||producedEpoch!=epoch)
+        consumed=atomic_load_explicit(&value->carried,memory_order_acquire);
+    else consumed=owned_audio_consumed(committed,end,source,device,read);
     if(consumed>maximum)consumed=maximum;
     while(previous<consumed&&!atomic_compare_exchange_weak_explicit(&value->seen,&previous,consumed,memory_order_release,memory_order_acquire)){}
     return previous>consumed?previous:consumed;
@@ -240,6 +276,9 @@ void klj_audio_source_retire(KljAudioSourceProgress *value,const void *source){
     // so another stream allocated at this address starts with a new mixer slot.
     pthread_mutex_lock(&g_wlock);
     atomic_store_explicit(&value->retired,1,memory_order_release);
+    KljAudioSourceProgress **at=&owned_audio_progress;
+    while(*at&&*at!=value)at=&(*at)->next;
+    if(*at)*at=value->next;
     for(int i=0;i<g_src_n;i++)if(g_src_key[i]==source){
         for(int next=i+1;next<g_src_n;next++){g_src_key[next-1]=g_src_key[next];g_src_pos[next-1]=g_src_pos[next];}
         g_src_n--;g_src_key[g_src_n]=NULL;g_src_pos[g_src_n]=0;break;

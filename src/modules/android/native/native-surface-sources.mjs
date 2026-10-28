@@ -20,7 +20,7 @@ export function prepareNativeSurfaceSources(klepton,build){
  audio=replace(audio,'            if (nf > curw) atomic_store_explicit(&g_w, nf, memory_order_release);','            if (nf > curw) atomic_store_explicit(&g_w, nf, memory_order_release);\n            owned_audio_commit(here + take,written,frames);');
  const reset='    atomic_store(&g_w, 0); atomic_store(&g_r, 0);';
  if(audio.split(reset).length!==3)throw Error('Original audio device cursor resets changed');
- audio=audio.replaceAll(reset,'    atomic_fetch_add_explicit(&owned_audio_epoch,1,memory_order_acq_rel);\n'+reset);
+ audio=audio.replaceAll(reset,'    owned_audio_reset_progress();\n'+reset);
  audio=replace(audio,'    if (g_wd_streak < 4 || (g_wd_streak % 20) == 0)',
    '    if (!owned_recovery_begin(limit)) return;\n    if (g_wd_streak < 4 || (g_wd_streak % 20) == 0)');
  audio=replace(audio,'    g_wd_streak++;\n    kl_audio_restart();',
