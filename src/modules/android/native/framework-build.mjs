@@ -3,7 +3,7 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {cachedBuildStep} from './upstream/build-step.mjs';
-import {copyChanged,synchronizeSourceTree} from './upstream/source-files.mjs';
+import {copyChanged,synchronizeSourceTree,writeChanged} from './upstream/source-files.mjs';
 import {originalTreeFiles} from './upstream/reuse.mjs';
 
 export const javaSources=directory=>fs.readdirSync(directory,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))
@@ -14,6 +14,26 @@ export function javaToolInputs(jdk){
 }
 export const javaToolEnvironment=()=>Object.fromEntries(
   ['JDK_JAVAC_OPTIONS','JAVA_TOOL_OPTIONS','JDK_JAVA_OPTIONS','_JAVA_OPTIONS'].map(name=>[name,process.env[name]??null]));
+
+/** Native Minikin maps the original pattern data by filesystem path. Copy the
+ * declared framework JAR's resources and any accompanying notices unchanged. */
+export function stageFrameworkHyphenation(archive,output){
+  const prefix='hyphen-data/',names=execFileSync('/usr/bin/unzip',['-Z1',archive,prefix+'*'],{encoding:'utf8',maxBuffer:4<<20})
+    .trim().split(/\r?\n/).filter(name=>name&&!name.endsWith('/'));
+  if(!names.some(name=>name.endsWith('.hyb')))throw Error('The supplied Android framework has no hyphenation data');
+  if(new Set(names).size!==names.length)throw Error('Duplicate Android hyphenation resource');
+  const destination=path.join(output,'android-root/system/usr/hyphen-data');
+  for(const name of names){
+    const relative=name.slice(prefix.length);
+    if(!name.startsWith(prefix)||relative.includes('\\')||relative.split('/').some(part=>!part||part==='.'||part==='..'))
+      throw Error('Invalid Android hyphenation resource path: '+name);
+    const bytes=execFileSync('/usr/bin/unzip',['-p',archive,name],{maxBuffer:16<<20});
+    if(name.endsWith('.hyb')&&(bytes.length<24||bytes.readUInt32LE(0)!==0x62ad7968||bytes.readUInt32LE(20)!==bytes.length))
+      throw Error('Invalid supplied Android hyphenation data: '+name);
+    writeChanged(path.join(destination,relative),bytes,0o644);
+  }
+  return names.map(name=>path.join(destination,name.slice(prefix.length)));
+}
 
 export async function buildFramework({root,build,output,jdk,framework,frameworkArchives,asmClasspath,graphicsRegistrations}){
   const frameworkTool=path.join(build,'framework-tool'),hostClasses=path.join(build,'classes'),jni=path.join(build,'jni');
@@ -51,5 +71,6 @@ export async function buildFramework({root,build,output,jdk,framework,frameworkA
   copyChanged(generatedCallbacks,callbacks);
   copyChanged(path.join(declarations,'host-callbacks.c'),path.join(build,'host-callbacks.c'));
   fs.copyFileSync(archive,path.join(output,'android-framework.jar'),fs.constants.COPYFILE_FICLONE);
+  stageFrameworkHyphenation(archive,output);
   return {frameworkTool,hostClasses};
 }
