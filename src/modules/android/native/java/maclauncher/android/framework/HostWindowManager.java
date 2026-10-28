@@ -66,7 +66,12 @@ public final class HostWindowManager {
     public static void viewDetached(ViewRootImpl root){HostScrollInput.retire(root);if(touchRoot==root){HostInput.cancelTouches(false);touchRoot=null;}HostInputManager.detach(root);updateFocus(root);}
     private static ArrayList<View> views(){return WindowManagerGlobal.getInstance().getWindowViews();}
     private static List<ViewRootImpl> roots(){return owner==null?List.of():WindowManagerGlobal.getInstance().getRootViews(owner.getActivityToken());}
-    static void activate(Activity activity){check();owner=Objects.requireNonNull(activity);HostActivity.activateOutput(activity);HostActivity.applyOrientation(activity);updateFocus(null);}
+    static void activate(Activity activity){
+        check();owner=Objects.requireNonNull(activity);HostActivity.activateOutput(activity);HostActivity.applyOrientation(activity);updateFocus(null);
+        // A returning Activity's stopped window regains its Surface in a later
+        // traversal. Its pre-draw selects focus, as for a newly attached root.
+        if(focusedRoot==null)for(ViewRootImpl root:roots()){View view=root.getView();if(view!=null)com.android.internal.view.OneShotPreDrawListener.add(view,()->{if(owner==activity&&view.getViewRootImpl()==root)updateFocus(null);});}
+    }
     private static void updateFocus(ViewRootImpl retiring){
         // Original ViewRoot creates its Surface and attaches the actual view
         // during traversal. Selecting it at setView return loses the focus
