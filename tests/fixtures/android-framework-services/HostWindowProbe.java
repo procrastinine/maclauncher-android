@@ -17,7 +17,11 @@ public final class HostWindowProbe {
     private static int checks,frames;private static final List<String> events=new ArrayList<>();
     private static long sequence;private static int[] latestPixels;
     static SurfaceControl fixtureOutput;static int outputWidth=320,outputHeight=240;
-    static void pump(Looper loop){HostLooper.drain(loop);long now=System.nanoTime();HostDisplayEvents.hostDispatchFrame(++sequence,now,now+16_666_667,16_666_667,1);HostDisplayEvents.hostPresentFrame();HostLooper.drain(loop);}
+    static void pump(Looper loop){settle(loop);long now=System.nanoTime();HostDisplayEvents.hostDispatchFrame(++sequence,now,now+16_666_667,16_666_667,1);HostDisplayEvents.hostPresentFrame();settle(loop);}
+    /** A bounded drain stops at work that was ready when it began. A running
+     * Looper also handles work queued during that turn for the same time, such
+     * as the original vsync doFrame message and ViewRoot focus messages. */
+    static void settle(Looper loop){for(int i=0;i<16;i++){HostLooper.drain(loop);if(loop.getQueue().isIdle())return;}}
     private static void check(boolean value,String text){checks++;if(!value)throw new AssertionError(text);}
     private static void retirePreferences()throws Exception{
         android.app.QueuedWork.waitToFinish();android.app.QueuedWork.resetHandler();
@@ -152,7 +156,7 @@ public final class HostWindowProbe {
         Looper loop=HostLooper.main();
         HostPackages.inspectSources(List.of(apk));
         HostStorageService.install();
-        HostDisplay.hostPublish(1,320,240,60);HostDisplayEvents.hostSetWakeup(()->{});HostApplication.prepare(HostWindowProbe.class.getClassLoader());Context context=HostApplication.applicationContext();Application app=new Application();HostApplication.attach(app,context);HostApplication.create(app);
+        HostDisplay.hostPublish(1,320,240,60);HostInput.initialize();HostDisplayEvents.hostSetWakeup(()->{});HostApplication.prepare(HostWindowProbe.class.getClassLoader());Context context=HostApplication.applicationContext();Application app=new Application();HostApplication.attach(app,context);HostApplication.create(app);
         var activityManager=context.getSystemService(ActivityManager.class);
         check(activityManager.getAppTasks().isEmpty(),"original task enumeration is empty before any Activity exists");
         OwnedActivity activity=new OwnedActivity();HostActivity.attach(activity,context,app);SurfaceControl output=null;Throwable first=null;
@@ -187,6 +191,9 @@ public final class HostWindowProbe {
             check(activity.content.isAttachedToWindow()&&activity.content.getViewRootImpl()!=null,"original attached ViewRoot");check(frames>0,"original traversal produced pixels");
             String inputProbe=System.getProperty("android.fixture.input");if(inputProbe!=null){Class.forName(inputProbe).getMethod("run",Activity.class,Looper.class).invoke(null,activity,loop);return;}
             check(Arrays.stream(latestPixels).anyMatch(pixel->pixel==Color.RED),"original activity pixels reach the output");
+            // Focus is selected by the first traversal's pre-draw callback; the
+            // original ViewRoot then delivers it as a queued focus message.
+            long focusDeadline=System.nanoTime()+2_000_000_000L;while(!window.getDecorView().hasWindowFocus()&&System.nanoTime()<focusDeadline){pump(loop);Thread.sleep(2);}
             check(window.getDecorView().hasWindowFocus(),"native focus before the first traversal reaches the original view root");
             window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);pump(loop);
             check(window.getAttributes().token==activity.getActivityToken(),"ordinary Window attribute updates retain the Activity window token");
@@ -222,7 +229,8 @@ public final class HostWindowProbe {
             View panel=new View(activity);WindowManager.LayoutParams params=new WindowManager.LayoutParams(40,20,WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,0,PixelFormat.TRANSLUCENT);params.token=window.getDecorView().getWindowToken();
             window.getWindowManager().addView(panel,params);pump(loop);check(panel.getViewRootImpl()!=null,"independent original panel ViewRoot");check(panel.hasWindowFocus()&&!window.getDecorView().hasWindowFocus(),"focus transfers to the new panel");window.getWindowManager().removeViewImmediate(panel);check(!panel.isAttachedToWindow(),"panel teardown");pump(loop);check(window.getDecorView().hasWindowFocus(),"focus returns after panel removal");
             AlertDialog dialog=new AlertDialog.Builder(activity).setMessage("Window callback").setPositiveButton("Close",(value,which)->value.dismiss()).create();dialog.show();pump(loop);
-            View dialogView=dialog.getWindow().getDecorView();check(dialog.isShowing()&&HostWindowManager.topView(activity)==dialogView,"original dialog owns the top application window");check(dialogView.hasWindowFocus()&&!window.getDecorView().hasWindowFocus(),"dialog receives native focus");
+            View dialogView=dialog.getWindow().getDecorView();long dialogDeadline=System.nanoTime()+2_000_000_000L;while(!dialogView.hasWindowFocus()&&System.nanoTime()<dialogDeadline){pump(loop);Thread.sleep(2);}
+            check(dialog.isShowing()&&HostWindowManager.topView(activity)==dialogView,"original dialog owns the top application window");check(dialogView.hasWindowFocus()&&!window.getDecorView().hasWindowFocus(),"dialog receives native focus");
             check(dialogView.getHeight()>40&&dialogView.getHeight()<=240,"wrap-content dialog measures within the native display: "+dialogView.getWidth()+"x"+dialogView.getHeight()+", measured="+dialogView.getMeasuredHeight()+", parameters="+dialog.getWindow().getAttributes());
             check(Arrays.stream(latestPixels).anyMatch(pixel->Color.alpha(pixel)>0&&Color.red(pixel)>200&&Color.green(pixel)>200&&Color.blue(pixel)>200),"original dialog text/background pixels reach the output");
             Dialog secondDialog=new Dialog(activity);secondDialog.setContentView(new View(activity));secondDialog.show();pump(loop);check(secondDialog.getWindow().getDecorView().isAttachedToWindow()&&dialogView.isAttachedToWindow(),"multiple root windows share the activity token without treating it as an IWindow");secondDialog.dismiss();pump(loop);
@@ -247,7 +255,7 @@ public final class HostWindowProbe {
             check(HostActivity.owner(activity).title().equals("Next activity")&&Arrays.stream(latestPixels).anyMatch(pixel->pixel==Color.BLUE),"shared native output and title follow the next Activity");
             appTask.startActivity(next,new Intent(next,NextActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("value",27),null);pump(loop);
             check(NextActivity.creations==1&&NextActivity.newIntents==1&&next.getIntent().getIntExtra("value",0)==27,"singleTop reuses original onNewIntent handling");
-            next.setResult(17,new Intent().putExtras(extras));next.finish();navigationDeadline=System.nanoTime()+2_000_000_000L;while((activity.activityRequest!=91||!activity.getWindow().getDecorView().hasWindowFocus())&&System.nanoTime()<navigationDeadline){pump(loop);Thread.sleep(2);}
+            next.setResult(17,new Intent().putExtras(extras));next.finish();navigationDeadline=System.nanoTime()+2_000_000_000L;while((activity.activityRequest!=91||!activity.getWindow().getDecorView().hasWindowFocus()||Arrays.stream(latestPixels).noneMatch(pixel->pixel==Color.RED))&&System.nanoTime()<navigationDeadline){pump(loop);Thread.sleep(2);}
             check(next.isDestroyed()&&activity.activityRequest==91&&activity.activityResult==17&&activity.activityData.getExtras().getBinder("response")==response,"original Activity result and destruction preserve Binder response");
             check(activity.getWindow().getDecorView().hasWindowFocus()&&Arrays.stream(latestPixels).anyMatch(pixel->pixel==Color.RED),"return restores the prior Activity and native pixels");
             check(events.subList(beforeNavigation.size(),events.size()).equals(List.of("pause","stop","start","resume","pause","resume")),"original navigation and result lifecycle: "+events);
