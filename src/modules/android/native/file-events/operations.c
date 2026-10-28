@@ -45,6 +45,8 @@ int klj_file_close(int fd) {
 }
 static int close_stream(void *stream){return fclose(stream);}
 int klj_file_fclose(FILE *file) {
+    /* Cookie streams, such as virtual OBB entries, own no descriptor. */
+    if (fileno(file) < 0) return fclose(file);
     klj_file_event event = klj_file_event_snapshot(fileno(file), IN_CLOSE);
     int result = klj_descriptor_release(fileno(file),close_stream,file);
     if (result == 0) klj_file_event_publish(&event);
