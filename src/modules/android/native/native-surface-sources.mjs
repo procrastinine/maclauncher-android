@@ -17,6 +17,10 @@ export function prepareNativeSurfaceSources(klepton,build){
  let audio=fs.readFileSync(path.join(klepton,'runtime/media/kl_audio.c'),'utf8');
  audio=replace(audio,'AURenderCallbackStruct cb = {render_cb, NULL};','AURenderCallbackStruct cb = {owned_render, NULL};');
  audio=replace(audio,'size_t kl_audio_write_src(const void *src, const void *pcm, size_t bytes) {','size_t kl_audio_write_src(const void *src, const void *pcm, size_t bytes) {\n    owned_note_source(src);');
+ audio=replace(audio,'            if (nf > curw) atomic_store_explicit(&g_w, nf, memory_order_release);','            if (nf > curw) atomic_store_explicit(&g_w, nf, memory_order_release);\n            owned_audio_commit(here + take,written,frames);');
+ const reset='    atomic_store(&g_w, 0); atomic_store(&g_r, 0);';
+ if(audio.split(reset).length!==3)throw Error('Original audio device cursor resets changed');
+ audio=audio.replaceAll(reset,'    atomic_fetch_add_explicit(&owned_audio_epoch,1,memory_order_acq_rel);\n'+reset);
  audio=replace(audio,'    if (g_wd_streak < 4 || (g_wd_streak % 20) == 0)',
    '    if (!owned_recovery_begin(limit)) return;\n    if (g_wd_streak < 4 || (g_wd_streak % 20) == 0)');
  audio=replace(audio,'    g_wd_streak++;\n    kl_audio_restart();',

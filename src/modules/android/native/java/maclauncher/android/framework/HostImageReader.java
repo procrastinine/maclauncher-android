@@ -37,49 +37,53 @@ public final class HostImageReader {
     }catch(ReflectiveOperationException failure){throw new ExceptionInInitializerError(failure);}}
     private static RuntimeException failure(Throwable error){if(error instanceof RuntimeException value)return value;if(error instanceof Error value)throw value;return new IllegalStateException(error);}
     private static final class Frame {
-        final long buffer,timestamp;boolean planesLocked,detached;
-        Frame(long buffer,long timestamp){this.buffer=buffer;this.timestamp=timestamp;}
+        final long buffer,timestamp;final int dataSpace;boolean planesLocked,detached;
+        Frame(long buffer,long timestamp,int dataSpace){this.buffer=buffer;this.timestamp=timestamp;this.dataSpace=dataSpace;}
         void release(){if(planesLocked){planesLocked=false;HostHardwareBuffer.unlockImagePlane(buffer);}HostNativeHandle.release(buffer);}
     }
     private static final class Reader implements AutoCloseable {
         final int width,height,format,dataSpace,maxImages;final long usage;final Object weakSelf;
         final ArrayDeque<Frame> pending=new ArrayDeque<>();
         final IdentityHashMap<Image,Frame> acquired=new IdentityHashMap<>();
-        final IdentityHashMap<Thread,Integer> submissions=new IdentityHashMap<>();
-        long surface;int reserved;boolean transferred,closed,producerClosed;
+        long surface;boolean transferred,closed,producerClosed;
         Reader(Object weakSelf,int width,int height,int maxImages,long usage,int format,int dataSpace){
             if(maxImages<1)throw new IllegalArgumentException("ImageReader maxImages must be positive");
             this.weakSelf=weakSelf;this.width=width;this.height=height;this.maxImages=maxImages;this.usage=usage;this.format=format;this.dataSpace=dataSpace;
-            if(!HostHardwareBuffer.nIsSupported(width,height,format,1,usage))throw new UnsupportedOperationException("ImageReader hardware buffer configuration is unsupported");
             surface=HostSurface.create(width,height,format,new HostSurface.Target(){
-                public void beginSubmit(){Reader.this.reserve();}
-                public void endSubmit(){Reader.this.cancelReservation();}
+                // This window receives the shared RGBA Canvas/video staging
+                // producer. The queued allocation retains the reader's format.
+                public long createNativeSurface(int w,int h,int f){return maclauncher.android.bridge.NativeSurface.create(w,h,android.graphics.PixelFormat.RGBA_8888);}
                 public boolean submit(int[] pixels,int w,int h,long frame,long timestamp){return Reader.this.submit(pixels,w,h,frame,timestamp);}
-                public void resize(int w,int h){if(w!=width||h!=height)throw new IllegalArgumentException("ImageReader producer dimensions are fixed");}
-                public void close(){synchronized(Reader.this){producerClosed=true;submissions.clear();reserved=0;Reader.this.notifyAll();}}
+                public int queueBuffer(long buffer,long frame,long timestamp,int space){return Reader.this.queueBuffer(buffer,timestamp,space);}
+                public void resize(int w,int h){}
+                public void close(){synchronized(Reader.this){producerClosed=true;}}
             });
         }
-        synchronized void reserve(){
-            while(!closed&&!producerClosed&&(long)pending.size()+acquired.size()+reserved>=(long)maxImages+1)
-                try{wait();}catch(InterruptedException error){Thread.currentThread().interrupt();throw new IllegalStateException("ImageReader producer was interrupted",error);}
-            if(closed||producerClosed)throw new IllegalStateException("ImageReader buffer queue is closed");
-            submissions.merge(Thread.currentThread(),1,Integer::sum);reserved++;
-        }
-        synchronized void cancelReservation(){
-            Thread thread=Thread.currentThread();Integer count=submissions.get(thread);if(count==null)return;
-            if(count==1)submissions.remove(thread);else submissions.put(thread,count-1);reserved--;notifyAll();
-        }
         public boolean submit(int[] pixels,int width,int height,long frameId,long timestamp){
+            long buffer;
             synchronized(this){
                 if(closed||producerClosed)return false;
-                if(width!=this.width||height!=this.height)throw new IllegalArgumentException("ImageReader producer dimensions do not match its buffer");
-                if(!submissions.containsKey(Thread.currentThread()))throw new IllegalStateException("ImageReader producer has no buffer reservation");
-                cancelReservation();
-                long buffer=HostHardwareBuffer.allocate(width,height,format,usage);
+                buffer=HostHardwareBuffer.allocate(width,height,format,usage);
                 if(buffer==0)throw new UnsupportedOperationException("ImageReader hardware buffer configuration is unsupported");
-                try{HostHardwareBuffer.writePixels(buffer,pixels);pending.addLast(new Frame(buffer,timestamp));}
+                try{HostHardwareBuffer.writePixels(buffer,pixels);}
                 catch(Throwable error){HostNativeHandle.release(buffer);throw error;}
             }
+            int space=format==35||format==54||format==60?android.hardware.DataSpace.DATASPACE_JFIF:android.hardware.DataSpace.DATASPACE_SRGB;
+            return publish(new Frame(buffer,timestamp,space));
+        }
+        int queueBuffer(long buffer,long timestamp,int dataSpace){
+            if(format!=android.graphics.ImageFormat.PRIVATE&&!HostHardwareBuffer.compatibleFormat(format,HostHardwareBuffer.nGetFormat(buffer)))return -22;
+            return publish(new Frame(HostNativeHandle.retain(buffer),timestamp,dataSpace))?0:-19;
+        }
+        boolean publish(Frame frame){
+            Frame replaced;
+            synchronized(this){
+                if(closed||producerClosed){frame.release();return false;}
+                // AOSP's app-controlled producer and BufferItemConsumer use
+                // nonblocking dequeue and replace the last droppable frame.
+                replaced=pending.pollLast();pending.addLast(frame);
+            }
+            if(replaced!=null)replaced.release();
             // No consumer lock is held while the original callback inspects its
             // listener, validity and Executor. The APK keeps callback ownership.
             try{postEvent.invokeExact(weakSelf);}catch(Throwable error){throw failure(error);}
@@ -87,7 +91,7 @@ public final class HostImageReader {
         }
         @Override public void close(){
             long untransferred;List<Frame> queued;
-            synchronized(this){if(closed)return;closed=true;queued=new ArrayList<>(pending);pending.clear();submissions.clear();reserved=0;notifyAll();untransferred=transferred?0:surface;transferred=true;}
+            synchronized(this){if(closed)return;closed=true;queued=new ArrayList<>(pending);pending.clear();untransferred=transferred?0:surface;transferred=true;}
             for(Frame frame:queued)frame.release();
             // The original Java Surface owns a transferred producer reference.
             // Closing the consumer never frees a producer still held elsewhere.
@@ -113,12 +117,12 @@ public final class HostImageReader {
             if(owner.acquired.size()>=owner.maxImages)return 2;
             Frame frame=owner.pending.pollFirst();if(frame==null)return 1;
             owner.acquired.put(image,frame);imageBuffer.set(image,frame.buffer);imageTime.set(image,frame.timestamp);
-            imageDataSpace.set(image,owner.dataSpace);imageTransform.set(image,0);imageScaling.set(image,0);return 0;
+            imageDataSpace.set(image,frame.dataSpace);imageTransform.set(image,0);imageScaling.set(image,0);return 0;
         }
     }
     public static void nativeReleaseImage(ImageReader value,Image image){
         Reader owner=reader(value);Frame frame;
-        synchronized(owner){frame=owner.acquired.remove(image);if(frame==null)throw new IllegalArgumentException("Image was not acquired from this ImageReader");imageBuffer.set(image,0L);owner.notifyAll();}
+        synchronized(owner){frame=owner.acquired.remove(image);if(frame==null)throw new IllegalArgumentException("Image was not acquired from this ImageReader");imageBuffer.set(image,0L);}
         frame.release();
     }
     public static int nativeDetachImage(ImageReader value,Image image,boolean throwISEOnly){
@@ -126,34 +130,40 @@ public final class HostImageReader {
             if(frame.planesLocked){frame.planesLocked=false;HostHardwareBuffer.unlockImagePlane(frame.buffer);}frame.detached=true;return 0;}
     }
     public static void nativeDiscardFreeBuffers(ImageReader value){reader(value);/* Released buffers are retired immediately by their existing owner. */}
-    public static void prepareClose(ImageReader value){long handle=(long)context.get(value);if(handle!=0)((Reader)HostNativeHandle.state(handle)).close();}
     public static void nativeClose(ImageReader value){long handle=(long)context.getAndSet(value,0L);if(handle!=0)HostNativeHandle.release(handle);}
     public static int nativeGetWidth(Object image){return HostHardwareBuffer.nGetWidth(buffer(image));}
     public static int nativeGetHeight(Object image){return HostHardwareBuffer.nGetHeight(buffer(image));}
-    public static int nativeGetFormat(Object image,int readerFormat){return HostHardwareBuffer.nGetFormat(buffer(image));}
+    public static int nativeGetFormat(Object image,int readerFormat){
+        long handle=buffer(image);if(readerFormat==android.graphics.ImageFormat.PRIVATE)return readerFormat;
+        try{Reader owner=reader((ImageReader)imageReader.invoke(image));int actual=HostHardwareBuffer.nGetFormat(handle);
+            if(owner.format==android.graphics.ImageFormat.PRIVATE)return android.graphics.ImageFormat.PRIVATE;
+            if(actual==android.graphics.ImageFormat.NV21||actual==android.graphics.ImageFormat.YV12)actual=android.graphics.ImageFormat.YUV_420_888;
+            return HostHardwareBuffer.publicFormat(actual,(int)imageDataSpace.get(image));
+        }catch(Throwable error){throw failure(error);}
+    }
     public static int nativeGetFenceFd(Object image){buffer(image);return -1;/* The shared CPU producer completes writes before publication. */}
     public static HardwareBuffer nativeGetHardwareBuffer(Object image){return HostHardwareBuffer.wrap(HostNativeHandle.retain(buffer(image)));}
     public static Object[] nativeCreatePlanes(Object image,int numPlanes,int format,long usage){
         long handle=buffer(image);var planes=(Object[])Array.newInstance(surfacePlane,numPlanes);
         if(format==android.graphics.ImageFormat.PRIVATE){if(numPlanes!=0)throw new IllegalArgumentException("Opaque images have no accessible planes");return planes;}
-        if(numPlanes>1||format!=HostHardwareBuffer.nGetFormat(handle))throw new UnsupportedOperationException("Image plane configuration is unsupported");
+        if(!HostHardwareBuffer.compatibleFormat(format,HostHardwareBuffer.nGetFormat(handle)))throw new UnsupportedOperationException("Image plane configuration is unsupported");
         ImageReader value;
         try{value=(ImageReader)imageReader.invoke(image);}catch(Throwable error){throw failure(error);}
         Reader owner=reader(value);synchronized(owner){Frame frame=owner.acquired.get(image);if(frame==null)throw new IllegalStateException("Image is not acquired");if(frame.planesLocked)throw new IllegalStateException("Image planes are already locked");
-            ByteBuffer bytes=HostHardwareBuffer.lockImagePlane(handle);
-            try{if(numPlanes!=0)planes[0]=surfacePlaneConstructor.invoke(image,HostHardwareBuffer.rowStride(handle),4,bytes);frame.planesLocked=true;return planes;}
+            HostHardwareBuffer.Plane[] storage=HostHardwareBuffer.lockImagePlanes(handle,numPlanes);
+            try{for(int i=0;i<numPlanes;i++)planes[i]=surfacePlaneConstructor.invoke(image,storage[i].rowStride(),storage[i].pixelStride(),storage[i].bytes());frame.planesLocked=true;return planes;}
             catch(Throwable error){HostHardwareBuffer.unlockImagePlane(handle);throw failure(error);}}
     }
     public static ImageReader.ImagePlane[] nativeCreateImagePlanes(int numPlanes,GraphicBuffer graphic,int fenceFd,int format,int left,int top,int right,int bottom){
         if(format==android.graphics.ImageFormat.PRIVATE){if(numPlanes!=0)throw new IllegalArgumentException("Opaque images have no accessible planes");return new ImageReader.ImagePlane[0];}
         long handle=HostHardwareBuffer.graphicHandle(Objects.requireNonNull(graphic));
         if(numPlanes<0)throw new NegativeArraySizeException(Integer.toString(numPlanes));
-        if(numPlanes>1||format!=HostHardwareBuffer.nGetFormat(handle))throw new UnsupportedOperationException("Image plane configuration is unsupported");
+        if(!HostHardwareBuffer.compatibleFormat(HostHardwareBuffer.hardwareFormat(format),HostHardwareBuffer.nGetFormat(handle)))throw new UnsupportedOperationException("Image plane configuration is unsupported");
         int width=HostHardwareBuffer.nGetWidth(handle),height=HostHardwareBuffer.nGetHeight(handle);
         if(left<0||top<0||right<left||bottom<top||right>width||bottom>height)throw new IllegalArgumentException("Image crop lies outside its GraphicBuffer");
         if(fenceFd>=0)try(var fence=SyncFence.adopt(fenceFd)){if(!fence.awaitForever())throw new IllegalStateException("Graphic buffer fence wait failed");}
-        ByteBuffer bytes=HostHardwareBuffer.lockImagePlane(handle);
-        try{return numPlanes==0?new ImageReader.ImagePlane[0]:new ImageReader.ImagePlane[]{(ImageReader.ImagePlane)imagePlaneConstructor.invoke(HostHardwareBuffer.rowStride(handle),4,bytes)};}
+        HostHardwareBuffer.Plane[] storage=HostHardwareBuffer.lockImagePlanes(handle,numPlanes);
+        try{var planes=new ImageReader.ImagePlane[numPlanes];for(int i=0;i<numPlanes;i++)planes[i]=(ImageReader.ImagePlane)imagePlaneConstructor.invoke(storage[i].rowStride(),storage[i].pixelStride(),storage[i].bytes());return planes;}
         catch(Throwable error){HostHardwareBuffer.unlockImagePlane(handle);throw failure(error);}
     }
     public static void nativeUnlockGraphicBuffer(GraphicBuffer graphic){HostHardwareBuffer.unlockImagePlane(HostHardwareBuffer.graphicHandle(Objects.requireNonNull(graphic)));}

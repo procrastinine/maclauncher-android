@@ -14,7 +14,13 @@ public final class HostAppOps {
     private HostAppOps() {}
     private static final Binder binder=new Binder();
     private static final IAppOpsService service=(IAppOpsService)Proxy.newProxyInstance(IAppOpsService.class.getClassLoader(),new Class<?>[]{IAppOpsService.class},HostAppOps::invoke);
-    private record Watch(int op,String packageName) {}
+    /** The first registration fixes callback identity; later calls add matching buckets. */
+    private static final class Watch {
+        final int op,flags,callingUid;final Set<Integer> operations=new HashSet<>();final Set<String> packages=new HashSet<>();
+        Watch(int op,int flags,int callingUid){this.op=op;this.flags=flags;this.callingUid=callingUid;}
+    }
+    private record Change(int op,int uid,String packageName,String device) {}
+    private record Delivery(IAppOpsCallback callback,Set<Change> changes) {}
     private record Active(IBinder token,int op,int uid,String packageName,String attribution) {}
     /** One attributed start owns its client's death link until its final finish. */
     private static final class Started implements IBinder.DeathRecipient {
@@ -26,13 +32,18 @@ public final class HostAppOps {
             try{key.token.unlinkToDeath(this,0);}catch(NoSuchElementException alreadyUnlinked){}
         }
     }
-    private static final RemoteCallbackList<IAppOpsCallback> watchers=new RemoteCallbackList<>();
+    private static final Map<IBinder,Watch> watching=new HashMap<>();
+    private static final RemoteCallbackList<IAppOpsCallback> watchers=new RemoteCallbackList<>(){
+        @Override public void onCallbackDied(IAppOpsCallback callback,Object cookie){synchronized(HostAppOps.class){watching.remove(callback.asBinder(),cookie);}}
+    };
     private static final Map<Active,Started> active=new HashMap<>();
     private static final Map<IBinder,Set<Integer>> globalRestrictions=new IdentityHashMap<>();
     private static final Set<String> diagnostics=new HashSet<>();
     private static final Set<Integer> changedOps=new LinkedHashSet<>();
+    private static final Set<Integer> foregroundChangedOps=new LinkedHashSet<>();
+    private static final Set<Integer> packageForegroundChangedOps=new LinkedHashSet<>();
     private static SharedPreferences decisions;
-    private static boolean foregroundModes;
+    private static boolean foregroundModes,uidForeground;
     private static Handler handler;private static String packageName;private static int uid;private static boolean installed,closed,pending;
     private static final SharedPreferences.OnSharedPreferenceChangeListener decisionListener=(preferences,key)->{
         if(key==null){permissionsChanged();return;}
@@ -47,7 +58,7 @@ public final class HostAppOps {
         if(closed)throw new IllegalStateException("Application operation service is closed");
         if(installed)return;packageName=context.getPackageName();uid=android.os.Process.myUid();handler=new Handler(Objects.requireNonNull(Looper.getMainLooper()));
         decisions=HostPermissions.decisions(context);decisions.registerOnSharedPreferenceChangeListener(decisionListener);
-        refreshForegroundModes();
+        refreshForegroundModes();uidForeground=isUidForeground();
         HostServices.register(Context.APP_OPS_SERVICE,service,"com.android.internal.app.IAppOpsService");
         if(!HostLooper.addShutdownListener(handler.getLooper(),HostAppOps::close))throw new IllegalStateException("Application operation owner has stopped");installed=true;
     }
@@ -59,9 +70,7 @@ public final class HostAppOps {
         if(!own(requestUid,requestPackage))return AppOpsManager.MODE_ERRORED;
         synchronized(HostAppOps.class){if(globalRestrictions.values().stream().anyMatch(ops->ops.contains(op)))return AppOpsManager.MODE_IGNORED;}
         int code;try{code=AppOpsManager.opToSwitch(op);}catch(IndexOutOfBoundsException|IllegalArgumentException error){return AppOpsManager.MODE_ERRORED;}
-        int defaultMode=AppOpsManager.opToDefaultMode(code);
-        int selected=decisions.getInt(uidKey(code),defaultMode);
-        if(selected==defaultMode)selected=decisions.getInt(packageKey(code),defaultMode);
+        int selected=storedMode(code);
         if(selected!=AppOpsManager.MODE_ALLOWED){
             if(selected!=AppOpsManager.MODE_FOREGROUND||raw)return selected;
             if(HostActivityManager.hostUidProcessState(null,requestUid)>ActivityManager.PROCESS_STATE_FOREGROUND_SERVICE)return AppOpsManager.MODE_IGNORED;
@@ -76,7 +85,16 @@ public final class HostAppOps {
     private static String uidKey(int op){return "appop:uid:"+uid+":"+AppOpsManager.opToPublicName(op);}
     // The existing all-files settings choice uses this same package key.
     private static String packageKey(int op){return "appop:"+AppOpsManager.opToPublicName(op);}
+    private static int storedMode(int op){int defaultMode=AppOpsManager.opToDefaultMode(op),selected=decisions.getInt(uidKey(op),defaultMode);return selected==defaultMode?decisions.getInt(packageKey(op),defaultMode):selected;}
     private static void refreshForegroundModes(){foregroundModes=decisions.getAll().entrySet().stream().anyMatch(entry->entry.getKey().startsWith("appop:")&&Objects.equals(entry.getValue(),AppOpsManager.MODE_FOREGROUND));}
+    private static boolean isUidForeground(){return HostActivityManager.hostUidProcessState(null,uid)<=ActivityManager.PROCESS_STATE_FOREGROUND_SERVICE;}
+    private static boolean restricted(int op){return globalRestrictions.values().stream().anyMatch(ops->ops.contains(op));}
+    private static void updateStartedMode(int op,int value){
+        if(value==AppOpsManager.MODE_ERRORED)return;
+        int packageMode=decisions.getInt(packageKey(op),AppOpsManager.opToDefaultMode(op));
+        if(packageMode!=AppOpsManager.MODE_ALLOWED&&packageMode!=AppOpsManager.MODE_FOREGROUND)return;
+        for(var entry:active.entrySet())if(entry.getKey().op==op)entry.getValue().paused=value==AppOpsManager.MODE_IGNORED||restricted(op);
+    }
     private static void setMode(int op,int requestUid,String requestPackage,int value,boolean uidMode){
         int caller=Binder.getCallingUid();var peer=HostBinderRpc.callingPeer();
         if(peer!=null&&(peer.uid()!=caller||peer.pid()!=Binder.getCallingPid()))throw new SecurityException("Application-operation caller differs from its authenticated process");
@@ -95,15 +113,25 @@ public final class HostAppOps {
             if(decisions.getInt(key,defaultMode)==value)return;
             var edit=decisions.edit();if(value==defaultMode)edit.remove(key);else edit.putInt(key,value);edit.apply();
             refreshForegroundModes();
-            if(value!=AppOpsManager.MODE_ERRORED)for(var entry:active.entrySet()){
-                Active activeOp=entry.getKey();
-                if(activeOp.op==code)entry.getValue().paused=mode(activeOp.op,activeOp.uid,activeOp.packageName)!=AppOpsManager.MODE_ALLOWED;
-            }
+            updateStartedMode(code,value);
             changedOps.add(code);postChanges();
         }
         AppOpsManager.invalidateAppOpModeCache();
     }
-    static void uidStateChanged(){synchronized(HostAppOps.class){if(!installed||closed||!foregroundModes)return;}permissionsChanged();}
+    static void uidStateChanged(){
+        synchronized(HostAppOps.class){
+            if(!installed||closed)return;boolean foreground=isUidForeground();if(foreground==uidForeground)return;uidForeground=foreground;
+            if(!foregroundModes)return;
+            for(int op=0;op<AppOpsManager._NUM_OP;op++)if(AppOpsManager.opToSwitch(op)==op){
+                int defaultMode=AppOpsManager.opToDefaultMode(op),uidMode=decisions.getInt(uidKey(op),defaultMode);
+                if(uidMode==AppOpsManager.MODE_FOREGROUND&&uidMode!=defaultMode)foregroundChangedOps.add(op);
+                else if(decisions.getInt(packageKey(op),defaultMode)==AppOpsManager.MODE_FOREGROUND&&(decisions.contains(packageKey(op))||hasStartedOp(op)))packageForegroundChangedOps.add(op);
+            }
+            if(!foregroundChangedOps.isEmpty()||!packageForegroundChangedOps.isEmpty())postChanges();
+        }
+        AppOpsManager.invalidateAppOpModeCache();
+    }
+    private static boolean hasStartedOp(int op){for(var key:active.keySet())if(key.op==op)return true;return false;}
     /** Same policy owner for original system-service AppOps restrictions. */
     public static void hostSetGlobalRestriction(Object receiver,int op,boolean restricted,IBinder token){
         if(receiver instanceof AppOpsManagerInternal original){original.setGlobalRestriction(op,restricted,token);return;}
@@ -137,12 +165,51 @@ public final class HostAppOps {
         Active key=new Active(token,op,requestUid,requestPackage,attribution);Started started=active.get(key);
         if(started!=null&&--started.count==0){active.remove(key);started.unlink();}
     }
-    private static synchronized void watch(int op,String requestPackage,IAppOpsCallback callback){if(closed||callback==null)return;if(op< -1||op>=AppOpsManager._NUM_OP)throw new IllegalArgumentException("Invalid watched application operation: "+op);if(requestPackage!=null&&!requestPackage.equals(packageName))return;if(watchers.getRegisteredCallbackCount()>=128)throw new IllegalStateException("Application operation callback limit reached");watchers.register(callback,new Watch(op,requestPackage));}
+    private static synchronized void watch(int op,String requestPackage,int flags,IAppOpsCallback callback){
+        if(closed||callback==null)return;if(op<AppOpsManager.OP_NONE||op>=AppOpsManager._NUM_OP)throw new IllegalArgumentException("Invalid watched application operation: "+op);
+        if(requestPackage!=null&&!requestPackage.equals(packageName))return;
+        Watch watch=watching.get(callback.asBinder());
+        if(watch==null){
+            if(watchers.getRegisteredCallbackCount()>=128)throw new IllegalStateException("Application operation callback limit reached");
+            watch=new Watch(op,flags,Binder.getCallingUid());if(!watchers.register(callback,watch))return;watching.put(callback.asBinder(),watch);
+        }
+        if(op!=AppOpsManager.OP_NONE)watch.operations.add(AppOpsManager.opToSwitch(op));
+        if(requestPackage!=null)watch.packages.add(requestPackage);
+    }
+    private static synchronized void unwatch(IAppOpsCallback callback){if(callback!=null){watching.remove(callback.asBinder());watchers.unregister(callback);}}
     private static void postChanges(){if(pending)return;pending=true;if(!handler.post(HostAppOps::dispatchChanges))pending=false;}
-    public static synchronized void permissionsChanged(){if(!installed||closed)return;for(int op=0;op<AppOpsManager._NUM_OP;op++)changedOps.add(AppOpsManager.opToSwitch(op));postChanges();}
-    private static void dispatchChanges(){Set<Integer> changed;synchronized(HostAppOps.class){pending=false;if(closed)return;changed=Set.copyOf(changedOps);changedOps.clear();for(var entry:active.entrySet()){Active key=entry.getKey();int selected=mode(key.op,key.uid,key.packageName);if(selected!=AppOpsManager.MODE_ERRORED)entry.getValue().paused=selected!=AppOpsManager.MODE_ALLOWED;}}HostPermissions.notifyChanged();
-        int count=watchers.beginBroadcast();try{for(int index=0;index<count;index++){Watch watch=(Watch)watchers.getBroadcastCookie(index);try{for(int op:changed)if(watch.op==-1||AppOpsManager.opToSwitch(watch.op)==op)watchers.getBroadcastItem(index).opChanged(op,uid,packageName,"default:0");}catch(RemoteException error){unavailable("callback delivery");}}}finally{watchers.finishBroadcast();}}
-    private static synchronized void close(){closed=true;for(var started:active.values())started.unlink();active.clear();globalRestrictions.clear();changedOps.clear();watchers.kill();if(decisions!=null)decisions.unregisterOnSharedPreferenceChangeListener(decisionListener);if(handler!=null)handler.removeCallbacksAndMessages(null);HostServices.unregister(Context.APP_OPS_SERVICE,service,"com.android.internal.app.IAppOpsService");}
+    public static synchronized void permissionsChanged(){
+        if(!installed||closed)return;
+        for(var entry:active.entrySet()){Active key=entry.getKey();int selected=mode(key.op,key.uid,key.packageName);if(selected!=AppOpsManager.MODE_ERRORED)entry.getValue().paused=selected!=AppOpsManager.MODE_ALLOWED;}
+        for(int op=0;op<AppOpsManager._NUM_OP;op++)changedOps.add(AppOpsManager.opToSwitch(op));postChanges();
+    }
+    private static void collectChanges(Watch watch,Set<Integer> codes,boolean foreground,boolean packageWatchers,Set<Change> changes){
+        if(foreground&&(watch.flags&AppOpsManager.WATCH_FOREGROUND_CHANGES)==0)return;
+        for(int code:codes)if(watch.operations.contains(code)||packageWatchers&&watch.packages.contains(packageName)){
+            if((watch.flags&AppOpsManager.CALL_BACK_ON_SWITCHED_OP)!=0)addChange(watch,watch.op==AppOpsManager.OP_NONE?code:AppOpsManager.opToSwitch(watch.op),changes);
+            else if(watch.op!=AppOpsManager.OP_NONE)addChange(watch,watch.op,changes);
+            else for(int op=0;op<AppOpsManager._NUM_OP;op++)if(AppOpsManager.opToSwitch(op)==code)addChange(watch,op,changes);
+        }
+    }
+    private static void addChange(Watch watch,int op,Set<Change> changes){
+        if(AppOpsManager.opRestrictsRead(op)&&HostPermissions.check(android.Manifest.permission.MANAGE_APPOPS,watch.callingUid,Context.DEVICE_ID_DEFAULT)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return;
+        changes.add(new Change(op,uid,packageName,"default:0"));
+    }
+    private static void dispatchChanges(){
+        List<Delivery> deliveries=new ArrayList<>();boolean notifyPermissions;
+        synchronized(HostAppOps.class){
+            pending=false;if(closed)return;notifyPermissions=!changedOps.isEmpty();
+            int count=watchers.beginBroadcast();try{for(int index=0;index<count;index++){
+                Watch watch=(Watch)watchers.getBroadcastCookie(index);Set<Change> changes=new LinkedHashSet<>();
+                collectChanges(watch,changedOps,false,true,changes);collectChanges(watch,foregroundChangedOps,true,true,changes);collectChanges(watch,packageForegroundChangedOps,true,false,changes);
+                if(!changes.isEmpty())deliveries.add(new Delivery(watchers.getBroadcastItem(index),changes));
+            }}finally{watchers.finishBroadcast();}
+            changedOps.clear();foregroundChangedOps.clear();packageForegroundChangedOps.clear();
+        }
+        if(notifyPermissions)HostPermissions.notifyChanged();
+        for(var delivery:deliveries)for(var change:delivery.changes)try{delivery.callback.opChanged(change.op,change.uid,change.packageName,change.device);}catch(RemoteException error){unavailable("callback delivery");}
+    }
+    private static synchronized void close(){closed=true;for(var started:active.values())started.unlink();active.clear();globalRestrictions.clear();changedOps.clear();foregroundChangedOps.clear();packageForegroundChangedOps.clear();watching.clear();watchers.kill();if(decisions!=null)decisions.unregisterOnSharedPreferenceChangeListener(decisionListener);if(handler!=null)handler.removeCallbacksAndMessages(null);HostServices.unregister(Context.APP_OPS_SERVICE,service,"com.android.internal.app.IAppOpsService");}
     private static Object invoke(Object proxy,Method method,Object[] arguments)throws Throwable{
         Object[] a=arguments==null?new Object[0]:arguments;String name=method.getName();
         if(method.getDeclaringClass()==Object.class)return switch(name){case "toString"->"Local Android application operations";case "hashCode"->System.identityHashCode(proxy);case "equals"->proxy==a[0];default->throw new AssertionError(name);};
@@ -164,9 +231,9 @@ public final class HostAppOps {
             case "noteProxyOperation":case "noteProxyOperationWithState":{AttributionSource source=a[1] instanceof AttributionSource s?s:new AttributionSource((AttributionSourceState)a[1]);return note((int)a[0],source.getUid(),source.getPackageName(),source.getAttributionTag());}
             case "startProxyOperation":case "startProxyOperationWithState":{AttributionSource source=a[2] instanceof AttributionSource s?s:new AttributionSource((AttributionSourceState)a[2]);return start((IBinder)a[0],(int)a[1],source.getUid(),source.getPackageName(),source.getAttributionTag());}
             case "finishProxyOperation":case "finishProxyOperationWithState":{AttributionSource source=a[2] instanceof AttributionSource s?s:new AttributionSource((AttributionSourceState)a[2]);finish((IBinder)a[0],(int)a[1],source.getUid(),source.getPackageName(),source.getAttributionTag());return null;}
-            case "startWatchingMode":watch((int)a[0],(String)a[1],(IAppOpsCallback)a[2]);return null;
-            case "startWatchingModeWithFlags":watch((int)a[0],(String)a[1],(IAppOpsCallback)a[3]);return null;
-            case "stopWatchingMode":watchers.unregister((IAppOpsCallback)a[0]);return null;
+            case "startWatchingMode":watch((int)a[0],(String)a[1],0,(IAppOpsCallback)a[2]);return null;
+            case "startWatchingModeWithFlags":watch((int)a[0],(String)a[1],(int)a[2],(IAppOpsCallback)a[3]);return null;
+            case "stopWatchingMode":unwatch((IAppOpsCallback)a[0]);return null;
             case "isOperationActive":synchronized(HostAppOps.class){int op=(int)a[0],requestUid=(int)a[1];String requestPackage=(String)a[2];return active.entrySet().stream().anyMatch(entry->{Active key=entry.getKey();return !entry.getValue().paused&&key.op==op&&key.uid==requestUid&&Objects.equals(key.packageName,requestPackage);});}
             case "shouldCollectNotes":return false;
             case "getHistoricalOps":case "getHistoricalOpsFromDiskRaw":unavailable(name);((RemoteCallback)a[a.length-1]).sendResult(Bundle.EMPTY);return null;

@@ -11,11 +11,9 @@ import java.util.Objects;
 /** Platform buffer ownership under the complete AOSP Surface implementation. */
 public final class HostSurface {
     public interface Target {
-        /** Reserve consumer capacity before entering the shared scene lock. */
-        default void beginSubmit(){}
-        /** Release a reservation if submission failed or the producer retired. */
-        default void endSubmit(){}
         boolean submit(int[] pixels,int width,int height,long frameId,long sourceTimeNanos);
+        /** A consumer can retain the producer's actual buffer without a color copy. */
+        default int queueBuffer(long buffer,long frameId,long sourceTimeNanos,int dataSpace){return -38;}
         void resize(int width,int height);
         /** Allocate the native identity from this same producer's buffer owner. */
         default long createNativeSurface(int width,int height,int format){return NativeSurface.create(width,height,format);}
@@ -68,19 +66,13 @@ public final class HostSurface {
             locked=canvas;owner=Thread.currentThread();
         }}
         void post(Canvas canvas){
-            synchronized(HostSurfaceControl.scene){if(closed||locked!=canvas||owner!=Thread.currentThread())throw new IllegalStateException("Surface Canvas belongs to another lock");}
-            boolean submitted=false;
-            try{
-                target.beginSubmit();submitted=true;
-                synchronized(HostSurfaceControl.scene){
+            synchronized(HostSurfaceControl.scene){
                 if(closed||locked!=canvas||owner!=Thread.currentThread())throw new IllegalStateException("Surface Canvas belongs to another lock");
+                try{
                 bitmap.getPixels(pixels,0,width,0,0,width,height);frame++;
                 pending=!target.submit(pixels,width,height,frame,System.nanoTime());
                 for(var listener:java.util.List.copyOf(frames))listener.accept(frame);
-                }
-            }finally{
-                synchronized(HostSurfaceControl.scene){if(locked==canvas&&owner==Thread.currentThread()){canvas.setBitmap(null);locked=null;owner=null;}}
-                if(submitted)target.endSubmit();
+                }finally{canvas.setBitmap(null);locked=null;owner=null;}
             }
         }
         @Override public void close(){synchronized(HostSurfaceControl.scene){
@@ -125,9 +117,8 @@ public final class HostSurface {
     /** Native producers retain this same Buffer through HostNativeHandle. */
     public static int videoTarget(long handle){var target=buffer(handle).target;return target==null?0:target instanceof HostSurfaceTexture?1:2;}
     public static boolean submitVideoPixels(long handle,int[] pixels,int width,int height,long timestamp){
-        var target=buffer(handle);if(target.target==null)return false;boolean submitted=false;
-        synchronized(HostSurfaceControl.scene){if(target.closed||target.locked!=null)return false;}
-        try{target.target.beginSubmit();submitted=true;synchronized(HostSurfaceControl.scene){
+        var target=buffer(handle);if(target.target==null)return false;
+        synchronized(HostSurfaceControl.scene){
         if(target.closed||target.locked!=null)return false;
         if(target.width!=width||target.height!=height)target.resize(width,height);
         if(target.bitmap==null)target.bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
@@ -135,7 +126,7 @@ public final class HostSurface {
         target.pending=!target.target.submit(pixels,width,height,target.frame,timestamp);
         for(var listener:java.util.List.copyOf(target.frames))listener.accept(target.frame);
         return !target.pending;
-        }}finally{if(submitted)target.target.endSubmit();}
+        }
     }
     /** Copy the last posted Canvas image; an active producer lock is never read. */
     static int copyCanvasInto(Surface surface,Rect requested,Bitmap destination){synchronized(HostSurfaceControl.scene){
@@ -158,12 +149,15 @@ public final class HostSurface {
     public static void nativeWriteToParcel(long handle,Parcel parcel){if(handle!=0)buffer(handle);HostObjectParcel.writeNativeHandle(parcel,handle);}
     public static long nativeReadFromParcel(long current,Parcel parcel){long next=HostObjectParcel.readNativeHandle(parcel,Buffer.class);if(current!=0)HostNativeHandle.release(current);return next;}
     public static int nativeAttachAndQueueBufferWithColorSpace(long handle,HardwareBuffer hardware,int colorSpace){
-        Target sink=buffer(handle).target;
         long source=HostNativeHandle.retain(HostHardwareBuffer.handle(Objects.requireNonNull(hardware)));
-        boolean submitted=false;
-        try{if(sink!=null){sink.beginSubmit();submitted=true;}synchronized(HostSurfaceControl.scene){
+        try{synchronized(HostSurfaceControl.scene){
             Buffer target=buffer(handle);if(target.closed)return -19;if(target.locked!=null)return -16;
             int width=HostHardwareBuffer.nGetWidth(source),height=HostHardwareBuffer.nGetHeight(source);
+            if(target.target!=null){
+                ColorSpace.Named[] spaces=ColorSpace.Named.values();if(colorSpace<0||colorSpace>=spaces.length)return -22;
+                int result=target.target.queueBuffer(source,target.frame+1,System.nanoTime(),ColorSpace.get(spaces[colorSpace]).getDataSpace());
+                if(result!=-38){if(result==0){target.frame++;target.pending=false;for(var listener:java.util.List.copyOf(target.frames))listener.accept(target.frame);}return result;}
+            }
             if(target.target==null&&colorSpace==ColorSpace.Named.SRGB.ordinal()){
                 if(target.width!=width||target.height!=height)target.resize(width,height);
                 int result=HostHardwareBuffer.present(source,target.lease);if(result==0){target.frame++;target.pending=false;for(var listener:java.util.List.copyOf(target.frames))listener.accept(target.frame);}return result;
@@ -183,7 +177,7 @@ public final class HostSurface {
             target.pending=!target.target.submit(pixels,width,height,target.frame,System.nanoTime());
             for(var listener:java.util.List.copyOf(target.frames))listener.accept(target.frame);
             return 0;
-        }}finally{if(submitted)sink.endSubmit();HostNativeHandle.release(source);}
+        }}finally{HostNativeHandle.release(source);}
     }
     public static boolean nativeIsValid(long handle){return NativeSurface.valid(buffer(handle).lease);}
     public static boolean nativeIsConsumerRunningBehind(long handle){return buffer(handle).pending;}

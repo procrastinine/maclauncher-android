@@ -7,7 +7,9 @@ import org.objectweb.asm.tree.*;
 /** Bind native boundaries from compiled platform declarations, never name lists.
  * Original Java methods and native entries without an exact adapter stay intact. */
 final class NativeBindings implements Opcodes {
-    private record Adapter(String owner,boolean receiver){}
+    private record Adapter(String owner,boolean receiver,Map<String,String> returns){
+        Adapter(String owner,boolean receiver){this(owner,receiver,Map.of());}
+    }
     private static Adapter framework(String owner){return new Adapter("maclauncher/android/framework/"+owner,true);}
     private static Adapter media(String owner){return new Adapter("maclauncher/android/media/"+owner,true);}
     // Actual native implementations, not framework eligibility: every unmatched
@@ -28,7 +30,10 @@ final class NativeBindings implements Opcodes {
         Map.entry("android/graphics/BLASTBufferQueue",framework("HostBufferQueue")),
         Map.entry("android/graphics/HardwareRenderer",framework("HostPixelCopy")),
         Map.entry("android/media/ImageReader",framework("HostImageReader")),
-        Map.entry("android/media/ImageReader$SurfaceImage",framework("HostImageReader")),
+        // SurfacePlane is private to the upstream class. The adapter constructs
+        // that exact array reflectively; only its Java declaration uses Object[].
+        Map.entry("android/media/ImageReader$SurfaceImage",new Adapter("maclauncher/android/framework/HostImageReader",true,
+            Map.of("[Landroid/media/ImageReader$SurfaceImage$SurfacePlane;","[Ljava/lang/Object;"))),
         Map.entry("android/view/DisplayEventReceiver",framework("HostDisplayEvents")),
         Map.entry("android/os/incremental/IncrementalManager",framework("HostIncrementalFilesystem")),
         Map.entry("android/util/jar/StrictJarFile",framework("HostStrictJarFile")),
@@ -49,7 +54,7 @@ final class NativeBindings implements Opcodes {
         Map.entry("android/media/AudioPortEventHandler",media("HostAudioPortEventHandler")),
         Map.entry("android/hardware/Camera",media("HostCamera"))
     );
-    static byte[] transform(byte[] original){Adapter adapter=owners.get(new ClassReader(original).getClassName());return adapter==null?original:transform(original,adapter.owner(),adapter.receiver());}
+    static byte[] transform(byte[] original){Adapter adapter=owners.get(new ClassReader(original).getClassName());return adapter==null?original:transform(original,adapter);}
     private static final Map<String,Set<String>> declarations=new HashMap<>();
     private static Set<String> methods(String owner) {
         return declarations.computeIfAbsent(owner,key->{
@@ -83,13 +88,14 @@ final class NativeBindings implements Opcodes {
         return source.getSort()==Type.ARRAY&&target.getDescriptor().equals("[Ljava/lang/Object;")
             &&(source.getDimensions()>1||source.getElementType().getSort()==Type.OBJECT);
     }
-    private static String binding(Set<String> available,String name,String descriptor){
+    private static String binding(Set<String> available,String name,String descriptor,Map<String,String> returns){
         if(available.contains(name+descriptor))return descriptor;
         String selected=null;Type[] source=Type.getArgumentTypes(descriptor);Type result=Type.getReturnType(descriptor);
         for(String declaration:available){
             if(!declaration.startsWith(name+"("))continue;
             String candidate=declaration.substring(name.length());Type[] target=Type.getArgumentTypes(candidate);
-            if(source.length!=target.length||!accepts(result,Type.getReturnType(candidate)))continue;
+            Type targetResult=Type.getReturnType(candidate);
+            if(source.length!=target.length||(!result.equals(targetResult)&&!targetResult.getDescriptor().equals(returns.get(result.getDescriptor()))))continue;
             boolean matches=true;for(int i=0;i<source.length;i++)if(!accepts(source[i],target[i])){matches=false;break;}
             if(!matches)continue;
             if(selected!=null)throw new IllegalStateException("Ambiguous native platform binding: "+name+descriptor);
@@ -98,29 +104,18 @@ final class NativeBindings implements Opcodes {
         return selected;
     }
     static byte[] transform(byte[] original,String platformOwner) {
-        return transform(original,platformOwner,true);
+        return transform(original,new Adapter(platformOwner,true));
     }
-    private static byte[] transform(byte[] original,String platformOwner,boolean receiver) {
+    private static byte[] transform(byte[] original,Adapter adapter) {
+        String platformOwner=adapter.owner();boolean receiver=adapter.receiver();
         Set<String> available=methods(platformOwner);
         ClassNode node=new ClassNode();new ClassReader(original).accept(node,0);
         boolean changed=false;
-        if(node.name.equals("android/media/ImageReader"))for(MethodNode method:node.methods)
-            if(method.name.equals("close")&&method.desc.equals("()V")){
-                boolean prepared=false;for(AbstractInsnNode instruction:method.instructions)
-                    if(instruction instanceof MethodInsnNode call&&call.owner.equals(platformOwner)&&call.name.equals("prepareClose")){prepared=true;break;}
-                if(prepared)continue;
-                // Surface's Java monitor can be held by a producer waiting for
-                // consumer capacity. Abandon that platform queue before the
-                // original close body releases its Surface and acquired Images.
-                var begin=new InsnList();begin.add(new VarInsnNode(ALOAD,0));
-                begin.add(new MethodInsnNode(INVOKESTATIC,platformOwner,"prepareClose","(Landroid/media/ImageReader;)V",false));
-                method.instructions.insert(begin);changed=true;
-            }
         for(MethodNode method:node.methods){
             if((method.access&ACC_NATIVE)==0)continue;
             boolean instance=(method.access&ACC_STATIC)==0;
             String descriptor=instance&&receiver?"(L"+node.name+";"+method.desc.substring(1):method.desc;
-            descriptor=binding(available,method.name,descriptor);
+            descriptor=binding(available,method.name,descriptor,adapter.returns());
             if(descriptor==null)continue;
             method.access&=~ACC_NATIVE;
             if(instance&&receiver)method.instructions.add(new VarInsnNode(ALOAD,0));

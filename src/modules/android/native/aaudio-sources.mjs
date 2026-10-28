@@ -4,7 +4,7 @@ export function adaptAAudioOwnership(source){
  const callbacks='    klaa_error_cb error_cb;  void *error_user;';
  if(source.split(callbacks).length!==3)throw Error('Original AAudio callback owners changed');
  source=source.replaceAll(callbacks,callbacks+'\n    KljAAudioCallback owned_callbacks[3];\n    void (*presentation_cb)(void *,void *); void *presentation_user;\n    int32_t content_spatialized;');
- replace('    int32_t buffer_size;', '    int32_t content_type,usage,privacy_sensitive,capture_policy;\n    int64_t frames_read_seen;\n    _Atomic int resources_released;\n    int32_t buffer_size;');
+ replace('    int32_t buffer_size;', '    int32_t content_type,usage,privacy_sensitive,capture_policy;\n    KljAudioSourceProgress *output_progress;\n    _Atomic int resources_released;\n    int32_t buffer_size;');
  replace('} klaa_stream;', '} klaa_stream;\nstatic aaudio_result_t owned_aaudio_release(klaa_stream *s);');
  replace('    unsigned long callbacks, frames;', '    _Atomic unsigned long callbacks, frames;');
  replace('    b->sharing_mode     = 1;               // AAUDIO_SHARING_MODE_SHARED', '    b->sharing_mode     = 1;               // AAUDIO_SHARING_MODE_SHARED\n    b->content_type=2; b->usage=1; b->capture_policy=1;\n    b->privacy_sensitive=-1;');
@@ -14,6 +14,7 @@ export function adaptAAudioOwnership(source){
  source=source.slice(0,begin)+`static aaudio_result_t klaa_close(klaa_stream *s) {
     aaudio_result_t result=owned_aaudio_release(s);
     if(result!=AAUDIO_OK)return result;
+    klj_audio_source_destroy(s->output_progress);
     pthread_mutex_destroy(&s->lock); free(s); return AAUDIO_OK;
 }
 
@@ -29,5 +30,7 @@ export function adaptAAudioOwnership(source){
  replace('if (s->direction != AAUDIO_DIRECTION_INPUT) kl_audio_flush();', 'if (s->direction != AAUDIO_DIRECTION_INPUT && g_open_streams==1) kl_audio_flush();');
  // Read/write on a released stream must not reach retired capture/staging data.
  source=source.replaceAll('if (!s || !buffer) return AAUDIO_ERROR_NULL;', 'if (!s || !buffer) return AAUDIO_ERROR_NULL;\n    if(s->resources_released)return AAUDIO_ERROR_INVALID_STATE;');
+ if(source.split('kl_audio_write_src(s, pcm, bytes)').length!==3)throw Error('Original AAudio write owners changed');
+ source=source.replaceAll('kl_audio_write_src(s, pcm, bytes)','klj_audio_source_write(s->output_progress,s,pcm,bytes,bytes/(size_t)frame_out)');
  return source;
 }

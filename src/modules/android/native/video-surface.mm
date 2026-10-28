@@ -21,6 +21,10 @@ JavaVM*vm=nullptr;jclass handles=nullptr,surfaces=nullptr;jmethodID retainHandle
 std::once_flag initialized;
 struct Attached {JNIEnv*env=nullptr;bool detach=false;Attached(){if(vm&&vm->GetEnv((void**)&env,JNI_VERSION_1_8)==JNI_EDETACHED)detach=vm->AttachCurrentThreadAsDaemon((void**)&env,nullptr)==JNI_OK;}~Attached(){if(detach)vm->DetachCurrentThread();}};
 JNIEnv* environment(){thread_local Attached thread;return thread.env;}
+// This asynchronous native consumer returns media status, never a Java throw.
+// Retire its JNI failure at that boundary so a daemon decoder can deliver later
+// frames, including after a consumer closes or rejects a producer configuration.
+struct MediaResult {JNIEnv*env;bool enteredClean;explicit MediaResult(JNIEnv*value):env(value),enteredClean(!value->ExceptionCheck()){}~MediaResult(){if(enteredClean&&env->ExceptionCheck())env->ExceptionClear();}};
 int64_t now(){timespec value;klj_clock_read(1,&value);return int64_t(value.tv_sec)*1000000000+value.tv_nsec;}
 struct Surface {
     std::atomic<unsigned> refs{1};void*window;uint64_t lease;jlong handle;int kind;
@@ -29,6 +33,7 @@ struct Surface {
     static void release(void*p){auto*s=static_cast<Surface*>(p);if(s->refs.fetch_sub(1,std::memory_order_acq_rel)==1)delete s;}
     int deliver(CVPixelBufferRef pixels,int64_t time,void(*completed)(void*,int64_t),void*context){@autoreleasepool{
         auto*env=environment();if(!env)return failed;
+        MediaResult resultBoundary{env};if(env->ExceptionCheck())return failed;
         if(kind==1)return klj_texture_publish_video(env,lease,pixels,time,completed,context)?0:failed;
         if(kind==2){
             size_t width=CVPixelBufferGetWidth(pixels),height=CVPixelBufferGetHeight(pixels),count=width*height;if(count>INT_MAX)return invalid;
@@ -61,15 +66,16 @@ struct Surface {
 int acquire(void*window,KLJMediaSurface*out){
     if(!window||!out)return invalid;if(!klj_surface_retain_window(window))return unsupported;
     auto*env=environment();if(!env){klj_surface_release_window(window);return failed;}
+    MediaResult resultBoundary{env};if(env->ExceptionCheck()){klj_surface_release_window(window);return failed;}
     jlong handle=(jlong)klj_surface_consumer(window);if(!handle){klj_surface_release_window(window);return unsupported;}
-    handle=env->CallStaticLongMethod(handles,retainHandle,handle);if(env->ExceptionCheck()||!handle){klj_surface_release_window(window);return invalid;}
+    handle=env->CallStaticLongMethod(handles,retainHandle,handle);if(env->ExceptionCheck()||!handle){if(env->ExceptionCheck())env->ExceptionClear();klj_surface_release_window(window);return invalid;}
     int kind=env->CallStaticIntMethod(surfaces,targetKind,handle);
-    if(env->ExceptionCheck()){env->CallStaticVoidMethod(handles,releaseHandle,handle);klj_surface_release_window(window);return failed;}
+    if(env->ExceptionCheck()){env->ExceptionClear();env->CallStaticVoidMethod(handles,releaseHandle,handle);klj_surface_release_window(window);return failed;}
     auto*value=new(std::nothrow) Surface;if(!value){env->CallStaticVoidMethod(handles,releaseHandle,handle);klj_surface_release_window(window);return failed;}
     value->window=window;value->handle=handle;value->lease=klj_surface_lease(window);value->kind=kind;
     *out={value,Surface::retain,Surface::release,Surface::present};return 0;
 }
-int javaSurface(JNIEnv*env,jobject surface,KLJMediaSurface*out){void*window=klj_surface_native_window(env,surface);if(!window)return invalid;int result=acquire(window,out);klj_surface_release_window(window);return result;}
+int javaSurface(JNIEnv*env,jobject surface,KLJMediaSurface*out){MediaResult resultBoundary{env};if(env->ExceptionCheck())return failed;void*window=klj_surface_native_window(env,surface);if(!window)return invalid;int result=acquire(window,out);klj_surface_release_window(window);return result;}
 }
 extern "C" void klj_video_initialize(JNIEnv*env){
     std::call_once(initialized,[&]{env->GetJavaVM(&vm);auto type=env->FindClass("maclauncher/android/framework/HostNativeHandle");if(!type)return;handles=(jclass)env->NewGlobalRef(type);env->DeleteLocalRef(type);retainHandle=env->GetStaticMethodID(handles,"retain","(J)J");releaseHandle=env->GetStaticMethodID(handles,"release","(J)V");if(env->ExceptionCheck())return;

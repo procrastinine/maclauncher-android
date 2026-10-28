@@ -3,11 +3,27 @@
 #include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <AudioToolbox/AudioToolbox.h>
 #include "audio-volume.h"
 #include "audio-pcm.h"
 #include "audio-hardware.h"
+/* SOURCE_PROGRESS_STATE_BEGIN */
+struct KljAudioSourceProgress {
+    _Atomic uint64_t sequence,epoch,committed,end,source_frames,device_frames,seen;
+    _Atomic int retired;
+};
+_Static_assert(ATOMIC_LONG_LOCK_FREE==2&&ATOMIC_LLONG_LOCK_FREE==2,"Audio progress requires lock-free native counters");
+static _Atomic uint64_t owned_audio_epoch=1;
+struct OwnedAudioWrite {
+    KljAudioSourceProgress *progress;
+    uint64_t frames,base,epoch;
+    int initialized;
+};
+static _Thread_local struct OwnedAudioWrite *owned_audio_write;
+static void owned_audio_commit(uint64_t end,uint64_t written,uint64_t total);
+/* SOURCE_PROGRESS_STATE_END */
 static _Atomic int owned_paused;
 static _Atomic uint32_t owned_capture_device;
 static pthread_mutex_t owned_sources_lock=PTHREAD_MUTEX_INITIALIZER;
@@ -150,25 +166,85 @@ int klj_audio_capture_hardware_info(int32_t *rate,int32_t *channels,int32_t *for
     return available?0:-889;
 }
 
-int klj_audio_source_queued_frames(const void *source,int32_t rate,uint64_t *frames){
-    if(!source||!frames)return -886;
-    if(rate<=0)return -898;
-    // The existing source cursors and shared read cursor describe each stream's
-    // remaining contribution. Never register a source merely to query it.
-    pthread_mutex_lock(&g_wlock);
-    pthread_mutex_lock(&g_lock);
-    int slot=-1;
-    for(int i=0;i<g_src_n;i++)if(g_src_key[i]==source){slot=i;break;}
-    int available=slot>=0&&g_open&&g_ring&&isfinite(g_out_rate)&&g_out_rate>0;
-    if(available){
-        uint64_t written=atomic_load_explicit(&g_w,memory_order_acquire);
-        uint64_t read=atomic_load_explicit(&g_r,memory_order_acquire);
-        uint64_t end=g_src_n==1||!g_src_pos[slot]?written:g_src_pos[slot];
-        if(end>written)end=written;
-        long double pending=end>read?(long double)(end-read)*rate/g_out_rate:0;
-        *frames=pending>=0x1p64L?UINT64_MAX:(uint64_t)ceill(pending);
-    }
-    pthread_mutex_unlock(&g_lock);
-    pthread_mutex_unlock(&g_wlock);
-    return available?0:-889;
+/* SOURCE_PROGRESS_OPERATIONS_BEGIN */
+KljAudioSourceProgress *klj_audio_source_create(void){
+    KljAudioSourceProgress *value=malloc(sizeof(*value));
+    if(!value)return NULL;
+    atomic_init(&value->sequence,0);atomic_init(&value->epoch,0);
+    atomic_init(&value->committed,0);atomic_init(&value->end,0);
+    atomic_init(&value->source_frames,0);atomic_init(&value->device_frames,0);
+    atomic_init(&value->seen,0);atomic_init(&value->retired,0);
+    return value;
 }
+
+// The original writer holds g_wlock here, only after copying/mixing this range.
+// The cumulative count excludes a callback's not-yet-written next burst.
+static void owned_audio_commit(uint64_t end,uint64_t written,uint64_t total){
+    struct OwnedAudioWrite *write=owned_audio_write;
+    if(!write||!total||atomic_load_explicit(&write->progress->retired,memory_order_acquire))return;
+    KljAudioSourceProgress *value=write->progress;
+    uint64_t epoch=atomic_load_explicit(&owned_audio_epoch,memory_order_acquire);
+    if(!write->initialized||write->epoch!=epoch){
+        write->base=atomic_load_explicit(&value->epoch,memory_order_relaxed)==epoch
+            ?atomic_load_explicit(&value->committed,memory_order_relaxed)
+            :atomic_load_explicit(&value->seen,memory_order_relaxed);
+        write->epoch=epoch;write->initialized=1;
+    }
+    __uint128_t count=(__uint128_t)write->frames*written/total+write->base;
+    uint64_t committed=count>INT64_MAX?INT64_MAX:(uint64_t)count;
+    atomic_fetch_add_explicit(&value->sequence,1,memory_order_acq_rel);
+    atomic_store_explicit(&value->epoch,epoch,memory_order_relaxed);
+    atomic_store_explicit(&value->committed,committed,memory_order_relaxed);
+    atomic_store_explicit(&value->end,end,memory_order_relaxed);
+    atomic_store_explicit(&value->source_frames,write->frames,memory_order_relaxed);
+    atomic_store_explicit(&value->device_frames,total,memory_order_relaxed);
+    atomic_fetch_add_explicit(&value->sequence,1,memory_order_release);
+}
+
+size_t klj_audio_source_write(KljAudioSourceProgress *progress,const void *source,const void *pcm,size_t bytes,uint64_t frames){
+    if(!progress||!frames)return 0;
+    struct OwnedAudioWrite write={.progress=progress,.frames=frames};
+    struct OwnedAudioWrite *previous=owned_audio_write;owned_audio_write=&write;
+    size_t result=owned_original_write_src(source,pcm,bytes);
+    owned_audio_write=previous;return result;
+}
+
+uint64_t klj_audio_source_frames_read(KljAudioSourceProgress *value,uint64_t maximum){
+    if(!value)return 0;
+    uint64_t previous=atomic_load_explicit(&value->seen,memory_order_acquire);
+    if(atomic_load_explicit(&value->retired,memory_order_acquire))return previous;
+    uint64_t epoch=atomic_load_explicit(&owned_audio_epoch,memory_order_acquire);
+    uint64_t sequence=atomic_load_explicit(&value->sequence,memory_order_acquire);
+    if(sequence&1)return previous;
+    uint64_t committed=atomic_load_explicit(&value->committed,memory_order_relaxed);
+    uint64_t end=atomic_load_explicit(&value->end,memory_order_relaxed);
+    uint64_t source=atomic_load_explicit(&value->source_frames,memory_order_relaxed);
+    uint64_t device=atomic_load_explicit(&value->device_frames,memory_order_relaxed);
+    uint64_t producedEpoch=atomic_load_explicit(&value->epoch,memory_order_relaxed);
+    uint64_t read=atomic_load_explicit(&g_r,memory_order_acquire);
+    atomic_thread_fence(memory_order_acquire);
+    // An in-progress publication or device reset returns the last observation;
+    // it never waits for a paced writer or touches mutable mixer slots.
+    if(sequence!=atomic_load_explicit(&value->sequence,memory_order_acquire)||
+       epoch!=atomic_load_explicit(&owned_audio_epoch,memory_order_acquire)||producedEpoch!=epoch||!device)return previous;
+    __uint128_t pending=end>read?((__uint128_t)(end-read)*source+device-1)/device:0;
+    uint64_t consumed=pending>=committed?0:committed-(uint64_t)pending;
+    if(consumed>maximum)consumed=maximum;
+    while(previous<consumed&&!atomic_compare_exchange_weak_explicit(&value->seen,&previous,consumed,memory_order_release,memory_order_acquire)){}
+    return previous>consumed?previous:consumed;
+}
+
+void klj_audio_source_retire(KljAudioSourceProgress *value,const void *source){
+    if(!value)return;
+    // The feeder has joined. Retire the exact key while writers are serialized,
+    // so another stream allocated at this address starts with a new mixer slot.
+    pthread_mutex_lock(&g_wlock);
+    atomic_store_explicit(&value->retired,1,memory_order_release);
+    for(int i=0;i<g_src_n;i++)if(g_src_key[i]==source){
+        for(int next=i+1;next<g_src_n;next++){g_src_key[next-1]=g_src_key[next];g_src_pos[next-1]=g_src_pos[next];}
+        g_src_n--;g_src_key[g_src_n]=NULL;g_src_pos[g_src_n]=0;break;
+    }
+    pthread_mutex_unlock(&g_wlock);
+}
+void klj_audio_source_destroy(KljAudioSourceProgress *value){free(value);}
+/* SOURCE_PROGRESS_OPERATIONS_END */
