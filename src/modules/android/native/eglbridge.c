@@ -82,6 +82,10 @@ JNIEXPORT void JNICALL Java_maclauncher_android_bridge_Graphics_configureHost(JN
     setenv("KL_GLFB_SIZE",dimensions,1);setenv("KL_GLFB","1",1);unsetenv("KL_PERMISSIVE");
     setenv("KLEPTON_METAL_PRESENT","1",1);
     setenv("RESHADE_EXPLICIT_HOST","1",1);
+    // A core loaded later reads this setting once at load; an already loaded
+    // core takes it through its exported setter. An older core has neither.
+    int (*explicit_host)(int,int)=(int(*)(int,int))dlsym(RTLD_DEFAULT,"rsSetExplicitHost");
+    if(explicit_host)explicit_host(1,1);
     if(library){const char *path=(*env)->GetStringUTFChars(env,library,NULL);if(!path)return;setenv("KLEPTON_FRAME_LIBRARY",path,1);(*env)->ReleaseStringUTFChars(env,library,path);}
     else unsetenv("KLEPTON_FRAME_LIBRARY");
 }

@@ -8,6 +8,7 @@
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
 #include <mach/vm_statistics.h>
+#include "process-ids.h"
 static malloc_statistics_t snapshot(void){malloc_statistics_t value={0};malloc_zone_statistics(NULL,&value);return value;}
 static jlong measured(size_t value){return value>(size_t)INT64_MAX?INT64_MAX:(jlong)value;}
 JNIEXPORT jlong JNICALL Java_android_os_Debug_getNativeHeapAllocatedSize(JNIEnv*env,jclass type){(void)env;(void)type;return measured(snapshot().size_in_use);}
@@ -29,8 +30,10 @@ typedef struct {
     uint64_t resident,unique;
 } process_memory;
 
-static int resident_memory(pid_t pid,uint64_t *bytes){
-    if(pid!=getpid())return 0;
+/* Android PIDs are leases in the supervisor's process namespace. Only this
+ * process's own lease names the Mach task measured here. */
+static int current_process(pid_t pid){return pid>0&&pid==klj_process_id();}
+static int resident_memory(uint64_t *bytes){
     mach_task_basic_info_data_t info={0};mach_msg_type_number_t count=MACH_TASK_BASIC_INFO_COUNT;
     if(task_info(mach_task_self(),MACH_TASK_BASIC_INFO,(task_info_t)&info,&count)!=KERN_SUCCESS)return 0;
     *bytes=info.resident_size;return 1;
@@ -45,9 +48,9 @@ static unsigned memory_group(unsigned tag){
         default:return MEMORY_OTHER;
     }
 }
-static int process_snapshot(pid_t pid,process_memory *result){
+static int process_snapshot(process_memory *result){
     memset(result,0,sizeof(*result));
-    if(!resident_memory(pid,&result->resident))return 0;
+    if(!resident_memory(&result->resident))return 0;
     mach_vm_address_t address=0;natural_t depth=0;
     for(;;){
         mach_vm_size_t extent=0;vm_region_submap_info_data_64_t info={0};
@@ -89,9 +92,9 @@ static void output_longs(JNIEnv *env,jlongArray target,const jlong *values,jsize
     if(!target)return;jsize length=(*env)->GetArrayLength(env,target);if(length<count)count=length;
     if(count)(*env)->SetLongArrayRegion(env,target,0,count,values);
 }
-static jboolean memory_info(JNIEnv *env,jint pid,jobject target){
+static jboolean memory_info(JNIEnv *env,int current,jobject target){
     if(!target){jclass error=(*env)->FindClass(env,"java/lang/NullPointerException");if(error)(*env)->ThrowNew(env,error,"memoryInfo");return JNI_FALSE;}
-    process_memory info;if(!process_snapshot(pid,&info))return JNI_FALSE;
+    process_memory info;if(!current||!process_snapshot(&info))return JNI_FALSE;
     jclass type=(*env)->GetObjectClass(env,target);
     const char *prefixes[]={"other","dalvik","native"};
     const char *suffixes[]={"Pss","SwappablePss","Rss","PrivateDirty","SharedDirty","PrivateClean","SharedClean","SwappedOut","SwappedOutPss"};
@@ -115,15 +118,15 @@ static jboolean memory_info(JNIEnv *env,jint pid,jobject target){
 failed:
     (*env)->DeleteLocalRef(env,type);return JNI_FALSE;
 }
-JNIEXPORT void JNICALL Java_android_os_Debug_getMemoryInfo__Landroid_os_Debug_00024MemoryInfo_2(JNIEnv *env,jclass type,jobject target){(void)type;memory_info(env,getpid(),target);}
-JNIEXPORT jboolean JNICALL Java_android_os_Debug_getMemoryInfo__ILandroid_os_Debug_00024MemoryInfo_2(JNIEnv *env,jclass type,jint pid,jobject target){(void)type;return memory_info(env,pid,target);}
+JNIEXPORT void JNICALL Java_android_os_Debug_getMemoryInfo__Landroid_os_Debug_00024MemoryInfo_2(JNIEnv *env,jclass type,jobject target){(void)type;memory_info(env,1,target);}
+JNIEXPORT jboolean JNICALL Java_android_os_Debug_getMemoryInfo__ILandroid_os_Debug_00024MemoryInfo_2(JNIEnv *env,jclass type,jint pid,jobject target){(void)type;return memory_info(env,current_process(pid),target);}
 JNIEXPORT jlong JNICALL Java_android_os_Debug_getPss__(JNIEnv *env,jclass type){(void)env;(void)type;return 0;}
 JNIEXPORT jlong JNICALL Java_android_os_Debug_getPss__I_3J_3J(JNIEnv *env,jclass type,jint pid,jlongArray details,jlongArray memtrack){
-    (void)type;process_memory info;if(!process_snapshot(pid,&info))return 0;
+    (void)type;process_memory info;if(!current_process(pid)||!process_snapshot(&info))return 0;
     jlong values[]={(jlong)(info.unique/1024),0,(jlong)(info.resident/1024)},empty[4]={0};
     output_longs(env,details,values,3);output_longs(env,memtrack,empty,4);return 0;
 }
-JNIEXPORT jlong JNICALL Java_android_os_Debug_getRss__(JNIEnv *env,jclass type){(void)env;(void)type;uint64_t bytes;return resident_memory(getpid(),&bytes)?(jlong)(bytes/1024):0;}
+JNIEXPORT jlong JNICALL Java_android_os_Debug_getRss__(JNIEnv *env,jclass type){(void)env;(void)type;uint64_t bytes;return resident_memory(&bytes)?(jlong)(bytes/1024):0;}
 JNIEXPORT jlong JNICALL Java_android_os_Debug_getRss__I_3J(JNIEnv *env,jclass type,jint pid,jlongArray memtrack){
-    (void)type;uint64_t bytes;if(!resident_memory(pid,&bytes))return 0;jlong empty[4]={0};output_longs(env,memtrack,empty,4);return (jlong)(bytes/1024);
+    (void)type;uint64_t bytes;if(!current_process(pid)||!resident_memory(&bytes))return 0;jlong empty[4]={0};output_longs(env,memtrack,empty,4);return (jlong)(bytes/1024);
 }
