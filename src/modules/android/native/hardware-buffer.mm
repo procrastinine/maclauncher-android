@@ -58,6 +58,14 @@ size_t elementBytes(OSType type){
 void registerFormats(){
     registerRGBA();static dispatch_once_t once;
     dispatch_once(&once,^{
+        // Like RGBA, Darwin declares this Android byte layout without a
+        // usable CVPixelBuffer allocation description. IOSurface already
+        // supplies its native little-endian two-byte RGB565 storage.
+        NSDictionary *rgb565=@{(id)kCVPixelFormatName:@"Android RGB565",(id)kCVPixelFormatConstant:@(kCVPixelFormatType_16LE565),
+            (id)kCVPixelFormatBitsPerBlock:@16,(id)kCVPixelFormatBlockWidth:@1,(id)kCVPixelFormatBlockHeight:@1,
+            (id)kCVPixelFormatContainsAlpha:@NO,(id)kCVPixelFormatContainsRGB:@YES,
+            (id)kCVPixelFormatComponentRange:(id)kCVPixelFormatComponentRange_FullRange};
+        CVPixelFormatDescriptionRegisterDescriptionWithPixelFormatType((__bridge CFDictionaryRef)rgb565,kCVPixelFormatType_16LE565);
         NSDictionary *format=@{(id)kCVPixelFormatName:@"Android RGBA1010102",(id)kCVPixelFormatConstant:@(rgba1010102),
             (id)kCVPixelFormatBitsPerBlock:@32,(id)kCVPixelFormatBlockWidth:@1,(id)kCVPixelFormatBlockHeight:@1,
             (id)kCVPixelFormatContainsAlpha:@YES,(id)kCVPixelFormatContainsRGB:@YES,
