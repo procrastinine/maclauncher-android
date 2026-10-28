@@ -4,7 +4,7 @@ export function adaptAAudioOwnership(source){
  const callbacks='    klaa_error_cb error_cb;  void *error_user;';
  if(source.split(callbacks).length!==3)throw Error('Original AAudio callback owners changed');
  source=source.replaceAll(callbacks,callbacks+'\n    KljAAudioCallback owned_callbacks[3];\n    void (*presentation_cb)(void *,void *); void *presentation_user;\n    int32_t content_spatialized;');
- replace('    int32_t buffer_size;', '    int32_t content_type,usage,privacy_sensitive,capture_policy;\n    _Atomic int resources_released;\n    int32_t buffer_size;');
+ replace('    int32_t buffer_size;', '    int32_t content_type,usage,privacy_sensitive,capture_policy;\n    int64_t frames_read_seen;\n    _Atomic int resources_released;\n    int32_t buffer_size;');
  replace('} klaa_stream;', '} klaa_stream;\nstatic aaudio_result_t owned_aaudio_release(klaa_stream *s);');
  replace('    unsigned long callbacks, frames;', '    _Atomic unsigned long callbacks, frames;');
  replace('    b->sharing_mode     = 1;               // AAUDIO_SHARING_MODE_SHARED', '    b->sharing_mode     = 1;               // AAUDIO_SHARING_MODE_SHARED\n    b->content_type=2; b->usage=1; b->capture_policy=1;\n    b->privacy_sensitive=-1;');

@@ -144,7 +144,8 @@ public final class HostPermissions extends IPermissionManager.Default {
     private static synchronized boolean runtimePermission(String permission){var declaration=declarations.get(permission);return requested.contains(permission)&&declaration!=null&&(declaration.apply(0).protectionLevel&PermissionInfo.PROTECTION_MASK_BASE)==PermissionInfo.PROTECTION_DANGEROUS;}
     // Use Android's original preference implementation and its existing disk
     // owner. Decisions are private to this installation, just like its grants.
-    static SharedPreferences decisions(){return HostApplication.applicationContext().createDeviceProtectedStorageContext().getSharedPreferences(DECISIONS,Context.MODE_PRIVATE);}
+    static SharedPreferences decisions(){return decisions(HostApplication.applicationContext());}
+    static SharedPreferences decisions(Context context){return context.createDeviceProtectedStorageContext().getSharedPreferences(DECISIONS,Context.MODE_PRIVATE);}
     static synchronized boolean requested(String permission){return requested.contains(permission);}
     private static int decisionFlags(String permission){return decisions().getInt(permission,0);}
     static void recordResult(String[] names,int[] results){

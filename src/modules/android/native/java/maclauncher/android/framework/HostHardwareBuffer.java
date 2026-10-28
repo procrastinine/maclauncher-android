@@ -20,7 +20,7 @@ public final class HostHardwareBuffer {
     private HostHardwareBuffer(){}
     static final class Buffer implements AutoCloseable {
         final int width,height,format;final long usage;
-        long storage;Bitmap bitmap;int[] pixels;Canvas locked;Thread thread;
+        long storage;Bitmap bitmap;int[] pixels;Canvas locked;Thread thread;int imageLocks;
         Buffer(int width,int height,int format,long usage){this.width=width;this.height=height;this.format=format;this.usage=usage;storage=createStorage(width,height);}
         void live(){if(storage==0)throw new IllegalStateException("Hardware buffer has closed");}
         @Override public synchronized void close(){if(storage==0)return;long previous=storage;storage=0;try{if(locked!=null)locked.setBitmap(null);if(bitmap!=null)bitmap.recycle();}finally{locked=null;thread=null;bitmap=null;pixels=null;releaseStorage(previous);}}
@@ -29,6 +29,15 @@ public final class HostHardwareBuffer {
     public static long allocate(int width,int height,int format,long usage){return nCreateHardwareBuffer(width,height,format,1,usage);}
     public static HardwareBuffer wrap(long ownedHandle){try{return (HardwareBuffer)hardwareConstructor.invokeExact(ownedHandle);}catch(RuntimeException|Error failure){HostNativeHandle.release(ownedHandle);throw failure;}catch(Throwable failure){HostNativeHandle.release(ownedHandle);throw new IllegalStateException(failure);}}
     public static long handle(HardwareBuffer buffer){long handle=(long)hardwarePointer.get(buffer);if(handle==0)throw new IllegalStateException("Hardware buffer has closed");return handle;}
+    static long graphicHandle(GraphicBuffer buffer){long handle=(long)graphicPointer.get(buffer);if(handle==0)throw new IllegalStateException("Graphic buffer has closed");return handle;}
+    static ByteBuffer lockImagePlane(long handle){
+        Buffer value=buffer(handle);synchronized(value){value.live();if(value.locked!=null)throw new IllegalStateException("Graphic buffer Canvas is locked");
+            HostNativeHandle.retain(handle);try{ByteBuffer plane=storagePlane(value.storage);value.imageLocks++;return plane;}catch(Throwable failure){HostNativeHandle.release(handle);throw failure;}}
+    }
+    static void unlockImagePlane(long handle){
+        Buffer value=buffer(handle);synchronized(value){value.live();if(value.imageLocks==0)throw new IllegalStateException("Graphic buffer has no image lock");value.imageLocks--;}
+        HostNativeHandle.release(handle);
+    }
     /** Borrowed IOSurface/plane pointers remain valid while the caller retains the handle. */
     public static long storage(long handle){Buffer value=buffer(handle);synchronized(value){value.live();return surfaceStorage(value.storage);}}
     public static ByteBuffer plane(long handle){Buffer value=buffer(handle);synchronized(value){value.live();return storagePlane(value.storage);}}
@@ -65,7 +74,7 @@ public final class HostHardwareBuffer {
         try{return (GraphicBuffer)graphicConstructor.invokeExact(value.width,value.height,value.format,(int)value.usage,handle);}catch(RuntimeException|Error failure){HostNativeHandle.release(handle);throw failure;}catch(Throwable failure){HostNativeHandle.release(handle);throw new IllegalStateException(failure);}
     }
     public static boolean nLockCanvas(long handle,Canvas canvas,Rect dirty){
-        Buffer value=buffer(handle);synchronized(value){value.live();if(value.locked!=null)return false;
+        Buffer value=buffer(handle);synchronized(value){value.live();if(value.locked!=null||value.imageLocks!=0)return false;
             if(value.bitmap==null){value.bitmap=Bitmap.createBitmap(value.width,value.height,Bitmap.Config.ARGB_8888);value.pixels=new int[Math.multiplyExact(value.width,value.height)];}
             storagePixels(value.storage,value.pixels,false,value.format==HardwareBuffer.RGBX_8888);value.bitmap.setPixels(value.pixels,0,value.width,0,0,value.width,value.height);
             canvas.setBitmap(value.bitmap);if(dirty!=null){if(!dirty.intersect(0,0,value.width,value.height))dirty.setEmpty();canvas.clipRect(dirty);}value.locked=canvas;value.thread=Thread.currentThread();return true;

@@ -11,6 +11,10 @@ import java.util.Objects;
 /** Platform buffer ownership under the complete AOSP Surface implementation. */
 public final class HostSurface {
     public interface Target {
+        /** Reserve consumer capacity before entering the shared scene lock. */
+        default void beginSubmit(){}
+        /** Release a reservation if submission failed or the producer retired. */
+        default void endSubmit(){}
         boolean submit(int[] pixels,int width,int height,long frameId,long sourceTimeNanos);
         void resize(int width,int height);
         /** Allocate the native identity from this same producer's buffer owner. */
@@ -63,14 +67,22 @@ public final class HostSurface {
             if(dirty!=null){if(!dirty.intersect(0,0,width,height))dirty.setEmpty();canvas.clipRect(dirty);}
             locked=canvas;owner=Thread.currentThread();
         }}
-        void post(Canvas canvas){synchronized(HostSurfaceControl.scene){
-            if(closed||locked!=canvas||owner!=Thread.currentThread())throw new IllegalStateException("Surface Canvas belongs to another lock");
+        void post(Canvas canvas){
+            synchronized(HostSurfaceControl.scene){if(closed||locked!=canvas||owner!=Thread.currentThread())throw new IllegalStateException("Surface Canvas belongs to another lock");}
+            boolean submitted=false;
             try{
+                target.beginSubmit();submitted=true;
+                synchronized(HostSurfaceControl.scene){
+                if(closed||locked!=canvas||owner!=Thread.currentThread())throw new IllegalStateException("Surface Canvas belongs to another lock");
                 bitmap.getPixels(pixels,0,width,0,0,width,height);frame++;
                 pending=!target.submit(pixels,width,height,frame,System.nanoTime());
                 for(var listener:java.util.List.copyOf(frames))listener.accept(frame);
-            }finally{canvas.setBitmap(null);locked=null;owner=null;}
-        }}
+                }
+            }finally{
+                synchronized(HostSurfaceControl.scene){if(locked==canvas&&owner==Thread.currentThread()){canvas.setBitmap(null);locked=null;owner=null;}}
+                if(submitted)target.endSubmit();
+            }
+        }
         @Override public void close(){synchronized(HostSurfaceControl.scene){
             if(closed)return;closed=true;pending=false;
             try{if(locked!=null)locked.setBitmap(null);if(bitmap!=null)bitmap.recycle();}
@@ -112,15 +124,19 @@ public final class HostSurface {
     }
     /** Native producers retain this same Buffer through HostNativeHandle. */
     public static int videoTarget(long handle){var target=buffer(handle).target;return target==null?0:target instanceof HostSurfaceTexture?1:2;}
-    public static boolean submitVideoPixels(long handle,int[] pixels,int width,int height,long timestamp){synchronized(HostSurfaceControl.scene){
-        var target=buffer(handle);if(target.closed||target.locked!=null||target.target==null)return false;
+    public static boolean submitVideoPixels(long handle,int[] pixels,int width,int height,long timestamp){
+        var target=buffer(handle);if(target.target==null)return false;boolean submitted=false;
+        synchronized(HostSurfaceControl.scene){if(target.closed||target.locked!=null)return false;}
+        try{target.target.beginSubmit();submitted=true;synchronized(HostSurfaceControl.scene){
+        if(target.closed||target.locked!=null)return false;
         if(target.width!=width||target.height!=height)target.resize(width,height);
         if(target.bitmap==null)target.bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
         target.bitmap.setPixels(pixels,0,width,0,0,width,height);target.pixels=pixels;target.frame++;
         target.pending=!target.target.submit(pixels,width,height,target.frame,timestamp);
         for(var listener:java.util.List.copyOf(target.frames))listener.accept(target.frame);
         return !target.pending;
-    }}
+        }}finally{if(submitted)target.target.endSubmit();}
+    }
     /** Copy the last posted Canvas image; an active producer lock is never read. */
     static int copyCanvasInto(Surface surface,Rect requested,Bitmap destination){synchronized(HostSurfaceControl.scene){
         long handle=(long)nativeObject.get(surface);if(handle==0)return android.view.PixelCopy.ERROR_SOURCE_INVALID;
@@ -142,8 +158,10 @@ public final class HostSurface {
     public static void nativeWriteToParcel(long handle,Parcel parcel){if(handle!=0)buffer(handle);HostObjectParcel.writeNativeHandle(parcel,handle);}
     public static long nativeReadFromParcel(long current,Parcel parcel){long next=HostObjectParcel.readNativeHandle(parcel,Buffer.class);if(current!=0)HostNativeHandle.release(current);return next;}
     public static int nativeAttachAndQueueBufferWithColorSpace(long handle,HardwareBuffer hardware,int colorSpace){
+        Target sink=buffer(handle).target;
         long source=HostNativeHandle.retain(HostHardwareBuffer.handle(Objects.requireNonNull(hardware)));
-        try{synchronized(HostSurfaceControl.scene){
+        boolean submitted=false;
+        try{if(sink!=null){sink.beginSubmit();submitted=true;}synchronized(HostSurfaceControl.scene){
             Buffer target=buffer(handle);if(target.closed)return -19;if(target.locked!=null)return -16;
             int width=HostHardwareBuffer.nGetWidth(source),height=HostHardwareBuffer.nGetHeight(source);
             if(target.target==null&&colorSpace==ColorSpace.Named.SRGB.ordinal()){
@@ -165,7 +183,7 @@ public final class HostSurface {
             target.pending=!target.target.submit(pixels,width,height,target.frame,System.nanoTime());
             for(var listener:java.util.List.copyOf(target.frames))listener.accept(target.frame);
             return 0;
-        }}finally{HostNativeHandle.release(source);}
+        }}finally{if(submitted)sink.endSubmit();HostNativeHandle.release(source);}
     }
     public static boolean nativeIsValid(long handle){return NativeSurface.valid(buffer(handle).lease);}
     public static boolean nativeIsConsumerRunningBehind(long handle){return buffer(handle).pending;}

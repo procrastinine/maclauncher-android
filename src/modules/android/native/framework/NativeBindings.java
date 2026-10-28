@@ -27,6 +27,8 @@ final class NativeBindings implements Opcodes {
         Map.entry("android/view/SurfaceSession",framework("HostSurfaceSession")),
         Map.entry("android/graphics/BLASTBufferQueue",framework("HostBufferQueue")),
         Map.entry("android/graphics/HardwareRenderer",framework("HostPixelCopy")),
+        Map.entry("android/media/ImageReader",framework("HostImageReader")),
+        Map.entry("android/media/ImageReader$SurfaceImage",framework("HostImageReader")),
         Map.entry("android/view/DisplayEventReceiver",framework("HostDisplayEvents")),
         Map.entry("android/os/incremental/IncrementalManager",framework("HostIncrementalFilesystem")),
         Map.entry("android/util/jar/StrictJarFile",framework("HostStrictJarFile")),
@@ -87,7 +89,7 @@ final class NativeBindings implements Opcodes {
         for(String declaration:available){
             if(!declaration.startsWith(name+"("))continue;
             String candidate=declaration.substring(name.length());Type[] target=Type.getArgumentTypes(candidate);
-            if(source.length!=target.length||!result.equals(Type.getReturnType(candidate)))continue;
+            if(source.length!=target.length||!accepts(result,Type.getReturnType(candidate)))continue;
             boolean matches=true;for(int i=0;i<source.length;i++)if(!accepts(source[i],target[i])){matches=false;break;}
             if(!matches)continue;
             if(selected!=null)throw new IllegalStateException("Ambiguous native platform binding: "+name+descriptor);
@@ -102,6 +104,18 @@ final class NativeBindings implements Opcodes {
         Set<String> available=methods(platformOwner);
         ClassNode node=new ClassNode();new ClassReader(original).accept(node,0);
         boolean changed=false;
+        if(node.name.equals("android/media/ImageReader"))for(MethodNode method:node.methods)
+            if(method.name.equals("close")&&method.desc.equals("()V")){
+                boolean prepared=false;for(AbstractInsnNode instruction:method.instructions)
+                    if(instruction instanceof MethodInsnNode call&&call.owner.equals(platformOwner)&&call.name.equals("prepareClose")){prepared=true;break;}
+                if(prepared)continue;
+                // Surface's Java monitor can be held by a producer waiting for
+                // consumer capacity. Abandon that platform queue before the
+                // original close body releases its Surface and acquired Images.
+                var begin=new InsnList();begin.add(new VarInsnNode(ALOAD,0));
+                begin.add(new MethodInsnNode(INVOKESTATIC,platformOwner,"prepareClose","(Landroid/media/ImageReader;)V",false));
+                method.instructions.insert(begin);changed=true;
+            }
         for(MethodNode method:node.methods){
             if((method.access&ACC_NATIVE)==0)continue;
             boolean instance=(method.access&ACC_STATIC)==0;
@@ -115,6 +129,8 @@ final class NativeBindings implements Opcodes {
                 method.instructions.add(new VarInsnNode(argument.getOpcode(ILOAD),slot));slot+=argument.getSize();
             }
             method.instructions.add(new MethodInsnNode(INVOKESTATIC,platformOwner,method.name,descriptor,false));
+            if(!Type.getReturnType(method.desc).equals(Type.getReturnType(descriptor)))
+                method.instructions.add(new TypeInsnNode(CHECKCAST,Type.getReturnType(method.desc).getInternalName()));
             method.instructions.add(new InsnNode(Type.getReturnType(method.desc).getOpcode(IRETURN)));
             changed=true;
         }

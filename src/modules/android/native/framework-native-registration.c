@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <limits.h>
 #include "android-log.h"
 #include "android-log-abi.h"
 
@@ -93,8 +94,7 @@ int klj_framework_registration(JNIEnv *env,jclass target,const JNINativeMethod *
     if(!supplied)return 0;
     JavaVM *vm=NULL;jvmtiEnv *ti=NULL;jmethodID *methods=NULL;jint method_count=0;char *owner=NULL;
     Declaration *declarations=NULL;
-    JNINativeMethod *selected=count?malloc((size_t)count*sizeof(*selected)):NULL;
-    if(count&&!selected){fail(env,"Cannot allocate Android native registration table");return -1;}
+    JNINativeMethod *selected=NULL;
     if((*env)->GetJavaVM(env,&vm)!=JNI_OK||(*vm)->GetEnv(vm,(void**)&ti,JVMTI_VERSION_1_2)!=JNI_OK||
        (*ti)->GetClassSignature(ti,target,&owner,NULL)!=JVMTI_ERROR_NONE||
        (*ti)->GetClassMethods(ti,target,&method_count,&methods)!=JVMTI_ERROR_NONE){fail(env,"Cannot read Android native declarations");goto failed;}
@@ -106,6 +106,18 @@ int klj_framework_registration(JNIEnv *env,jclass target,const JNINativeMethod *
         if((*ti)->GetMethodModifiers(ti,methods[j],&entry->modifiers)!=JVMTI_ERROR_NONE){fail(env,"Cannot read Android native method modifiers");goto failed;}
     }
     if(method_count>1)qsort(declarations,(size_t)method_count,sizeof(*declarations),declaration_order);
+    if(count<0||method_count>INT_MAX-count){fail(env,"Android native registration table is too large");goto failed;}
+    size_t capacity=(size_t)count+(size_t)method_count;
+    if(capacity>SIZE_MAX/sizeof(*selected)){fail(env,"Android native registration table is too large");goto failed;}
+    size_t allocation=capacity*sizeof(*selected);
+    for(jint j=0;j<method_count;j++)if(declarations[j].modifiers&0x100){
+        size_t name_size=strlen(declarations[j].name)+1,signature_size=strlen(declarations[j].descriptor)+1;
+        if(name_size>SIZE_MAX-allocation||signature_size>SIZE_MAX-allocation-name_size){fail(env,"Android native method identities are too large");goto failed;}
+        allocation+=name_size+signature_size;
+    }
+    selected=allocation?malloc(allocation):NULL;
+    if(allocation&&!selected){fail(env,"Cannot allocate Android native registration table");goto failed;}
+    char *identities=selected?(char*)(selected+capacity):NULL;
     *size=0;
     for(jint i=0;i<count;i++){
         int implemented=0;Dl_info image={0};
@@ -125,6 +137,24 @@ int klj_framework_registration(JNIEnv *env,jclass target,const JNINativeMethod *
             if(owned)selected[*size].fnPtr=owned;
         }
         ++*size;
+    }
+    /* Host publisher builds omit device-only table rows even when the complete
+     * framework retains the original declaration. Bind any concrete platform
+     * export for those rows, using the same exact class/name/descriptor lookup
+     * as replacements. The table owns its copied identities until dispatch
+     * completes; no class/member policy or second registration owner is added. */
+    for(jint j=0;j<method_count;j++){
+        Declaration *entry=&declarations[j];if(!(entry->modifiers&0x100))continue;
+        int supplied_entry=0;
+        for(jint i=0;i<count;i++)if(!strcmp(input[i].name,entry->name)&&!strcmp(input[i].signature,entry->descriptor)){supplied_entry=1;break;}
+        if(supplied_entry)continue;
+        void *owned=platform_entry(env,owner,entry->name,entry->descriptor);
+        if((*env)->ExceptionCheck(env))goto failed;
+        if(!owned)continue;
+        size_t name_size=strlen(entry->name)+1,signature_size=strlen(entry->descriptor)+1;
+        selected[*size].name=identities;memcpy(identities,entry->name,name_size);identities+=name_size;
+        selected[*size].signature=identities;memcpy(identities,entry->descriptor,signature_size);identities+=signature_size;
+        selected[*size].fnPtr=owned;++*size;
     }
     declarations_free(ti,declarations,method_count);
     if(methods)(*ti)->Deallocate(ti,(unsigned char*)methods);

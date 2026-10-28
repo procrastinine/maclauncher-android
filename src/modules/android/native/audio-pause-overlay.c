@@ -149,3 +149,26 @@ int klj_audio_capture_hardware_info(int32_t *rate,int32_t *channels,int32_t *for
     pthread_mutex_unlock(&g_mic_lock);
     return available?0:-889;
 }
+
+int klj_audio_source_queued_frames(const void *source,int32_t rate,uint64_t *frames){
+    if(!source||!frames)return -886;
+    if(rate<=0)return -898;
+    // The existing source cursors and shared read cursor describe each stream's
+    // remaining contribution. Never register a source merely to query it.
+    pthread_mutex_lock(&g_wlock);
+    pthread_mutex_lock(&g_lock);
+    int slot=-1;
+    for(int i=0;i<g_src_n;i++)if(g_src_key[i]==source){slot=i;break;}
+    int available=slot>=0&&g_open&&g_ring&&isfinite(g_out_rate)&&g_out_rate>0;
+    if(available){
+        uint64_t written=atomic_load_explicit(&g_w,memory_order_acquire);
+        uint64_t read=atomic_load_explicit(&g_r,memory_order_acquire);
+        uint64_t end=g_src_n==1||!g_src_pos[slot]?written:g_src_pos[slot];
+        if(end>written)end=written;
+        long double pending=end>read?(long double)(end-read)*rate/g_out_rate:0;
+        *frames=pending>=0x1p64L?UINT64_MAX:(uint64_t)ceill(pending);
+    }
+    pthread_mutex_unlock(&g_lock);
+    pthread_mutex_unlock(&g_wlock);
+    return available?0:-889;
+}

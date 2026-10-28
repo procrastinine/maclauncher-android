@@ -157,12 +157,14 @@ public final class HostActivityManager {
         synchronized(HostActivityManager.class){boolean changed=started.isEmpty();if(!started.add(activity)||!changed)return;observer=uidObserver;state=ActivityManager.PROCESS_STATE_TOP;}
         if(observer!=null)observer.accept(android.os.Process.myUid(),state);
         maclauncher.android.ProcessAuthority.processStateChanged(state);
+        HostAppOps.uidStateChanged();
     }
     public static void hostStopped(Activity activity){
         java.util.function.BiConsumer<Integer,Integer> observer;
         synchronized(HostActivityManager.class){if(!started.remove(activity)||!started.isEmpty())return;observer=uidObserver;}
         if(observer!=null)observer.accept(android.os.Process.myUid(),ActivityManager.PROCESS_STATE_CACHED_EMPTY);
         maclauncher.android.ProcessAuthority.processStateChanged(ActivityManager.PROCESS_STATE_CACHED_EMPTY);
+        HostAppOps.uidStateChanged();
     }
     public static void hostObserveUid(java.util.function.BiConsumer<Integer,Integer> observer){
         int state;

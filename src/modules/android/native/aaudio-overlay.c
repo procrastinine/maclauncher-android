@@ -109,6 +109,26 @@ static aaudio_result_t owned_request_flush(klaa_stream *stream){
 static int32_t owned_get_usage(klaa_stream *stream){return stream?stream->usage:AAUDIO_ERROR_NULL;}
 static int32_t owned_get_content(klaa_stream *stream){return stream?stream->content_type:AAUDIO_ERROR_NULL;}
 static int32_t owned_get_capture_policy(klaa_stream *stream){return stream?stream->capture_policy:AAUDIO_ERROR_NULL;}
+// Output frame accounting follows Klepton PR 12
+// (3dde04e7b33039a3d041590b44aaa2c81cd3f584). Queued frames come from the
+// shared mixer and each stream retains independent consumption progress.
+static int64_t owned_get_frames_read(klaa_stream *stream){
+    if(!stream)return 0;
+    if(stream->direction==AAUDIO_DIRECTION_INPUT)return klaa_getFramesRead(stream);
+    pthread_mutex_lock(&stream->lock);
+    int64_t written=(int64_t)stream->frames,previous=stream->frames_read_seen;
+    int32_t rate=stream->rate;
+    int released=stream->resources_released;
+    pthread_mutex_unlock(&stream->lock);
+    uint64_t queued;
+    if(released||klj_audio_source_queued_frames(stream,rate,&queued)!=0)return previous;
+    int64_t consumed=queued>(uint64_t)written?0:written-(int64_t)queued;
+    pthread_mutex_lock(&stream->lock);
+    if(consumed<stream->frames_read_seen)consumed=stream->frames_read_seen;
+    stream->frames_read_seen=consumed;
+    pthread_mutex_unlock(&stream->lock);
+    return consumed;
+}
 static bool owned_get_spatialized(klaa_stream *stream){return stream&&stream->content_spatialized;}
 static bool owned_get_privacy(klaa_stream *stream){return stream&&stream->privacy_sensitive;}
 static int32_t owned_get_hardware(klaa_stream *stream,unsigned which){
@@ -189,6 +209,7 @@ void *kl_aaudio_lookup(const char *name){
     OWNED("AAudioStreamBuilder_setSamplesPerFrame",klaa_setChannelCount);
     OWNED("AAudioStream_getAllowedCapturePolicy",owned_get_capture_policy);
     OWNED("AAudioStream_getContentType",owned_get_content);
+    OWNED("AAudioStream_getFramesRead",owned_get_frames_read);
     OWNED("AAudioStream_getHardwareChannelCount",owned_get_hardware_channels);
     OWNED("AAudioStream_getHardwareFormat",owned_get_hardware_format);
     OWNED("AAudioStream_getHardwareSampleRate",owned_get_hardware_rate);
