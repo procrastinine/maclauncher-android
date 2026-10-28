@@ -30,6 +30,7 @@ final class NativeBindings implements Opcodes {
         Map.entry("android/graphics/BLASTBufferQueue",framework("HostBufferQueue")),
         Map.entry("android/graphics/HardwareRenderer",framework("HostPixelCopy")),
         Map.entry("android/media/ImageReader",framework("HostImageReader")),
+        Map.entry("android/media/PublicFormatUtils",framework("HostHardwareBuffer")),
         // SurfacePlane is private to the upstream class. The adapter constructs
         // that exact array reflectively; only its Java declaration uses Object[].
         Map.entry("android/media/ImageReader$SurfaceImage",new Adapter("maclauncher/android/framework/HostImageReader",true,

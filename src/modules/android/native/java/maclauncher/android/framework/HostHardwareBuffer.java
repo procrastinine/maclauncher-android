@@ -82,6 +82,64 @@ public final class HostHardwareBuffer {
     static boolean compatibleFormat(int requested,int actual){return requested==actual||requested==android.graphics.ImageFormat.YUV_420_888&&(actual==android.graphics.ImageFormat.NV21||actual==android.graphics.ImageFormat.YV12);}
     static int hardwareFormat(int format){try{return (int)halFormat.invokeExact(format);}catch(RuntimeException|Error error){throw error;}catch(Throwable error){throw new IllegalStateException(error);}}
     static int publicFormat(int format,int dataSpace){try{return (int)publicFormat.invokeExact(format,dataSpace);}catch(RuntimeException|Error error){throw error;}catch(Throwable error){throw new IllegalStateException(error);}}
+    /*
+     * Copyright (C) 2019 The Android Open Source Project
+     *
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     *      http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     */
+    // Complete device mappings from AOSP frameworks/native PublicFormat.cpp,
+    // 2827a4a16b0340ecd07c2d5a6c89991799b362bb (Apache-2.0):
+    // https://android.googlesource.com/platform/frameworks/native/+/2827a4a16b0340ecd07c2d5a6c89991799b362bb/libs/ui/PublicFormat.cpp
+    // The supplied host utility uses identity conversions. Keep the original
+    // PublicFormatUtils Java wrappers and replace only these native operations.
+    public static int nativeGetHalFormat(int format){return switch(format){
+        case ImageFormat.JPEG,ImageFormat.DEPTH_POINT_CLOUD,ImageFormat.DEPTH_JPEG,ImageFormat.HEIC,0x1006,ImageFormat.JPEG_R->HardwareBuffer.BLOB;
+        case ImageFormat.DEPTH16->0x20363159;
+        case ImageFormat.RAW_SENSOR,0x1002->ImageFormat.RAW_SENSOR;
+        case 0x1003->ImageFormat.RAW10;
+        default->format;
+    };}
+    public static int nativeGetHalDataspace(int format){return switch(format){
+        case ImageFormat.JPEG,ImageFormat.YUV_420_888,ImageFormat.NV21,ImageFormat.YV12->android.hardware.DataSpace.DATASPACE_JFIF;
+        case ImageFormat.DEPTH_POINT_CLOUD,ImageFormat.DEPTH16,0x1002,0x1003->android.hardware.DataSpace.DATASPACE_DEPTH;
+        case ImageFormat.RAW_SENSOR,ImageFormat.RAW_PRIVATE,ImageFormat.RAW10,ImageFormat.RAW12->1; // HAL_DATASPACE_ARBITRARY
+        case ImageFormat.DEPTH_JPEG->android.hardware.DataSpace.DATASPACE_DYNAMIC_DEPTH;
+        case ImageFormat.HEIC->android.hardware.DataSpace.DATASPACE_HEIF;
+        case 0x1006->android.hardware.DataSpace.DATASPACE_HEIF_ULTRAHDR;
+        case ImageFormat.JPEG_R->android.hardware.DataSpace.DATASPACE_JPEG_R;
+        default->android.hardware.DataSpace.DATASPACE_UNKNOWN;
+    };}
+    public static int nativeGetPublicFormat(int format,int dataSpace){return switch(format){
+        case ImageFormat.RAW10->dataSpace==android.hardware.DataSpace.DATASPACE_DEPTH?0x1003:ImageFormat.RAW10;
+        case ImageFormat.RAW_SENSOR->dataSpace==android.hardware.DataSpace.DATASPACE_DEPTH?0x1002:ImageFormat.RAW_SENSOR;
+        case 0x20363159->dataSpace==android.hardware.DataSpace.DATASPACE_DEPTH?ImageFormat.DEPTH16:0x20363159;
+        case HardwareBuffer.BLOB->switch(dataSpace){
+            case android.hardware.DataSpace.DATASPACE_DEPTH->ImageFormat.DEPTH_POINT_CLOUD;
+            case android.hardware.DataSpace.DATASPACE_HEIF->ImageFormat.HEIC;
+            case android.hardware.DataSpace.DATASPACE_DYNAMIC_DEPTH->ImageFormat.DEPTH_JPEG;
+            case android.hardware.DataSpace.DATASPACE_JPEG_R->ImageFormat.JPEG_R;
+            case android.hardware.DataSpace.DATASPACE_HEIF_ULTRAHDR->0x1006;
+            default->ImageFormat.JPEG;
+        };
+        case PixelFormat.RGBA_8888,PixelFormat.RGBX_8888,PixelFormat.RGB_888,PixelFormat.RGB_565,
+             HardwareBuffer.RGBA_FP16,HardwareBuffer.RGBA_1010102,ImageFormat.Y8,ImageFormat.RAW12,
+             ImageFormat.YUV_420_888,ImageFormat.YV12,HardwareBuffer.YCBCR_P010,
+             ImageFormat.RAW_PRIVATE,ImageFormat.NV16,ImageFormat.NV21,ImageFormat.YUY2,ImageFormat.PRIVATE->format;
+        // P210 is declared by this same pinned PublicFormat enum and selected
+        // Java profile, retaining the complete profile's 4:2:2 10-bit identity.
+        case 60->60;
+        default->ImageFormat.UNKNOWN;
+    };}
     public static void nWriteHardwareBufferToParcel(long handle,Parcel parcel){HostObjectParcel.writeNativeHandle(parcel,handle);}
     public static long nReadHardwareBufferFromParcel(Parcel parcel){return HostObjectParcel.readNativeHandle(parcel,Buffer.class);}
     public static long nCreateFromGraphicBuffer(GraphicBuffer value){long handle=(long)graphicPointer.get(value);buffer(handle);return HostNativeHandle.retain(handle);}
