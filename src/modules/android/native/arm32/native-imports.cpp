@@ -305,11 +305,30 @@ struct Imports::Impl {
     std::string_view origin;
     struct View { uint32_t guest; unsigned type; std::vector<uint8_t> bytes; bool writable; unsigned count=1; void *native=nullptr; };
     std::vector<std::unique_ptr<View>> views;
+    std::vector<std::unique_ptr<std::string>> inputStrings;
+    std::vector<std::unique_ptr<std::vector<const char *>>> inputVectors;
     struct ByteWrite {uint32_t guest;size_t size;};
     std::vector<ByteWrite> byteWrites;
     std::map<uintptr_t,uint32_t> opaquePointers;
     explicit Transfer(Impl &o,std::string_view origin={}):owner(o),origin(origin){}
     ~Transfer(){for(auto&view:views)if(view->native&&view->guest)owner.memory.unmap(view->guest);}
+    const char *inputString(uint32_t pointer){
+      if(!pointer)throw Memory::Fault("Android process string is null");
+      auto value=std::make_unique<std::string>(owner.memory.string(pointer));
+      const char *native=value->c_str();inputStrings.push_back(std::move(value));return native;
+    }
+    const char *const *terminatedStrings(uint32_t pointer){
+      auto values=std::make_unique<std::vector<const char *>>();
+      if(pointer)for(uint64_t address=pointer;;address+=4){
+        if(address>UINT32_MAX-3)throw Memory::Fault("Android process pointer array crosses its address space");
+        auto string=uint32_t(read(owner.memory.translate(uint32_t(address),4,Memory::Read),4));
+        if(!string)break;values->push_back(inputString(string));
+      }
+      // Linux treats a null argv/envp as an empty terminated list. Native
+      // process owners receive that same list, never an absent host array.
+      values->push_back(nullptr);const char *const *native=values->data();
+      inputVectors.push_back(std::move(values));return native;
+    }
     void *byteSpan(uint32_t pointer,size_t size,unsigned permission){
       if(!size)return reinterpret_cast<void *>(uintptr_t(pointer));
       void *bytes=owner.memory.translate(pointer,size,permission);
@@ -1206,12 +1225,14 @@ struct Imports::Impl {
         do {++count;}while(read(memory.translate(uint32_t(words[i])+count*unsigned(option.guestSize),4,Memory::Read),4));
         auto options=transfer.array(uint32_t(words[i]),p.element,count+1);std::memcpy(pointers[i],&options,sizeof options);
       }
-      else if((name.starts_with("exec")||name=="fexecve")&&p.kind==Kind::Pointer&&types[p.element].kind==Kind::Pointer&&words[i]){
-        // argv/envp are terminated pointer arrays. Convert the complete
-        // original list, rather than giving the process owner a one-entry
-        // temporary view with no terminator.
-        uint64_t count=0;for(;;){auto address=uint64_t(uint32_t(words[i]))+count*4;if(address>UINT32_MAX-3)throw Memory::Fault("Android process pointer array crosses its address space");if(!read(memory.translate(uint32_t(address),4,Memory::Read),4))break;++count;}
-        auto values=transfer.array(uint32_t(words[i]),p.element,unsigned(count+1));std::memcpy(pointers[i],&values,sizeof values);
+      else if(name.starts_with("exec")&&p.kind==Kind::Pointer&&types[p.element].guestSize==1&&(i==0||(name=="execveat"&&i==1))){
+        auto path=transfer.inputString(uint32_t(words[i]));std::memcpy(pointers[i],&path,sizeof path);
+      }
+      else if((name.starts_with("exec")||name=="fexecve")&&p.kind==Kind::Pointer&&types[p.element].kind==Kind::Pointer){
+        // Process vectors are input strings, not opaque pointer fields. Validate
+        // every complete string before calling the owner and keep their native
+        // storage with this invocation, including null-list terminators.
+        auto values=transfer.terminatedStrings(uint32_t(words[i]));std::memcpy(pointers[i],&values,sizeof values);
       }
       else if((name=="dladdr" && i==0) || (name=="pthread_setspecific" && i==1) || graphicsOffset) {
         // dladdr queries an address in the common image registry; it never

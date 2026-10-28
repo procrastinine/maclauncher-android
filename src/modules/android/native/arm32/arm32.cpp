@@ -399,6 +399,7 @@ std::string Memory::string(uint32_t address) const {
     if (!c)
       return value;
     value += c;
+    if(address==UINT32_MAX)throw Fault("ARM32 string crosses its address space");
     address = add(address, 1);
   }
 }
