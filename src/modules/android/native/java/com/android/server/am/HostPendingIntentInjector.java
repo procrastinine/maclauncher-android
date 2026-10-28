@@ -9,11 +9,15 @@ import com.android.internal.os.IResultReceiver;
 public final class HostPendingIntentInjector implements AutoCloseable {
     private final Context context;
     private final PendingIntentController controller;
+    private final Runnable retirement=this::close;
     public HostPendingIntentInjector(Context context){
         this.context=context;
         var constants=new ActivityManagerConstants(context,null,new Handler(context.getMainLooper()));
         controller=new PendingIntentController(context.getMainLooper(),null,constants);
         controller.onActivityManagerInternalAdded();
+        // Retire original tokens before later queue listeners unpublish the
+        // AlarmManager used by PendingIntentController cancellation.
+        maclauncher.android.framework.HostLooper.addShutdownListener(context.getMainLooper(),retirement);
     }
     public IIntentSender create(int type,String pkg,String feature,int uid,int user,IBinder activity,String who,int request,Intent[] intents,String[] types,int flags,Bundle options){
         return controller.getIntentSender(type,pkg,feature,uid,user,activity,who,request,intents,types,flags,options);
@@ -38,5 +42,5 @@ public final class HostPendingIntentInjector implements AutoCloseable {
         if(!(sender instanceof PendingIntentRecord record))return ActivityManager.START_CANCELED;
         return maclauncher.android.framework.HostPendingIntentDispatch.start(caller,()->record.sendInner(caller,0,fill,type,allowlist,null,null,result,who,request,mask,flags,options));
     }
-    @Override public void close(){controller.removePendingIntentsForPackage(context.getPackageName(),context.getUserId(),UserHandle.getAppId(android.os.Process.myUid()),true,PendingIntentRecord.CANCEL_REASON_OWNER_FORCE_STOPPED);}
+    @Override public void close(){controller.removePendingIntentsForPackage(context.getPackageName(),context.getUserId(),UserHandle.getAppId(android.os.Process.myUid()),true,PendingIntentRecord.CANCEL_REASON_OWNER_FORCE_STOPPED);maclauncher.android.framework.HostLooper.removeShutdownListener(context.getMainLooper(),retirement);}
 }
