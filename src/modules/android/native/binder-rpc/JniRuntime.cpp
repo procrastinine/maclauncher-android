@@ -32,6 +32,7 @@ void kljReleaseBinderJniMetadata(JNIEnv*);
 bool kljInstallTraceImports();
 namespace android {
 int register_android_os_Parcel(JNIEnv*);
+int kljRegisterCursorParcel(JNIEnv*);
 int register_android_os_SharedMemory(JNIEnv*);
 int register_android_util_MemoryIntArray(JNIEnv*);
 int register_android_util_CharsetUtils(JNIEnv*);
@@ -104,7 +105,7 @@ static jint initializeBinder(JavaVM* vm){
     if(!fileDescriptorClass)return JNI_ERR;
     fileDescriptorConstructor=env->GetMethodID(fileDescriptorClass,"<init>","()V");if(!fileDescriptorConstructor)return JNI_ERR;
     fileDescriptorField=env->GetFieldID(fileDescriptorClass,"fd","I");if(!fileDescriptorField)return JNI_ERR;
-    if(register_android_os_Binder(env)<0||android::register_android_os_Parcel(env)<0||android::register_android_os_SharedMemory(env)<0||kljRegisterObjectParcel(env)<0||kljRegisterBinderRpc(env)<0||
+    if(register_android_os_Binder(env)<0||android::register_android_os_Parcel(env)<0||android::kljRegisterCursorParcel(env)<0||android::register_android_os_SharedMemory(env)<0||kljRegisterObjectParcel(env)<0||kljRegisterBinderRpc(env)<0||
         android::register_android_util_CharsetUtils(env)<0||android::register_android_util_CharsetArray(env)<0||android::register_android_util_MemoryIntArray(env)<0)return JNI_ERR;
     if(!kljInstallTraceImports())return JNI_ERR;
     return JNI_VERSION_1_6;

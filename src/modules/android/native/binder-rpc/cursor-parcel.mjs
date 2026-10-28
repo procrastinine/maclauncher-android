@@ -43,7 +43,14 @@ export function prepareCursorParcel({framework,publisher,generated}){
   const assembly=['.section __DATA,__data','.p2align 3','.private_extern _kljCursorTargets','_kljCursorTargets:',`.space ${names.length*8}`,'.text'];
   names.forEach((name,i)=>assembly.push('.p2align 2',`.private_extern ${name}`,`${name}:`,'adrp x16, _kljCursorTargets@PAGE',`add x16, x16, _kljCursorTargets@PAGEOFF`,`ldr x16, [x16, #${i*8}]`,'br x16'));
   const unit=path.join(directory,'CursorWindowParcel.cpp');
-  const exports=[['nativeCreateFromParcel','jlong'],['nativeWriteToParcel','void']].map(([name,type])=>method(jni,'static '+type+' '+name+'(').replace('static '+type+' '+name,'extern "C" JNIEXPORT '+type+' JNICALL Java_android_database_CursorWindow_'+name));
+  const operations=[['nativeCreateFromParcel','jlong'],['nativeWriteToParcel','void']];
+  const exports=operations.map(([name,type])=>method(jni,'static '+type+' '+name+'(').replace('static '+type+' '+name,'extern "C" JNIEXPORT '+type+' JNICALL Java_android_database_CursorWindow_'+name));
+  const bindings=operations.map(([name])=>{
+    const pattern=new RegExp('\\{\\s*"'+name+'"\\s*,\\s*"[^"]+"\\s*,\\s*\\(void\\*\\)'+name+'\\s*\\}','g');
+    const rows=[...jni.matchAll(pattern)];
+    if(rows.length!==1)throw Error('AOSP cursor parcel registration changed: '+name);
+    return rows[0][0].replace('(void*)'+name,'(void*)Java_android_database_CursorWindow_'+name);
+  });
   fs.writeFileSync(unit,source.slice(0,source.indexOf('*/')+2)+`
 #include "hotspot-jni.h"
 #include "core_jni_helpers.h"
@@ -73,6 +80,13 @@ ${read}
 ${method(source,'status_t CursorWindow::writeToParcel(')}
 ${method(jni,'static int getFdCount()')}
 ${exports.join('\n')}
+// These device-only operations use this library's actual Parcel and cursor
+// implementations. Register them when that owner initializes, after Parcel's
+// original metadata is ready; the publisher retains every other cursor row.
+int kljRegisterCursorParcel(JNIEnv* env) {
+    static const JNINativeMethod methods[]={${bindings.join(',\n')}};
+    return RegisterMethodsOrDie(env,"android/database/CursorWindow",methods,NELEM(methods));
+}
 }
 `);
   return {sources:[unit],include:directory};

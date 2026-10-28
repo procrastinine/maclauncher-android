@@ -38,7 +38,7 @@ public final class NativeCompositionWindow implements HostActivity.Window {
  @Override public void present(Activity activity,String title,int ignoredWidth,int ignoredHeight){
   check();HostWindowManager.attachOutput(activity,root,width,height,(current,landscape)->session.orientation(landscape));running=true;
   try{try{Looper.loop();}catch(End ended){if(ended.window!=this)throw ended;}}
-  finally{running=false;HostWindowManager.detachOutput();}
+  finally{running=false;}
  }
  @Override public void resized(int width,int height){check();HostSurfaceControl.resizeRoot(root,width,height);this.width=width;this.height=height;}
  @Override public void taskEmpty(){check();if(running)throw new End(this);}
