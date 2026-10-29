@@ -12,9 +12,10 @@ test('standalone ART packaging requires explicit notice ownership before writing
  fs.mkdirSync(supplierRoot);fs.mkdirSync(commonRoot);
  fs.writeFileSync(path.join(supplierRoot,'runtime.json'),'{}');
  fs.writeFileSync(path.join(commonRoot,'runtime.json'),JSON.stringify({profile:{javaMajor:21}}));
- const options={supplierRoot,commonRoot,extractor:path.join(root,'extractor'),sourceArchive:path.join(root,'source.tar.gz'),output:path.join(root,'uncreated/adapter')};
+ const options={version:'0.2.0',supplierRoot,commonRoot,extractor:path.join(root,'extractor'),sourceArchive:path.join(root,'source.tar.gz'),output:path.join(root,'uncreated/adapter')};
  const metadata=Object.fromEntries(['fileInventory','readMachOLoadCommands','versionAtLeast','validatePublicMetadata','validateDeclaration','verifyPayload'].map(name=>[name,()=>{}]));
  assert.throws(()=>packageArtAdapter(options),/explicit package metadata services/);
+ assert.throws(()=>packageArtAdapter({...options,version:undefined},metadata),/explicit package version/);
  assert.throws(()=>packageArtAdapter(options,metadata),/common runtime notice declaration/);
  assert.throws(()=>packageArtAdapter({...options,commonDeclaration:{manifestRelative:'runtime.json',manifestSha256:'a'.repeat(64),notices:[{path:'notices/LICENSE'}]}},metadata),/differs from its producer manifest/);
  assert.equal(fs.existsSync(path.join(root,'uncreated')),false,'Missing or mismatched metadata cannot create a package stage');

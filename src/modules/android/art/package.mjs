@@ -12,9 +12,11 @@ function destinationPath(file){
 /** Publish the ART adapter separately from the user-acquired Android image.
  * All dependencies are explicit existing producer outputs; this never builds
  * native code, reads app data or includes an extracted Google system image. */
-export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,extractor,sourceArchive,originalImage,output},metadata) {
+export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,extractor,sourceArchive,originalImage,output,version},metadata) {
   if(!metadata||['fileInventory','readMachOLoadCommands','versionAtLeast','validatePublicMetadata','validateDeclaration','verifyPayload'].some(name=>typeof metadata[name]!=='function'))
     throw Error('Android ART packaging requires explicit package metadata services.');
+  if(typeof version!=='string'||!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(version)||version.includes('..'))
+    throw Error('Android ART packaging requires an explicit package version.');
   for(const value of [supplierRoot,commonRoot,extractor,sourceArchive,output])
     if(typeof value!=='string'||!path.isAbsolute(value))throw Error('Android ART packaging requires absolute producer paths.');
   if(fs.existsSync(output))throw Error('Android ART package output already exists.');
@@ -97,7 +99,6 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
       return record;
     });
     const sourceHash=sha(sourceArchive),inputHash=crypto.createHash('sha256').update(JSON.stringify(files)).digest('hex');
-    const version='0.1.0-'+sourceHash.slice(0,8)+'-'+inputHash.slice(0,8);
     const manifest={schemaVersion:1,version,profile:{id:'maclauncher-android-art-16',artExecutionVersion:1},
       minimumMacOS,architectures:['arm64'],sourceHash,inputHash,dependencies,files};
     metadata.validatePublicMetadata(manifest);
