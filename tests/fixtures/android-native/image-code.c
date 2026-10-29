@@ -76,7 +76,7 @@ int main(int argc,char **argv){
     assert(data_words==1&&!excluded.tls_refused&&!excluded.tls_rewrites);
     assert(unchanged[24]==0xd53bd048u);
     unsigned data,ctr,want=klj_x18_survey_context(code,sizeof code,&data,&ctr,&context);kl_x18_stats stats;size_t used=0;
-    assert(!klj_x18_emit_surveyed(code,sizeof code,0x800,pool,sizeof pool,0x2000,&stats,&used,want,data,ctr,&context));
+    assert(!klj_x18_emit_surveyed(code,sizeof code,0x800,pool,sizeof pool,0x2000,NULL,&stats,&used,want,data,ctr,&context,0));
     assert(stats.patched&&code[25]!=0xaa0003f2u);
     assert(klj_inline_syscall_count(file+0x800,160)==0&&klj_inline_syscall_count_context(file+0x800,160,&context)==2);
     size_t page=(size_t)getpagesize();uint8_t *mapping=mmap(NULL,page*2,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);assert(mapping!=MAP_FAILED);
