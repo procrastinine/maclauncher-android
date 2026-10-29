@@ -350,7 +350,9 @@ void klj_webkit_edit(int64_t handle,int operation,NSString*text,int start,int le
 namespace {
 // Android has already applied its editing rules to the Editable. This boundary
 // mirrors the resulting UTF-16 ranges through the actual document input client.
-void publishEditor(const Ref&s){
+void publishEditor(const Ref&browser){
+ // Both JavaScript completions retain an owner after this call returns.
+ auto s=browser;
  if(s->closed||s->editorPending)return;
  while(!s->editorChanges.empty()){
   EditorChange change=s->editorChanges.front();s->editorChanges.pop_front();

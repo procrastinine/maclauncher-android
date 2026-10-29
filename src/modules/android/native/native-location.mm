@@ -165,10 +165,12 @@ void show(const std::shared_ptr<Request> &request) {
         addObserverForName:NSWindowWillCloseNotification object:window queue:nil usingBlock:^(NSNotification *) {
             if (auto pending = weak.lock()) { pending->cancelled = true; cancelOnMain(pending); }
         }];
+    // The completion outlives the caller's shared_ptr storage.
+    auto completionRequest = request;
     [alert beginSheetModalForWindow:window completionHandler:^(NSModalResponse response) {
         double coordinates[3];
-        const bool shared = response == NSAlertFirstButtonReturn && [request->fields read:coordinates];
-        finish(request, shared ? coordinates : nullptr);
+        const bool shared = response == NSAlertFirstButtonReturn && [completionRequest->fields read:coordinates];
+        finish(completionRequest, shared ? coordinates : nullptr);
     }];
 }
 }
