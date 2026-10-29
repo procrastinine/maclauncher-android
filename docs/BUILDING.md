@@ -45,6 +45,20 @@ returns the runtime supplier directory and corresponding source archive. The
 [source and runtime reference](REFERENCE.md) describes the individual input groups,
 source-export options and reusable component suppliers.
 
+Common native-memory, ART and standalone AIM integrations retain separate source
+profiles. Their framework, JNI, CPU and native-library inputs use the revisions
+recorded by the corresponding producer; a standalone AIM revision does not
+replace the ART or common native-memory pin. Both execution bindings compile the
+shared Java adapters against their matching runtime declarations. JVM-only
+adapters remain in their separate source group.
+
+The compiler workspace reuses unchanged native objects and supplier components.
+Framework assembly, application DEX conversion, native compilation and ART boot
+image generation retain their own input identities. Completed supplier outputs
+are packaged by MacLauncher Builds with their manifests and license notices;
+build directories and source archives remain separate from installed runtime
+payloads.
+
 ## Distribution
 
 MacLauncher Android supplies the pinned producer source used by

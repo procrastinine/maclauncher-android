@@ -5,6 +5,9 @@ operations. Its Java 21 binding uses dex2jvm and the complete AOSP Java framewor
 its ART binding executes original DEX with a matching Android framework and
 native image. Shared application services and macOS resource implementations
 serve both bindings. Java, NDK and XR entry points use those same owners.
+The ART binding loads its matching framework, libcore and boot image into the
+application host. The optional standalone AIM provider starts a separate Android
+services guest before launching its application.
 
 ## Execution boundaries
 
@@ -101,6 +104,9 @@ service destinations in classfiles and DEX to `HostPendingIntentDispatch`.
 Android's original controller and record retain token identity, flags, options,
 result handling and cancellation; the shared activity, broadcast, service and
 alarm owners receive the original call arguments.
+Queue retirement cancels the original PendingIntent tokens before unpublishing
+the AlarmManager used by their controller. Explicit application cleanup removes
+that retirement subscription.
 Remote broadcast routing uses the same reusable daemon executor on both VMs.
 Original `LoadedApk` and `ActivityThread` deliver receivers; the broadcast owner
 retains result ordering and retires its executor during application shutdown.
@@ -637,6 +643,28 @@ consumer. A returned Java `Surface` has independent wrapper ownership; releasing
 earlier Java wrappers keeps an acquired native window usable. The final native
 reference releases the existing consumer after the window lock is dropped.
 
+The JVM ImageReader boundary retains the original ImageReader, Image and plane
+objects over the shared Surface and HardwareBuffer owners. Acquired images and
+returned hardware buffers retain their own buffer references. App-controlled
+producers replace the queued frame without waiting for their own consumer;
+maxImages limits acquired Images until close, including detached Images.
+Direct producer buffers retain their actual dimensions, format and dataspace.
+The original PublicFormatUtils APIs use Android device mappings between public
+formats, HAL storage formats and dataspaces, including encoded and depth data.
+Native storage supplies packed RGB, FP16, flexible YUV420, P010/P210, monochrome,
+RAW16 and encoded BLOB planes with their actual row and pixel strides. PRIVATE
+images retain opaque producer storage and expose no CPU planes. Encoded and raw
+formats require the corresponding producer bytes. RAW10/RAW12, RAW_PRIVATE,
+NV16, NV21 and YV12 allocation paths remain unsupported. A failed native video
+delivery clears its own JNI exception so later frames can be delivered.
+
+The Binder JNI library registers CursorWindow parcel operations after original
+Parcel metadata initialization. Both inline and mapped windows retain their
+original Android serialization format and descriptor ownership.
+
+JVM activity cleanup retains the physical output through pause, stop and destroy.
+The central window owner detaches presentation before retiring display callbacks.
+
 The JVM `SurfaceControl` transaction boundary is `HostSurfaceControl`.
 Transaction completion follows `HostSurface.Target.onFrameCompleted` when the
 existing output consumer accepts the Android frame. `CanvasFrameSource` owns
@@ -732,6 +760,13 @@ ARM32 pointer conversion uses an interval index over the existing mapped-memory
 owner. Overlapping native aliases retain their lowest guest-base identity;
 translation checks exact bounds and permissions under one owner lock. Mapping
 replacement, splitting and retirement update that same index.
+
+ARM32 process calls snapshot executable names, argument vectors and environment
+strings for the lifetime of each native invocation. Complete strings can span
+guest mappings; every pointer cell and string is checked before the process
+owner receives the call. Null vectors become empty native lists, while invalid
+or unterminated guest input retains the Linux EFAULT result.
+
 The shared ARM32 ELF image owner resolves symbol names through the image's
 original GNU or SysV hash tables and Bionic's hash functions. Both execution
 backends use the same lookup, relocation and image lifetime.
@@ -1489,16 +1524,29 @@ device identities and PCM or camera buffers; the shared physical owner retains
 capture conversion, device authorization, stream tokens and retirement.
 Microphone resampling and anti-alias state use Klepton's original conversion
 code in that same physical owner, shared by AAudio and media input bindings.
-Concurrent AudioRecord, AAudio and OpenSL capture streams share one physical
-device with separate PCM cursors and resampling state. The first stream opens
-the selected device and the last closes it. Each stream reports its own history
-overruns; device loss or revoked access disconnects its consumers.
+Output AAudio streams report consumed frames in the stream sample-rate domain.
+The original PCM writer publishes each stream's committed range; getters read
+atomic snapshots without taking producer, device or stream locks. Unsubmitted
+callback frames do not advance consumption. Counters remain independent and
+monotonic, carry actual consumed progress across device cursor resets, and
+retain their final values after stream release.
 The media platform component owns selected devices, capture authorization,
 microphone stream lifetime and camera sessions; VM adapters marshal strings,
 tokens and sample buffers without maintaining separate media policy.
 Application operation starts retain their client Binder, UID, package and
 attribution. Nested starts balance their finishes; the last finish, client
 death or application retirement releases the operation's death subscription.
+UID and package mode changes require the Android application-operation management
+permission and use the existing persisted permission-decision store. Switch
+operations share their mode, unchanged writes do not notify watchers, and raw
+queries preserve foreground-only modes. Activity state determines their effective
+mode. Watchers retain their original registration flags: specific operations
+report their own code, legacy switch callbacks report the switch, and package
+watchers receive the switch family. Foreground transitions notify only matching
+foreground watchers. IGNORED mode pauses started operations, ERRORED leaves
+their started state intact, and other written modes resume them subject to the
+original package and restriction guards. Nesting and Binder ownership survive
+pauses. Android mode choices do not grant physical device access.
 Memory queries use each VM's native memory-accounting owner and a shared
 ActivityManager threshold calculation; the ART process retains its original
 Bionic system-information interface.
@@ -1604,7 +1652,7 @@ module registry and runtime contracts as other game types.
 | --- | --- |
 | Android module | Detect APK package sets, read manifest/resources, retain original inputs and select the runtime |
 | Mac.apk provider | Resolve a managed publisher release and launch its Android application host |
-| AIM provider | Launch the included pinned AIM host with its separately acquired compatible Android image |
+| AIM provider | Launch a managed pinned AIM host with its separately acquired compatible Android image |
 | Shared macOS sandbox | Confine files, child processes and optional network access to the declared launch resources |
 | Per-provider application root | Retain writable Android data, home, caches and temporary files for one game and provider |
 
@@ -1616,11 +1664,11 @@ publisher releases, so an upstream version can be installed or selected without
 rebuilding MacLauncher. Release catalogs and downloads are queried only by
 explicit actions.
 
-AIM is a fixed adapted build from a pinned Git submodule. Owned patches remain
-outside the read-only upstream checkout. Its native payload is selected through
-the module's supplemental distribution declaration, including binary checksums,
-CPU architecture, minimum macOS, source identity and license notices. It has no
-runtime manager or installation tab.
+AIM uses a managed adapted build from a pinned Git submodule. Owned patches remain
+outside the read-only upstream checkout. Its MacLauncher Builds package records
+binary checksums, CPU architecture, minimum macOS, source identity and license
+notices. Runtimes manages AIM versions independently from its Android image; Play
+requests missing downloads and reuses installed versions offline.
 
 Guest control commands retain the resident Android image, authenticated mount
 namespace, Binder namespace and display endpoint. Original Android tools access

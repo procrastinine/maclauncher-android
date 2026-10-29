@@ -2,7 +2,7 @@
 
 The [architecture reference](../../../../docs/runtimes/ANDROID_ARCHITECTURE.md)
 describes execution, platform boundaries, resource ownership and host policy.
-The included backend combines Java 21, the complete Android 16 Java framework,
+The JVM backend combines Java 21, the complete Android 16 Java framework,
 dex2jvm and pinned Klepton native code. ARM32 libraries use Dynarmic and the same
 platform services as ARM64.
 
@@ -213,7 +213,7 @@ and rendered icon; headless profile services use accessory application behavior.
 ## Developer build
 
 The build accepts supplied executable framework and native artifacts alongside
-pinned source inputs. End users run the included backend without an Android SDK
+pinned source inputs. Installed runtime packages run without an Android SDK
 or native compiler. Developer prerequisites include a JDK 21, the official SDL3
 framework, Vulkan and NDK headers, portable codec libraries, AIDL and aconfig,
 a Rust toolchain, Ninja, CMake and a project Python environment.
@@ -323,7 +323,6 @@ reads on the original ANGLE queue. The lease retires its pending conversion
 and queue wait before releasing source storage or synchronization objects;
 the converted RGB texture follows the last GL reference independently.
 
-`scripts/stage-android.mjs` installs a completed build into the ordinary Android
-runtime declaration. Its `--build`, `--klepton`, `--dex2jvm`, `--codec-sources`
-and `--gles-headers` arguments identify that build and the corresponding source
-notices. Launcher runtime selection reads this declaration for each launch.
+[MacLauncher Builds](https://github.com/procrastinine/maclauncher-builds) packages
+completed producer outputs with their source identities and notices. MacLauncher
+downloads and installs these versioned packages through its runtime manager.

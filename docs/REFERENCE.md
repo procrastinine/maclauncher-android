@@ -11,9 +11,10 @@ launcher account/storage orchestration remain in MacLauncher.
 
 MacLauncher consumes this project as a pinned source submodule. Its existing
 producer paths are source-only aliases into this repository; the runtime
-implementation lives here. Application packages contain only the small metadata
-library needed by the launcher and the selected runtime binaries. Running games
-does not require Git, source checkouts or compilation.
+implementation lives here. The MacLauncher application includes the small APK
+metadata and integration helpers used by the launcher. Bulk common and ART
+runtimes are installed as managed packages from MacLauncher Builds. Running
+games does not require Git, source checkouts or compilation.
 
 ## Common runtime builds
 
@@ -71,6 +72,37 @@ no complete image or Google package is included in the platform component
 collection. The APK is a binary build input and is not committed to this source
 repository.
 
+Framework staging retains the original hyphenation data supplied by the selected
+framework artifact. Text layout and widgets consume the same language patterns.
+
+The JVM ImageReader binding keeps the original ImageReader, Image and plane
+objects over the shared Surface and HardwareBuffer owners. App-controlled
+producers replace queued frames without waiting for their own consumer; acquired
+images and returned hardware buffers retain independent references. Public,
+HAL and dataspace formats use the original Android device mappings. Buffer
+planes retain their producer dimensions, format, row stride and pixel stride;
+PRIVATE buffers expose opaque storage without CPU planes. The
+[architecture reference](runtimes/ANDROID_ARCHITECTURE.md) records the native
+storage formats and allocation limits.
+
+CursorWindow parcel methods are registered by the Binder JNI owner after Parcel
+metadata initialization. Inline and mapped windows retain their original Android
+serialization and descriptor ownership.
+
+Application-operation mode changes use the existing permission-decision store
+and Android management permission checks. Watchers retain their registered
+operation, flags and Binder lifetime; effective foreground modes follow activity
+state. PendingIntent queue retirement cancels original tokens before their alarm
+service is unpublished.
+
+AAudio output progress follows each stream's committed consumed frames in that
+stream's sample-rate domain. Atomic snapshots keep progress getters independent
+of the mixer's paced writer lock. Device cursor resets preserve consumed history;
+streams retain separate counters and final released values.
+
+Descriptor-less virtual stdio streams reach the original close callback without
+attempting to release a nonexistent file descriptor.
+
 Linux process dumpability belongs to the existing guest process lease. Normal
 executables start dumpable, fork inherits the setting, and ordinary exec resets
 it. Disabling dumpability restricts peer inspection; self-access remains
@@ -116,7 +148,7 @@ node tools/build-art.mjs --inputs /absolute/path/to/art-inputs.json
 
 The input object supplies the existing `buildArt` options, including `host`,
 `java`, `inputs` and `bootClasspath` producer groups. Its `sources.source`,
-`sources.klepton` and `sources.glesHeaders` naming the original pinned checkouts.
+`sources.klepton` and `sources.glesHeaders` name the original pinned checkouts.
 Without `sourceArchive`, `sources.aosp` supplies the original AOSP tree used by
 AIM's `patches/art-android/sources.lock`. The exporter checks those original
 ART, bionic, libcore and dependency subsets against the recorded content hashes.
