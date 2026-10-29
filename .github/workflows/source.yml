@@ -1,0 +1,32 @@
+name: Source checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Check source imports and pinned upstream metadata
+        run: npm run check
+      - name: Check source ownership and package inputs
+        run: node --test tests/android-source-check.test.mjs tests/android-source-owner.test.mjs tests/android-art-package-inputs.test.mjs
+      - name: Check ART producer entry
+        run: node tools/build-art.mjs --check

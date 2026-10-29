@@ -291,10 +291,14 @@ The ARM32 image adapter seals RELRO through the translated address space's
 original 4 KB page owner at the same relocation boundary. Program headers,
 load alignment and relocated pointers retain their original image ownership.
 
-The ARM64 image adapter supports dynamic ELF TLS through `PT_TLS`,
-`DTPMOD64`, `DTPREL64` and `TLSDESC`, with per-thread module storage and the
-original host thread pointer preserved. Initial-exec `TPREL64` relocations
-remain unsupported.
+The ARM64 image adapter supports `PT_TLS`, `DTPMOD64`, `DTPREL64`, `TPREL64`
+and `TLSDESC` while preserving the real Android thread pointer and original
+Bionic slots. Initial-exec and dynamic references share the same per-thread
+address. A demand-zero reserve supplies one MiB of fixed TLS layout with
+alignment up to 64 KiB; module offsets remain reserved after unloading. New
+modules initialize existing physical threads before publishing native entry
+points. Modules beyond that layout retain dynamic TLS; an initial-exec reference
+to one reports a loader error.
 
 ## Process and resource ownership
 
