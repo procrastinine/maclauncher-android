@@ -80,7 +80,6 @@ export function snapshotSources(root,destination,{toolInputs}={}){
  * catalog. Capturing those inputs does not evaluate the Android platform graph. */
 export function snapshotBuildCompanions({repository,destination}){
   const helpers='src/modules/shared/runtime',companions=[
-    'src/modules/nitroplus/runtime/portable-media.json',
     'src/modules/android/apk.js','src/modules/android/binary-manifest.js'
   ];
   sourceInventory(path.join(repository,helpers),path.join(destination,helpers));
