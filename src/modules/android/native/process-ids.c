@@ -256,6 +256,7 @@ static void release_child_locked(int id){
     atomic_store_explicit(&child_hosts[id],0,memory_order_release);
     atomic_store_explicit(&child_descriptors[id],0,memory_order_release);
     close(leases[id].descriptor-1);leases[id]=(Slot){0};
+    if((unsigned)id<cursor)cursor=(unsigned)id;
 }
 static int acquire_locked(int kind){
     if(directory_fd<0){errno=ENXIO;return -1;}
@@ -332,7 +333,9 @@ static void after_child(void){
     pthread_sigmask(SIG_SETMASK,&identity_mask,NULL);
 }
 static void initialize(void){
-    cursor=KLJ_PROCESS_ID_MIN+arc4random_uniform(KLJ_PROCESS_ID_MAX-KLJ_PROCESS_ID_MIN+1);
+    // Kernel locks already separate concurrent owners. Starting at the first
+    // slot reuses crashed owners' inodes instead of populating the ID range.
+    cursor=KLJ_PROCESS_ID_MIN;
     initialization_error=pthread_atfork(before_fork,after_parent,after_child);
     const char *text=getenv("KL_ANDROID_PROCESS_QUERY_FD");
     if(text&&*text){
@@ -436,6 +439,7 @@ void klj_thread_id_release(int id){
     if(id>=KLJ_PROCESS_ID_MIN&&id<=KLJ_PROCESS_ID_MAX&&id!=leader_id&&
        leases[id].descriptor&&!leases[id].child){
         int fd=leases[id].descriptor-1;leases[id]=(Slot){0};close(fd);
+        if((unsigned)id<cursor)cursor=(unsigned)id;
     }
     unlock_ids();
 }

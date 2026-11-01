@@ -326,3 +326,10 @@ the converted RGB texture follows the last GL reference independently.
 [MacLauncher Builds](https://github.com/procrastinine/maclauncher-builds) packages
 completed producer outputs with their source identities and notices. MacLauncher
 downloads and installs these versioned packages through its runtime manager.
+
+## Process identity leases
+
+Released process and thread IDs are reused before higher slots are allocated.
+Allocation starts at the lowest slot, so a new process reuses released kernel
+leases after a crash. Live and unreaped child identities retain their existing
+kernel locks; stable lease files remain in place.
