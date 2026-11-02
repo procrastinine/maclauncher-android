@@ -78,9 +78,16 @@ if not child:
         traceback.print_exc()
         os._exit(127)
 status=None
+# macOS answers a group signal with EPERM, not ESRCH, while the group exists
+# but none of its members can take a signal: all of them are exiting, such as a
+# leader that stays a zombie until it is reaped. Signal the leader directly
+# then; the group counts as gone only once the leader is.
 def group_signal(signum):
     try: os.killpg(child,signum); return True
     except ProcessLookupError: return False
+    except PermissionError:
+        try: os.kill(child,signum); return True
+        except ProcessLookupError: return False
 try:
     try: os.setpgid(child,child)
     except OSError as error:
@@ -94,19 +101,22 @@ try:
 finally:
     # Reap the leader and retire compiler children even if observing the build
     # fails. A live group retains its pgid; stop using it when the group is gone.
-    if not group_signal(signal.SIGTERM) and status is None:
-        try: os.kill(child,signal.SIGTERM)
-        except ProcessLookupError: pass
-    deadline=time.monotonic()+2
-    while True:
-        if status is None:
-            waited,value=os.waitpid(child,os.WNOHANG)
-            if waited: status=value
-        if not group_signal(0): break
-        if time.monotonic()>=deadline: group_signal(signal.SIGKILL)
-        time.sleep(0.02)
-    if status is None: _,status=os.waitpid(child,0)
-    release_output(os.WIFEXITED(status) and os.WEXITSTATUS(status)==0)
+    # An incomplete output is removed even if retirement itself fails, so the
+    # next builder never finds it in place.
+    try:
+        if not group_signal(signal.SIGTERM) and status is None:
+            try: os.kill(child,signal.SIGTERM)
+            except ProcessLookupError: pass
+        deadline=time.monotonic()+2
+        while True:
+            if status is None:
+                waited,value=os.waitpid(child,os.WNOHANG)
+                if waited: status=value
+            if not group_signal(0): break
+            if time.monotonic()>=deadline: group_signal(signal.SIGKILL)
+            time.sleep(0.02)
+        if status is None: _,status=os.waitpid(child,0)
+    finally: release_output(status is not None and os.WIFEXITED(status) and os.WEXITSTATUS(status)==0)
 # Keep fd open until all owned descendants have left the workspace.
 if cancelled: finish(-cancelled)
 finish(-os.WTERMSIG(status) if os.WIFSIGNALED(status) else os.WEXITSTATUS(status))

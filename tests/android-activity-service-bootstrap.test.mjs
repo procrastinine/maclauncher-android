@@ -1,3 +1,4 @@
+import { createRequire as fixtureRequire } from 'node:module';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {fileURLToPath} from 'node:url';import {spawnSync} from 'node:child_process';
 
 test('the actual activity endpoint precedes original ContextImpl permission checks',{timeout:45000},t=>{
@@ -11,7 +12,7 @@ test('the actual activity endpoint precedes original ContextImpl permission chec
  const run=(tool,args)=>{const result=spawnSync(path.join(jdk,'bin',tool),args,{encoding:'utf8',timeout:20000,maxBuffer:2<<20,env:{...process.env,KL_ANDROID_ID_DIRECTORY:ids}});assert.ifError(result.error);assert.equal(result.signal,null,result.stdout+result.stderr);assert.equal(result.status,0,result.stdout+result.stderr);return result;};
  run('javac',['--release','21','-cp',cp,'-d',classes,...['HostApplication','HostActivityService'].map(name=>path.join(native,'java/maclauncher/android/framework',name+'.java')),path.join(fixtures,'ActivityServiceBootstrapProbe.java')]);
  for(const mode of ['bootstrap','precontext']){
-  const result=run('java',[...options,'-Xverify:all','-cp',cp,'maclauncher.android.framework.ActivityServiceBootstrapProbe',path.resolve(runtime),path.join(temporary,mode),path.join(fixtures,'AndroidManifest.xml.bin'),mode]);
+  const result=run('java',[...options,'-Xverify:all','-cp',cp,'maclauncher.android.framework.ActivityServiceBootstrapProbe',path.resolve(runtime),path.join(temporary,mode),fixtureRequire(import.meta.url)('./helpers/manifest-fixtures').file(t,'android-activity-bootstrap/AndroidManifest'),mode]);
   assert.match(result.stdout,/PASS .*original .*permission|PASS original ContextImpl first permission lookup/);
   assert.doesNotMatch(result.stderr,/Missing ActivityManager; assuming/,'the original permission client must resolve its activity service');
   t.diagnostic(result.stdout.trim());

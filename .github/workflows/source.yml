@@ -27,6 +27,6 @@ jobs:
       - name: Check source imports and pinned upstream metadata
         run: npm run check
       - name: Check source ownership and package inputs
-        run: node --test tests/android-source-check.test.mjs tests/android-source-owner.test.mjs tests/android-art-package-inputs.test.mjs
+        run: node --test tests/source-binaries.test.js tests/android-manifest-fixtures.test.js tests/android-source-check.test.mjs tests/android-source-owner.test.mjs tests/android-art-package-inputs.test.mjs
       - name: Check ART producer entry
         run: node tools/build-art.mjs --check

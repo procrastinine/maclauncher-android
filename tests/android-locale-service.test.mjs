@@ -1,3 +1,4 @@
+import { createRequire as fixtureRequire } from 'node:module';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -21,7 +22,7 @@ test('original LocaleManager Binder, package configuration and lifetime',{timeou
  run(path.join(jdk,'bin/java'),['-cp',cp,'LocaleBindings',path.resolve(runtime,'android-framework.jar'),classes]);
  const library=path.join(temporary,'locale-properties.dylib');run(process.env.CLANG||'clang',['-dynamiclib','-Wall','-Wextra','-Werror','-I'+path.join(jdk,'include'),'-I'+path.join(jdk,'include/darwin'),path.join(fixture,'locale-properties.c'),'-o',library]);
  const options=['--add-opens=java.base/jdk.internal.foreign=ALL-UNNAMED','--add-opens=java.base/java.nio=ALL-UNNAMED','--add-opens=java.base/java.util=ALL-UNNAMED','--add-exports=java.base/jdk.internal.ref=ALL-UNNAMED','--add-exports=java.base/sun.net.www.protocol.jar=ALL-UNNAMED','--add-exports=java.base/sun.net.www=ALL-UNNAMED','--add-exports=java.base/sun.security.x509=ALL-UNNAMED','--add-exports=java.base/sun.security.jca=ALL-UNNAMED','--add-exports=java.base/sun.security.pkcs=ALL-UNNAMED','--add-opens=java.base/sun.security.ssl=ALL-UNNAMED'];
- const result=run(path.join(jdk,'bin/java'),[...options,'-Xverify:all','-cp',cp,'maclauncher.android.framework.LocaleServiceProbe',path.resolve(runtime),data,path.resolve(import.meta.dirname,'fixtures/android-activity-bootstrap/AndroidManifest.xml.bin'),library]);
+ const result=run(path.join(jdk,'bin/java'),[...options,'-Xverify:all','-cp',cp,'maclauncher.android.framework.LocaleServiceProbe',path.resolve(runtime),data,fixtureRequire(import.meta.url)('./helpers/manifest-fixtures').file(t,'android-activity-bootstrap/AndroidManifest'),library]);
  assert.match(result.stdout,/PASS full original LocaleManager:/);
  assert.doesNotMatch(result.stderr,/failed to commit locale setter info|Couldn't create directory for SharedPreferences|Exception in thread/);
  t.diagnostic(result.stdout.trim());

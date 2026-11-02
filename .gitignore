@@ -7,3 +7,7 @@ src/modules/android/native/tools/*.jar
 AGENTS.md
 /scripts/android-test/
 /tests/android-test-*
+
+# Binary XML fixtures are generated from their logical text trees.
+/tests/fixtures/android-activity-bootstrap/AndroidManifest.xml.bin
+/tests/fixtures/android-framework-services/manifests/providers.xml.bin

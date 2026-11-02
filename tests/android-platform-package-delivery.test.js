@@ -9,7 +9,7 @@ function fixture(t){
  const native=path.join(root,'native'),directory=path.join(root,'input'),output=path.join(root,'runtime');
  fs.mkdirSync(path.join(native,'notices/platform-packages'),{recursive:true});fs.mkdirSync(directory);
  const notice=Buffer.from('Original component notice\n');fs.writeFileSync(path.join(native,'notices/platform-packages/NOTICE'),notice);
- const apk=path.join(directory,'Provider.apk');writeZipArchive(apk,[{name:'AndroidManifest.xml',data:fs.readFileSync(path.join(__dirname,'fixtures/android-framework-services/manifests/providers.xml.bin'))},{name:'classes.dex',data:Buffer.from('unchanged original code')}]);
+ const apk=path.join(directory,'Provider.apk');writeZipArchive(apk,[{name:'AndroidManifest.xml',data:fs.readFileSync(require('./helpers/manifest-fixtures').file(t,'android-framework-services/manifests/providers'))},{name:'classes.dex',data:Buffer.from('unchanged original code')}]);
  const bytes=fs.readFileSync(apk),definition={schemaVersion:1,androidApi:36,files:[{path:'Provider.apk',destination:'packages/Provider/Provider.apk',packageName:'owned.providers',size:bytes.length,sha256:digest(bytes)}],notices:[{path:'NOTICE',size:notice.length,sha256:digest(notice)}]};
  const write=()=>fs.writeFileSync(path.join(native,'platform-packages-binary.json'),JSON.stringify(definition));write();
  return {root,native,directory,output,apk,bytes,definition,write};
