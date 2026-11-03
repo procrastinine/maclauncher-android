@@ -1,4 +1,5 @@
-import {copyOptional,prepareSourceTree,copyChanged,synchronizeSourceTree} from '../upstream/source-files.mjs';
+import {addLicense,includeLicenses} from '../upstream/licenses.mjs';
+import {prepareSourceTree,copyChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -33,8 +34,8 @@ function prepareMediaFoundation({avSource,frameworkSource,aidl,klepton,binder,ou
     ...['jni','source/nativehelper/header_only_include','source/native/libs/binder/include','source/native/libs/binder/ndk/include_cpp','source/native/headers/media_plugin','source/native/libs/binder/liblog_stub/include','source/core/libutils/binder/include','source/core/libutils/include','source/core/libcutils/include','source/core/libsystem/include','source/libbase/include','source/nativehelper/include_jni'].map(file=>path.join(binder.output,file)),path.join(root,'../binder-rpc/include'),path.join(root,'..')];
   const flags=['-std=c++23','-arch','arm64','-mmacosx-version-min=13.0','-O2','-fPIC','-Wall','-Wextra','-Werror','-Wno-unused-parameter','-Wno-multichar','-Wno-deprecated-declarations','-Wno-nontrivial-memcall','-Wno-sign-compare','-Wno-deprecated-enum-enum-conversion',
     '-Doff64_t=off_t','-DBINDER_NO_LIBBASE','-DBINDER_WITH_KERNEL_IPC','-DANDROID_UTILS_CALLSTACK_ENABLED=0','-DEXPORT=__attribute__((visibility("default")))',...includes.map(file=>'-I'+file)];
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(source,'media/module/foundation/NOTICE'),path.join(notices,'NOTICE'));
-  copyOptional(path.join(source,'media/ndk/NOTICE'),path.join(notices,'NDK-NOTICE'));
+  const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'media-foundation',path.join(source,'media/module/foundation/NOTICE'));
+  addLicense(path.dirname(licenses),'media-foundation',path.join(source,'media/ndk/NOTICE'));
   return {source,flags,inputs:[...units.map(file=>path.join(source,file)),...shaper.units,...['MediaRuntime.cpp','MediaExtractorJni.cpp','MediaExtractorNdk.cpp','MediaExtractorMetadata.cpp','MediaCodecOwner.cpp','VideoDecoder.cpp','VpxVideoDecoder.cpp','MediaCodecCatalog.cpp','MediaCodecListJni.cpp','MediaCodecNdk.cpp','MediaCodecJni.cpp','MediaCodecStreams.cpp','AudioShaper.cpp'].map(file=>path.join(root,file))]};
 }
 
@@ -62,7 +63,7 @@ export function buildMediaFoundation({avSource,frameworkSource,aidl,klepton,bind
   for(const dependency of ['libandroid-binder-rpc.dylib','libklepton-jvm.dylib'])execFileSync('install_name_tool',['-change','@rpath/'+dependency,'@loader_path/'+dependency,publication],{stdio:'inherit'});
   execFileSync('codesign',['--force','--sign','-',publication],{stdio:'inherit'});
   copyChanged(publication,library);
-  synchronizeSourceTree(path.join(prepared,'notices'),path.join(output,'notices'));
-  synchronizeSourceTree(vpx.notices,path.join(output,'notices','libvpx'));
+  includeLicenses(output,path.join(prepared,'licenses'));
+  includeLicenses(output,vpx.licenses);
   return {library,source:plan.source};
 }

@@ -1,4 +1,5 @@
-import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
+import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {exportSources} from '../binder-rpc/build.mjs';
@@ -40,7 +41,7 @@ export function prepareFormatPlan({bionicSource,output}){
   writeChanged(path.join(output,'format-plan.h'),'#pragma once\n#include <wchar.h>\nextern "C" {\nint klj_arm32_format_plan0(const char*,void*,int(*)(void*,unsigned));\nint klj_arm32_format_plan1(const wchar_t*,void*,int(*)(void*,unsigned));\nint klj_arm32_scan_plan(const char*,void*,int(*)(void*,unsigned));\n}\n');
   const header=path.join(output,'format-types.h');
   writeChanged(header,'#include <stddef.h>\n#include <stdint.h>\n#include <inttypes.h>\n#include <sys/types.h>\n#include <wchar.h>\nvoid __maclauncher_format_types('+types.map((type,index)=>type+' arg'+index).join(',')+');\nvoid __maclauncher_scan_types('+scan.types.map((type,index)=>type+' arg'+index).join(',')+');\n');
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'format-Bionic-NOTICE'));
+  const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'format-plan',path.join(source,'libc/NOTICE'));
   return {header,types,source:path.join(output,'format-plan.cpp')};
 }
 

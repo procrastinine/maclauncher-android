@@ -5,7 +5,7 @@ import zlib from 'node:zlib';
 import {execFileSync} from 'node:child_process';
 
 // Explicit developer acquisition. Original headers, ARM compiler builtins,
-// link-only NDK libraries and notices are transferred; no NDK compiler is needed.
+// link-only NDK libraries and licenses are transferred; no NDK compiler is needed.
 export function acquireNdkHeaders(output,{linkLibrariesOnly=false}={}){
   const pin=JSON.parse(fs.readFileSync(new URL('./ndk-headers.json',import.meta.url)));
   const links=new Map(pin.linkLibraries.map(row=>[row.entry,row]));

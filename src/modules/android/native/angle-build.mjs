@@ -1,4 +1,5 @@
-import {copyOptional,optionalFiles,prepareSourceTree,writeChanged} from './upstream/source-files.mjs';
+import {addLicense} from './upstream/licenses.mjs';
+import {optionalFiles,prepareSourceTree,writeChanged} from './upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -69,23 +70,17 @@ try{
     files.push({path:name,size:data.length,sha256:digest(data),architectures:['arm64'],minimumMacOS:'13.0'});
   }
 }finally{fs.rmSync(publication,{recursive:true,force:true});}
-const stock=JSON.parse(fs.readFileSync(path.join(root,'angle-binary.json')));
-const notices=[...stock.notices];
-{
-  const temporary=path.join(options.output,'notices');
-  for(const notice of stock.notices)copyOptional(path.join(root,'notices/angle',notice.file),path.join(temporary,notice.file));
-  const suppliers=[['JsonCpp','third_party/jsoncpp/source/LICENSE','https://github.com/open-source-parsers/jsoncpp'],['RapidJSON','third_party/rapidjson/src/license.txt','https://github.com/Tencent/rapidjson']];
-  if(backend==='metal-vulkan'){
-    suppliers.push(['VulkanMemoryAllocator','third_party/vulkan_memory_allocator/LICENSE.txt','https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator']);
-    for(const license of optionalFiles(path.join(source,'third_party/vulkan-headers/src/LICENSES')).map(file=>path.basename(file)))
-      suppliers.push(['Vulkan-Headers-'+license.replace(/\.[^.]+$/,''),'third_party/vulkan-headers/src/LICENSES/'+license,'https://github.com/KhronosGroup/Vulkan-Headers']);
-  }
-  for(const [name,file,url] of suppliers){const notice={name,url,file:name+'.txt'};notices.push(notice);copyOptional(path.join(source,file),path.join(temporary,notice.file));}
+for(const file of optionalFiles(path.join(root,'license-inputs/angle')))addLicense(options.output,'ANGLE/'+path.basename(file),file);
+const suppliers=[['JsonCpp','third_party/jsoncpp/source/LICENSE'],['RapidJSON','third_party/rapidjson/src/license.txt']];
+if(backend==='metal-vulkan'){
+ suppliers.push(['VulkanMemoryAllocator','third_party/vulkan_memory_allocator/LICENSE.txt']);
+ for(const file of optionalFiles(path.join(source,'third_party/vulkan-headers/src/LICENSES')))addLicense(options.output,'Vulkan-Headers',file,path.basename(file).replace(/\.[^.]+$/,''));
 }
+for(const [name,file]of suppliers)addLicense(options.output,name,path.join(source,file));
 const adaptations=['angle-source.mjs','angle-flip-source.mjs','angle-flip-source.json','angle-identity-source.mjs','angle-sync-source.mjs','angle-fence-completion.h','angle-current-source.mjs','angle-debug-source.mjs','angle-debug-callback.h','angle-blob-source.mjs','angle-blob-callback.h','angle-dither-source.mjs',...(backend==='metal-vulkan'?['angle-vulkan-source.mjs','angle-vulkan-image-source.mjs']:[])].map(file=>({file,sha256:digest(fs.readFileSync(path.join(root,file)))}));
 const internalShaders=fs.readFileSync(path.join(output,'obj/src/libANGLE/renderer/metal/angle_metal_backend.ninja'),'utf8').includes('-DANGLE_METAL_HAS_PREBUILT_INTERNAL_SHADERS')?'embedded-metallib':'runtime-source';
 const programBinaryVersion=fs.readFileSync(path.join(output,'gen/angle/ANGLEShaderProgramVersion.h'),'utf8').match(/^#define ANGLE_PROGRAM_VERSION "([a-f0-9]+)"$/m)?.[1];
 if(!programBinaryVersion)throw Error('Missing generated ANGLE program binary version');
-const manifest={schemaVersion:1,publisher:'MacLauncher',version:pins.revision.slice(0,12)+'-'+backend+'-12',angleRevision:pins.revision,programBinaryVersion,source:pins.repository,dependencies,adaptations,buildArguments:args,internalMetalShaders:internalShaders,files,notices};
+const manifest={schemaVersion:1,publisher:'MacLauncher',version:pins.revision.slice(0,12)+'-'+backend+'-12',angleRevision:pins.revision,programBinaryVersion,source:pins.repository,dependencies,adaptations,buildArguments:args,internalMetalShaders:internalShaders,files};
 writeChanged(path.join(options.output,'angle-manifest.json'),JSON.stringify(manifest,null,2)+'\n');
 console.log('ANGLE '+backend+' provider: '+options.output);

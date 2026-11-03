@@ -1,4 +1,5 @@
-import {copyOptional,prepareSourceTree,copyChanged} from '../../upstream/source-files.mjs';
+import {addLicense} from '../../upstream/licenses.mjs';
+import {prepareSourceTree,copyChanged} from '../../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -150,10 +151,10 @@ export function prepareKeyStoreRust(context) {
   }
   write(path.join(workspace,'Cargo.toml'),'[workspace]\nmembers=["binder","binder/sys","aidl/*","platform/*"]\nexclude=["bindgen-tool"]\nresolver="2"\n[profile.release]\nopt-level=3\ndebug=1\n');
   copyChanged(path.join(here,'Cargo.lock'),path.join(workspace,'Cargo.lock'));
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  // The source exporter owns notices for AOSP inputs. Cargo's lock identifies
+  const licenses=path.join(output,'licenses');
+  // The source exporter owns licenses for AOSP inputs. Cargo's lock identifies
   // the exact registry closure; package source licenses accompany distribution.
-  return {workspace,env,runCargo,crypto:{archives:crypto.archives},notices,aidl:{records:[...aidl.records.values()].filter(r=>aidl.generated.has(r.name))},
+  return {workspace,env,runCargo,crypto:{archives:crypto.archives},licenses,aidl:{records:[...aidl.records.values()].filter(r=>aidl.generated.has(r.name))},
     rustLibrary:path.join(output,'cargo-target/release/libkeystore_bootstrap.a')};
 }
 
@@ -161,13 +162,11 @@ export function buildKeyStoreRust(context) {
   const result=prepareKeyStoreRust(context);
   result.runCargo(['build','--release','--locked','--manifest-path',path.join(result.workspace,'Cargo.toml'),'-p','keystore_bootstrap']);
   const metadata=JSON.parse(result.runCargo(['metadata','--locked','--format-version=1','--manifest-path',path.join(result.workspace,'Cargo.toml')],{encoding:'utf8',stdio:'pipe'}));
-  const crates=[];
   for(const pkg of metadata.packages.filter(p=>p.source?.startsWith('registry+'))) {
-    const root=path.dirname(pkg.manifest_path),destination=path.join(result.notices,'crates',pkg.name+'-'+pkg.version);
+    const root=path.dirname(pkg.manifest_path);
     const files=new Set(fs.globSync(['LICENSE*','LICENCE*','COPYING*','NOTICE*'],{cwd:root}));
     if(pkg.license_file)files.add(pkg.license_file);
-    for(const relative of files)copyOptional(path.join(root,relative),path.join(destination,relative));
-    crates.push({name:pkg.name,version:pkg.version,source:pkg.source,license:pkg.license});
+    for(const relative of files)addLicense(context.output,pkg.name+'-'+pkg.version,path.join(root,relative),pkg.license);
   }
-  return {rustLibrary:result.rustLibrary,crypto:result.crypto,notices:result.notices,aidl:result.aidl};
+  return {rustLibrary:result.rustLibrary,crypto:result.crypto,licenses:result.licenses,aidl:result.aidl};
 }

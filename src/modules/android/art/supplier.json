@@ -37,8 +37,7 @@
     "sha256": "182f51ad2b04bbb9cd9464d3e0396a81201db6d9659e1fde5951b6efc1e0a00e",
     "license": {
       "id": "android-sdk-arm-dbt-license",
-      "path": "licenses/android-sdk-arm-dbt-license.txt",
-      "sha256": "0682da42e0ca119ce29503c265587f8ae17277094f9262b54c1d2bb99557c6f5"
+      "path": "licenses/android-sdk-arm-dbt-license.txt"
     },
     "delivery": "explicit-download"
   }

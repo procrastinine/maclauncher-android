@@ -1,4 +1,5 @@
-import {copyOptional,prepareSourceTree,copyChanged,writeChanged} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
+import {prepareSourceTree,copyChanged,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -45,7 +46,7 @@ export function buildAlarm({frameworkSource,binder,pollable,processLibrary,outpu
   for(const name of ['libandroid-binder-rpc.dylib','libklepton-jvm.dylib'])execFileSync('install_name_tool',['-change','@rpath/'+name,'@loader_path/'+name,publication],{stdio:'inherit'});
   execFileSync('codesign',['--force','--sign','-',publication],{stdio:'inherit'});
   copyChanged(publication,library);
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  copyOptional(path.join(source,'NOTICE'),path.join(notices,'framework.txt'));
-  return {library,source,notices};
+  const licenses=path.join(output,'licenses');
+  addLicense(path.dirname(licenses),'alarm',path.join(source,'NOTICE'));
+  return {library,source,licenses};
 }

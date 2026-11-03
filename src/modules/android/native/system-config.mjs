@@ -1,4 +1,4 @@
-import {copyOptional} from './upstream/source-files.mjs';
+import {addLicense} from './upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -8,8 +8,8 @@ const relative=value=>typeof value==='string'&&value.length&&!path.posix.isAbsol
 
 /** Install every original framework data/etc prebuilt using its Soong destination. */
 export function stageAndroidSystemConfig({source,output}){
-  const root=path.join(output,'android-root'),notices=path.join(output,'notices'),products=[],targets=new Map();
-  fs.rmSync(output,{recursive:true,force:true});fs.mkdirSync(root,{recursive:true});fs.mkdirSync(notices,{recursive:true});
+  const root=path.join(output,'android-root'),licenses=path.join(output,'licenses'),products=[],targets=new Map();
+  fs.rmSync(output,{recursive:true,force:true});fs.mkdirSync(root,{recursive:true});
   for(const definition of fs.globSync('data/etc/**/Android.bp',{cwd:source}).sort()){
     const declarations=parseBlueprint(fs.readFileSync(path.join(source,definition),'utf8'),{file:definition});
     for(const module of declarations.modules){
@@ -26,6 +26,6 @@ export function stageAndroidSystemConfig({source,output}){
       products.push({module:p.name,definition,source:original,path:destination,sha256:createHash('sha256').update(bytes).digest('hex')});
     }
   }
-  copyOptional(path.join(source,'NOTICE'),path.join(notices,'NOTICE'));
-  return {root,notices,products};
+  addLicense(path.dirname(licenses),'system-config',path.join(source,'NOTICE'));
+  return {root,licenses,products};
 }

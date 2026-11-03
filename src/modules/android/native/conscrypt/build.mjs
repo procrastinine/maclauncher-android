@@ -1,4 +1,4 @@
-import {copyOptional} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -33,10 +33,10 @@ export function buildConscrypt({conscryptSource,boringsslSource,binder,nativehel
   const library=path.join(output,'libjavacrypto.dylib');
   run('clang++',[...portable,'-std=c++17','-arch','arm64','-mmacosx-version-min=13.0','-O2','-fPIC','-fvisibility=hidden','-Wall','-Wextra','-Werror','-DCONSCRYPT_OPENJDK','-DCONSCRYPT_UNBUNDLED','-DBORINGSSL_SHARED_LIBRARY','-DJNI_JARJAR_PREFIX=com/android/',...includes.map(file=>'-I'+file),'-dynamiclib','-Wl,-install_name,@loader_path/libjavacrypto.dylib',...sources,ssl,crypto,'-o',library]);
   for(const file of[crypto,ssl,library])run('codesign',['--force','--sign','-',file]);
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  copyOptional(path.join(conscrypt,'LICENSE'),path.join(notices,'conscrypt.txt'));
-  copyOptional(path.join(boringssl,'NOTICE'),path.join(notices,'boringssl.txt'));
-  copyOptional(path.join(conscrypt,'NOTICE'),path.join(notices,'conscrypt-NOTICE.txt'));
-  copyOptional(path.join(boringssl,'src/LICENSE'),path.join(notices,'boringssl-LICENSE.txt'));
+  const licenses=path.join(output,'licenses');
+  addLicense(path.dirname(licenses),'conscrypt',path.join(conscrypt,'LICENSE'));
+  addLicense(path.dirname(licenses),'conscrypt',path.join(boringssl,'NOTICE'));
+  addLicense(path.dirname(licenses),'conscrypt',path.join(conscrypt,'NOTICE'));
+  addLicense(path.dirname(licenses),'conscrypt',path.join(boringssl,'src/LICENSE'));
   return {library,libraries:[crypto,ssl,library],boringssl:{crypto,ssl,include:path.join(boringssl,'src/include'),revision:pins.aospBoringSSL},certificates:path.join(conscrypt,'apex/ca-certificates/files')};
 }

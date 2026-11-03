@@ -1,3 +1,4 @@
+import {addLicense} from '../upstream/licenses.mjs';
 import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -274,8 +275,9 @@ export function refreshDescriptors({output,include,python,graphicsRegistry,clang
     graphicsRegistry=previous.graphicsRegistry;
   }
   const guest=JSON.parse(fs.readFileSync(path.join(output,'guest-ast.json'))),host=JSON.parse(fs.readFileSync(path.join(output,'host-ast.json')));
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  const graphicsLengths=graphicsRegistry?readGraphicsLengths({python,registry:graphicsRegistry,notice:path.join(notices,'khronos-gl-registry.txt')}):{};
+  const licenses=path.join(output,'licenses');
+  const graphicsLengths=graphicsRegistry?readGraphicsLengths({python,registry:graphicsRegistry,notice:path.join(output,'khronos-gl-registry-license.txt')}):{};
+  if(graphicsRegistry){addLicense(output,'Khronos GL registry',path.join(output,'khronos-gl-registry-license.txt'));fs.rmSync(path.join(output,'khronos-gl-registry-license.txt'),{force:true});}
   const mediaTags=readMediaTags({include,guest,host,clang});
   const result=emitDescriptors({guest,host,output,graphicsLengths,mediaTags});
   writeChanged(file,JSON.stringify({include:path.resolve(include),python:python?path.resolve(python):null,graphicsRegistry:graphicsRegistry?path.resolve(graphicsRegistry):null},null,2)+'\n');
@@ -356,11 +358,11 @@ export async function generateImports({include,python,output,ownerHeaders=[],gra
     if(errors.length)throw Error('Clang could not read original Android declarations: '+JSON.stringify(errors));
   }
   writeChanged(path.join(output,'header-inventory.json'),JSON.stringify(inventory,null,2)+'\n');
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
+  const licenses=path.join(output,'licenses');
   refreshDescriptors({include,python,output,graphicsRegistry:graphicsRegistry||null,clang});
   for(let ancestor=path.dirname(include);;ancestor=path.dirname(ancestor)){
     const candidate=path.join(ancestor,'NOTICE');
-    if(fs.existsSync(candidate)){copyOptional(candidate,path.join(notices,'android-ndk.txt'));break;}
+    if(fs.existsSync(candidate)){addLicense(path.dirname(licenses),'imports-generate',candidate);break;}
     if(path.dirname(ancestor)===ancestor)break;
   }
   return {output,guest:data.guest,host:data.host};

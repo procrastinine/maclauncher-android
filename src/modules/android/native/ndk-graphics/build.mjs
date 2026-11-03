@@ -1,4 +1,4 @@
-import {copyOptional} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -127,12 +127,12 @@ export function buildNdkGraphics({output,frameworkSource,skiaSource,nativeSource
     binder.library,processLibrary,'-Wl,-rpath,@loader_path','-o',library]);
   for(const name of ['libandroid-binder-rpc.dylib','libklepton-jvm.dylib'])
     run('install_name_tool',['-change','@rpath/'+name,'@loader_path/'+name,library]);
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  copyOptional(path.join(sources.framework,'NOTICE'),path.join(notices,'AOSP-NOTICE'));
+  const licenses=path.join(output,'licenses');
+  addLicense(path.dirname(licenses),'ndk-graphics',path.join(sources.framework,'NOTICE'));
   for(const relative of fs.globSync(['**/LICENSE','**/LICENSE.*','**/NOTICE','**/NOTICE.*'],{cwd:sources.skia})){
-    copyOptional(path.join(sources.skia,relative),path.join(notices,'skia',relative));
+    addLicense(path.dirname(licenses),'ndk-graphics',path.join(sources.skia,relative));
   }
 
-  const result={library,notices,bindings,exports};
+  const result={library,licenses,bindings,exports};
   fs.writeFileSync(path.join(output,'build.json'),JSON.stringify(result,null,2)+'\n');return result;
 }

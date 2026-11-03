@@ -1,4 +1,4 @@
-import {copyOptional} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {exportSources} from '../binder-rpc/build.mjs';
@@ -30,8 +30,8 @@ export function prepareStatsService({source,output}) {
   }
   sources('service-statsd');
   const selected=[...files].sort();
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
+  const licenses=path.join(output,'licenses');
   const provenance={project:'platform/packages/modules/StatsD',url:'https://android.googlesource.com/platform/packages/modules/StatsD',revision:pin,module:'service-statsd',license:'Apache-2.0',files:selected.map(file=>path.relative(exported,file))};
-  copyOptional(path.join(nativeRoot,'notices/aosp-framework/LICENSE'),path.join(notices,'LICENSE'));
-  return {files:selected,notices};
+  addLicense(path.dirname(licenses),'system-stats',path.join(nativeRoot,'license-inputs/aosp-framework/LICENSE'));
+  return {files:selected,licenses};
 }

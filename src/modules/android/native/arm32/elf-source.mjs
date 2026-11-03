@@ -1,4 +1,5 @@
-import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
+import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {exportSources} from '../binder-rpc/build.mjs';
@@ -53,9 +54,9 @@ ${sysv[0]}
   const timezone=fs.readFileSync(path.join(source,'libc/tzcode/localtime.c'),'utf8').match(/^char\s*\*\s*tzname\s*\[\s*\d+\s*\](?=\s*=)/m);
   if(!timezone)throw Error('Original Bionic timezone name declaration changed');
   writeChanged(stdio,'#include <stdio.h>\n#include <bits/struct_file.h>\n#include <time.h>\nextern '+streams[0]+';\nextern '+timezone[0]+';\n');
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'bionic.txt'));
-  copyOptional(path.join(source,'libstdc++/NOTICE'),path.join(notices,'bionic-libstdc++.txt'));
+  const licenses=path.join(output,'licenses');
+  addLicense(path.dirname(licenses),'elf-source',path.join(source,'libc/NOTICE'));
+  addLicense(path.dirname(licenses),'elf-source',path.join(source,'libstdc++/NOTICE'));
   // Allocation operators must retain ARM32 size_t and C++ symbol encoding.
   // The original unit calls the shared malloc/free owners; only its terminal
   // diagnostic is routed to the already-supplied Android logging endpoint.

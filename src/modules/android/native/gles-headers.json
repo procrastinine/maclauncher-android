@@ -76,9 +76,6 @@
       "sha256": "890c04e4cc75739666aa8ff989a0a37b7f11d9e0ec60bc362b40f91835d11b5c"
     }
   ],
-  "notices": {
-    "sgiLicenseUrl": "https://raw.githubusercontent.com/spdx/license-list-data/main/text/SGI-B-2.0.txt"
-  },
   "registry": {
     "path": "scripts/gl.xml",
     "size": 2712864,

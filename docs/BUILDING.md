@@ -55,7 +55,7 @@ adapters remain in their separate source group.
 The compiler workspace reuses unchanged native objects and supplier components.
 Framework assembly, application DEX conversion, native compilation and ART boot
 image generation retain their own input identities. Completed supplier outputs
-are packaged by MacLauncher Builds with their manifests and license notices;
+are packaged by MacLauncher Builds with their manifests and flat `licenses/` directories;
 build directories and source archives remain separate from installed runtime
 payloads.
 
@@ -63,7 +63,7 @@ payloads.
 
 MacLauncher Android supplies the pinned producer source used by
 [MacLauncher Builds](https://github.com/procrastinine/maclauncher-builds).
-MacLauncher Builds publishes selected runtime binaries and required notices in
+MacLauncher Builds publishes selected runtime binaries and licence texts in
 binary-only release archives. Its tagged source tree contains the build recipes,
 owned patches and pinned Android source. The original Android system image is
 acquired separately. Ordinary runtime installation and play do not require this

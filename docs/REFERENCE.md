@@ -38,7 +38,7 @@ are read-only inputs; adaptations are applied to owned build projections.
 
 The root LICENSE covers MacLauncher-owned code. Upstream source fragments and
 build inputs retain their original licenses, recorded in source headers,
-upstreams.json and emitted notices. The repository does not relicense upstream
+upstreams.json and packaged licence texts. The repository does not relicense upstream
 components. Source Gitlinks and metadata can be checked without initializing
 checkouts; initialized checkouts are also checked for exact HEAD identity and
 tracked changes. The source check performs no downloads.
@@ -67,7 +67,7 @@ provider APK is extracted unchanged from
 `system/priv-app/SettingsProvider/SettingsProvider.apk` in the Android system image
 identified by the latter catalog. The build consumes the separately supplied
 APK; a Google-enabled system image is not a build or runtime prerequisite. The
-producer stages this Apache-licensed component and its notice under `platform/`;
+producer stages this Apache-licensed component under `platform/` and its licence under `licenses/`;
 no complete image or Google package is included in the platform component
 collection. The APK is a binary build input and is not committed to this source
 repository.
@@ -121,17 +121,18 @@ offset; native filesystem errors remain errors.
 The ART package producer is `src/modules/android/art/package.mjs`. Its inputs
 include the completed supplier, common runtime, verified original image identity,
 extractor and corresponding source archive. `commonDeclaration` supplies the
-common runtime notice records and must match that producer manifest SHA-256.
+common runtime identity and must match that producer manifest SHA-256.
 The caller supplies shared package inventory, Mach-O inspection and verification
 services; the producer does not read a launcher catalog or selected version.
-Optional `hwuiLibrary` and `hwuiNotices` supplier inputs deliver a complete
-Android graphics library and its source notices beside the original image.
+Optional `hwuiLibrary` and `hwuiLicenses` supplier inputs deliver a complete
+Android graphics library and its licence texts beside the original image.
 `assembleArtSupplier` accepts `includeImage: false` with a verified
 `originalImage` identity for packaging an adapter from existing components.
 The image remains separately acquired; it is neither copied nor read during
-that assembly. Unchanged supplier notice records remain with their components.
-Component notice directories become supplier-relative records; packaging keeps
-those records alongside the matching common runtime notices.
+that assembly. Licence texts from the common runtime and each supplier merge into one
+flat `licenses/` directory. `licenses/components.txt` maps each component to its text;
+texts whose bytes differ only in whitespace share one file. These are ordinary
+payload files covered by the package inventory and archive digest.
 
 `prepareAimSource` accepts an explicit `glesHeaders` checkout alongside its AIM
 and Klepton inputs. Header bytes and the original Git revision are verified
@@ -176,18 +177,18 @@ archive unchanged. Separately supplied HWUI and native bridge components require
 their corresponding original inputs or a complete explicit archive.
 
 The ordinary producer reuses its `hwui.sources`, Cargo cache and prepared or
-generated component notices. Bridge sources reuse its declared Bionic/ART
+generated component source records. Bridge sources reuse its declared Bionic/ART
 checkouts and original import-header input. Top-level source options can supply
 original inputs for retained components.
 
 `hwuiSources` contains the public HWUI `sources` mapping, the active Cargo
-`registry` records from its component notices (or the notice `SOURCES.json` path),
+`registry` records from its `sourceRecords/SOURCES.json` output,
 and an absolute `registryCache` directory. The exporter verifies the pinned
 source catalog and Cargo.lock checksums, then includes consumed original source
 projections, notices and registry packages. `nativeBridgeSources.ndkHeaders`
-selects the pinned original ARM32 NDK headers. `nativeBridgeSources.arm32Notices`
-selects the ARM32 component notice directory that records its consumed Bionic
-units; the ordinary producer reuses `nativeBridge.arm32.notices`. `sourceCheckouts` supplies
+selects the pinned original ARM32 NDK headers. `nativeBridgeSources.arm32Sources`
+selects the ARM32 source-record directory that records its consumed Bionic
+units; the ordinary producer reuses `nativeBridge.arm32.sources`. `sourceCheckouts` supplies
 `libffi`, `dynarmic`, `aosp-bionic` and `aosp-art`. The source archive retains the
 selected original headers, their case-sensitive variants, NDK notices and
 compiler-runtime artifact identity. Android system images, complete SDK/NDK
@@ -200,7 +201,8 @@ prepared AIM source tree and statically links its ARM64 execution and native
 continuation components into `host/linux-run`. A supplied `buildPrecise` result
 reuses existing CPU archives; otherwise the producer builds the pinned Unicorn
 source. `buildArt` accepts this component through its optional `runner` input
-and includes the returned upstream notices in `licenses/runner`.
+and merges the returned licence texts into `licenses/` through the shared
+`addLicense` operation. Missing or unreadable licence sources emit a warning.
 
 ## Native runtime behavior
 

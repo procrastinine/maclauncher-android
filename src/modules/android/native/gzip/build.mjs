@@ -1,4 +1,4 @@
-import {copyOptional} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -46,7 +46,7 @@ export function prepareGzip({zlibSource,klepton,build}) {
     fs.writeFileSync(lookup,'#include <stddef.h>\n#include <string.h>\n'+publicApi.map(name=>`extern void binding_${name}(void) __asm__("_${overrides[name]||'klj_z_'+name}");`).join('\n')+
       '\nvoid *klj_gzip_lookup(const char *name){\n'+publicApi.map(name=>` if(!strcmp(name,"${name}"))return (void *)binding_${name};`).join('\n')+'\n return NULL;\n}\n');
     for(const input of [lookup,path.join(root,'bridge.c')]){const object=path.join(output,path.basename(input)+'.o');run('clang',[...flags,'-I'+path.join(klepton,'runtime/libc'),'-c',input,'-o',object]);objects.push(object);}
-    const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(source,'LICENSE'),path.join(notices,'LICENSE'));
+    const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'gzip',path.join(source,'LICENSE'));
     fs.writeFileSync(path.join(output,'exports.json'),JSON.stringify(publicApi.map(name=>({name,type:declarations.get(name),owner:overrides[name]?'argument-abi':'original-gzip'})),null,2)+'\n');
-    return {objects,notices,output,exports:publicApi};
+    return {objects,licenses,output,exports:publicApi};
 }

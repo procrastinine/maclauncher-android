@@ -7,70 +7,20 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {assembleArtSupplier,artSupplierComponents} from '../src/modules/android/art/build.mjs';
-import {buildArtRunner,stageArtRunnerNotices} from '../src/modules/android/art/build-runner.mjs';
+import {buildArtRunner} from '../src/modules/android/art/build-runner.mjs';
 import {nativeBridgeTrees} from '../src/modules/android/art/source-archive.mjs';
 import {arm32BuildProducts} from '../src/modules/android/native/arm32/components.mjs';
 
-test('native-bridge source export uses the ARM32 source output without a notices tree',t=>{
+test('native-bridge source export uses the ARM32 source output independently of licence delivery',t=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-bridge-source-records-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const products=arm32BuildProducts(root),revision='a'.repeat(40);fs.mkdirSync(products.sources);
  const write=(name,value)=>fs.writeFileSync(path.join(products.sources,name),JSON.stringify(value));
  write('bionic.json',{revision,files:['libc/source.c']});write('bionic-portable-families.json',{revision,jump:['libc/jump.c']});
- assert.equal(fs.existsSync(products.notices),false);
+ assert.equal(fs.existsSync(products.licenses),false);
  assert(nativeBridgeTrees({arm32Sources:products.sources},revision).includes('libc/source.c'));
  assert(nativeBridgeTrees({arm32Sources:products.sources},revision).includes('libc/jump.c'));
  write('bionic.json',{revision:'b'.repeat(40),files:[]});assert.throws(()=>nativeBridgeTrees({arm32Sources:products.sources},revision),/source record revision differs/);
  fs.unlinkSync(path.join(products.sources,'bionic.json'));assert.throws(()=>nativeBridgeTrees({arm32Sources:products.sources},revision),/ENOENT/);
-});
-
-test('ART supplier preserves runner upstream notices beside the delivered runner',t=>{
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-runner-notices-'));
- t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
- const original=path.join(root,'input');fs.mkdirSync(original);
- const notices=path.join(original,'notices');fs.mkdirSync(notices);
- const license='Original upstream license text\n';fs.writeFileSync(path.join(notices,'COPYING'),license);
- const image=path.join(original,'image');fs.mkdirSync(image);fs.writeFileSync(path.join(image,'identity'),'image');
- const component=path.join(original,'component');fs.writeFileSync(component,'component');
- const inputs=Object.fromEntries(Object.keys(artSupplierComponents()).map(key=>[key,['image','art','halRoot','halManifests'].includes(key)?image:component]));
- inputs.runnerNotices=notices;
- const art=path.join(original,'art');fs.mkdirSync(path.join(art,'notices'),{recursive:true});inputs.art=art;
- fs.writeFileSync(path.join(art,'notices','component.txt'),license);
- fs.symlinkSync('component.txt',path.join(art,'notices','candidate-link'));
- const sourceRecords=path.join(original,'source-records');fs.mkdirSync(sourceRecords);inputs.sourceRecords=sourceRecords;
- for(const name of ['source.json','Cargo.lock','artifact.pom','Android.bp'])fs.writeFileSync(path.join(sourceRecords,name),'Build provenance');
- for(const [name,bytes]of [['lockHolder','fresh lock holder'],['ptyHolder','fresh pty holder']]){inputs[name]=path.join(original,name);fs.writeFileSync(inputs[name],bytes);}
- const output=path.join(root,'runtime');
- const manifest=assembleArtSupplier({output,inputs,bootClasspath:[],sourceVersion:'0.1.0-test'});
- assert.equal(manifest.components.runnerNotices,'licenses/runner');
- assert.equal(fs.readFileSync(path.join(output,'licenses/runner/COPYING'),'utf8'),license);
- assert.equal(fs.readFileSync(path.join(output,'host/linux-run'),'utf8'),'component');
- assert.equal(manifest.components.lockHolder,'host/aim-lock-holder');assert.equal(manifest.components.ptyHolder,'host/aim-pty-holder');
- assert.equal(fs.readFileSync(path.join(output,manifest.components.lockHolder),'utf8'),'fresh lock holder');assert.equal(fs.readFileSync(path.join(output,manifest.components.ptyHolder),'utf8'),'fresh pty holder');
- assert(manifest.notices.some(row=>row.path==='licenses/runner/COPYING'));
- assert(manifest.notices.some(row=>row.path==='art/notices/component.txt'),'ART notices are independent of the component key');
- assert(fs.lstatSync(path.join(output,'art/notices/candidate-link')).isSymbolicLink(),'Candidates reach Builds without an Android file-type judge');
- for(const name of ['source.json','Cargo.lock','artifact.pom','Android.bp']){assert.equal(manifest.notices.some(row=>row.path==='licenses/runner/'+name),false);assert.equal(fs.existsSync(path.join(output,'licenses/runner',name)),false);}
- assert.equal(fs.readFileSync(path.join(notices,'COPYING'),'utf8'),license);
- const extra='licenses/extra/NOTICE';fs.mkdirSync(path.join(output,'licenses/extra'));fs.writeFileSync(path.join(output,extra),'Retained original notice\n');manifest.notices.push({name:'Original component',license:'See included license',path:extra});
- const compact=path.join(root,'compact'),{image:unusedImage,...retainedInputs}=inputs;const compactManifest=assembleArtSupplier({output:compact,inputs:retainedInputs,bootClasspath:[],sourceVersion:'0.1.0-compact',baseSupplier:{root:output,manifest},includeImage:false,originalImage:{archiveSha256:manifest.android.imageSha256,content:manifest.platformSupplier.image}});
- assert.equal(fs.existsSync(path.join(compact,'image')),false);assert.deepEqual(compactManifest.platformSupplier.image,manifest.platformSupplier.image);assert.equal(fs.readFileSync(path.join(compact,extra),'utf8'),'Retained original notice\n');assert(compactManifest.notices.some(row=>row.path===extra));
- assert.throws(()=>assembleArtSupplier({output:path.join(root,'rejected'),inputs:retainedInputs,bootClasspath:[],sourceVersion:'0.1.0-rejected',includeImage:false}),/verified original image identity/);
-});
-
-test('ART runner notices preserve supplier exceptions and supplied CPU notices',t=>{
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-runner-license-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
- const aim=path.join(root,'aim'),cpuNotices=path.join(root,'cpu'),output=path.join(root,'published');
- const files=['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md','licensing/OPENJDK.md','licensing/rust-dependencies.txt','licensing/upstream-sources.json','licensing/third-party/art-openjdkjvm-LICENSE'];
- for(const name of files){const file=path.join(aim,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,'Original '+name+'\n');}
- fs.writeFileSync(path.join(aim,'licensing/upstream-sources.json'),JSON.stringify({files:[{file:'licensing/third-party/art-openjdkjvm-LICENSE',sha256:createHash('sha256').update(fs.readFileSync(path.join(aim,'licensing/third-party/art-openjdkjvm-LICENSE'))).digest('hex')}]}));
- fs.mkdirSync(cpuNotices);fs.writeFileSync(path.join(cpuNotices,'unicorn-COPYING'),'Original CPU license\n');
- const original=files.map(name=>fs.readFileSync(path.join(aim,name))),cpu=fs.readFileSync(path.join(cpuNotices,'unicorn-COPYING'));
- assert.equal(stageArtRunnerNotices({aim,cpuNotices,output}),output);
- for(const [index,name]of files.entries()){if(name==='licensing/upstream-sources.json')assert.equal(fs.existsSync(path.join(output,'aim',name)),false);else assert.deepEqual(fs.readFileSync(path.join(output,'aim',name)),original[index]);assert.deepEqual(fs.readFileSync(path.join(aim,name)),original[index]);}
- assert.deepEqual(fs.readFileSync(path.join(output,'unicorn-COPYING')),cpu);assert.deepEqual(fs.readFileSync(path.join(cpuNotices,'unicorn-COPYING')),cpu);
- fs.writeFileSync(path.join(output,'obsolete-notice'),'retired');stageArtRunnerNotices({aim,cpuNotices,output});assert.equal(fs.readFileSync(path.join(output,'unicorn-COPYING'),'utf8'),cpu.toString());
- fs.writeFileSync(path.join(aim,'licensing/third-party/art-openjdkjvm-LICENSE'),'changed license');stageArtRunnerNotices({aim,cpuNotices,output});assert.equal(fs.readFileSync(path.join(output,'aim/licensing/third-party/art-openjdkjvm-LICENSE'),'utf8'),'changed license');
- fs.rmSync(path.join(aim,'licensing/OPENJDK.md'));assert.doesNotThrow(()=>stageArtRunnerNotices({aim,cpuNotices,output}));
 });
 
 test('prepared ART runner builds offline with its native continuation and static CPU',{timeout:600000},t=>{
@@ -85,7 +35,7 @@ test('prepared ART runner builds offline with its native continuation and static
   assert.match(load,/cmd LC_BUILD_VERSION\s+cmdsize \d+\s+platform \d+\s+minos 13\.0\b/);
  }
  execFileSync(result.linuxRun,['--help'],{timeout:10000,stdio:'pipe'});
- assert(fs.readdirSync(result.runnerNotices).some(name=>name==='unicorn-COPYING'));
+ assert(fs.readFileSync(path.join(result.runnerLicenses,'components.txt'),'utf8').includes('unicorn'));
 });
 
 
@@ -116,7 +66,7 @@ test('ART source export preserves locked AOSP and notices while omitting unused 
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-art-archive-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const write=(name,text)=>{const file=path.join(root,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,text);return file;};
  const original=path.resolve(import.meta.dirname,'..');
- for(const name of ['src/modules/android/art/source-archive.mjs','src/modules/android/art/source-hwui.mjs','src/modules/android/native/hwui/inputs.mjs','src/modules/android/native/hwui/sources.json','src/modules/android/native/hwui/Cargo.lock','src/modules/android/native/build-sources.mjs','src/modules/android/native/upstream/source-export.mjs','src/modules/android/native/upstream/source-files.mjs','src/modules/shared/runtime/runtime-content.js'])write(name,fs.readFileSync(path.join(original,name)));
+ for(const name of ['src/modules/android/art/source-archive.mjs','src/modules/android/art/source-hwui.mjs','src/modules/android/native/hwui/inputs.mjs','src/modules/android/native/hwui/sources.json','src/modules/android/native/hwui/Cargo.lock','src/modules/android/native/build-sources.mjs','src/modules/android/native/upstream/source-export.mjs','src/modules/android/native/upstream/source-files.mjs','src/modules/android/native/upstream/licenses.mjs','src/modules/shared/runtime/runtime-content.js'])write(name,fs.readFileSync(path.join(original,name)));
  for(const name of ['README.md','LICENSE','package.json','.gitmodules','tools/build.mjs','tools/build-art.mjs','tools/check-sources.mjs','src/modules/android/profile.js','src/modules/android/apk.js','src/modules/android/binary-manifest.js','src/modules/nitroplus/runtime/portable-media.json'])write(name,'original production input\n');
  write('package.json','{}\n');
  write('src/modules/android/native/original.c','owned implementation\n');write('src/modules/android/native/original_test.c','unused test\n');write('integration-notes.json','unrelated local build notes\n');
@@ -154,7 +104,7 @@ test('ART source export preserves locked AOSP and notices while omitting unused 
 test('HWUI source export narrows legacy trees and authenticates selected registry archives',async t=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-hwui-export-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const write=(name,text)=>{const file=path.join(root,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,text);return file;};
- const original=path.resolve(import.meta.dirname,'..');for(const name of ['src/modules/android/art/source-hwui.mjs','src/modules/android/native/hwui/inputs.mjs','src/modules/android/native/upstream/source-export.mjs','src/modules/android/native/upstream/source-files.mjs','src/modules/shared/runtime/runtime-content.js'])write(name,fs.readFileSync(path.join(original,name)));
+ const original=path.resolve(import.meta.dirname,'..');for(const name of ['src/modules/android/art/source-hwui.mjs','src/modules/android/native/hwui/inputs.mjs','src/modules/android/native/upstream/source-export.mjs','src/modules/android/native/upstream/source-files.mjs','src/modules/android/native/upstream/licenses.mjs','src/modules/shared/runtime/runtime-content.js'])write(name,fs.readFileSync(path.join(original,name)));
  const checkout=path.join(root,'original');write('original/core/jni/include/required.h','original declaration\n');write('original/unrelated/unused.txt','unrelated original source\n');write('original/NOTICE','required original notice\n');
  execFileSync('git',['-C',checkout,'init','-q']);execFileSync('git',['-C',checkout,'add','.']);execFileSync('git',['-C',checkout,'-c','user.name=Source test','-c','user.email=test@example.invalid','commit','-qm','Pinned source']);
  const git=args=>execFileSync('git',['-C',checkout,...args],{encoding:'utf8'}).trim(),revision=git(['rev-parse','HEAD']);

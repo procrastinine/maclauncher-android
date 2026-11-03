@@ -1,4 +1,4 @@
-import {copyOptional} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -117,6 +117,6 @@ export function prepareWideStdio({bionicSource,compilerRtSource,klepton,build,sh
   }
   if(table){const text=fs.readFileSync(table,'utf8');fs.writeFileSync(table,text.replace(/^KL_FWD\((\w+)\).*\n/gm,(line,name)=>exports.includes(name)?'':line));}
   if(libcSource){const text=fs.readFileSync(libcSource,'utf8');fs.writeFileSync(libcSource,removeFunction(text,'int    klb_swprintf('));}
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(libc,'NOTICE'),path.join(notices,'Bionic-NOTICE'));copyOptional(path.join(rtSource,'LICENSE.TXT'),path.join(notices,'CompilerRT-LICENSE'));
-  return {objects,notices,output,exports};
+  const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'wide-stdio',path.join(libc,'NOTICE'));addLicense(path.dirname(licenses),'wide-stdio',path.join(rtSource,'LICENSE.TXT'));
+  return {objects,licenses,output,exports};
 }

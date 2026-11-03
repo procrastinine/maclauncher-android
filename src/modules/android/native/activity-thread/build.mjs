@@ -1,4 +1,5 @@
-import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
+import {writeChanged} from '../upstream/source-files.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,7 +31,7 @@ export function prepareActivityThread({frameworkSource,bionicSource,build}){
   const unit=path.join(directory,'activity-thread.cpp');
   fs.mkdirSync(directory,{recursive:true});
   writeChanged(unit,includeDependencies(original.replace(includes,''),`#define M_PURGE ${purge}\n#define M_INIT_ZYGOTE_CHILD_PROFILING ${profiling}\n#include ${JSON.stringify(path.join(root,'allocator.h'))}`)+'\n'+exports+'\n');
-  const notices=path.join(directory,'notices');fs.mkdirSync(notices,{recursive:true});
-  copyOptional(path.join(source,'bionic/libc/NOTICE'),path.join(notices,'NOTICE'));
-  return {unit,notices};
+  const licenses=path.join(directory,'licenses');
+  addLicense(path.dirname(licenses),'activity-thread',path.join(source,'bionic/libc/NOTICE'));
+  return {unit,licenses};
 }

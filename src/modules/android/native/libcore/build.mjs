@@ -1,4 +1,5 @@
-import {copyOptional,prepareSourceTree,copyChanged} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
+import {prepareSourceTree,copyChanged} from '../upstream/source-files.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -44,7 +45,7 @@ export function buildLibcore({libcoreSource,artSource,binder,output,ninja=proces
   execFileSync('install_name_tool',['-change','@rpath/libandroid-binder-rpc.dylib','@loader_path/libandroid-binder-rpc.dylib',publication],{stdio:'inherit'});
   execFileSync('codesign',['--force','--sign','-',publication],{stdio:'inherit'});
   copyChanged(publication,library);
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  for(const project of ['libcore','art'])copyOptional(path.join(source,project,'NOTICE'),path.join(notices,project+'.txt'));
+  const licenses=path.join(output,'licenses');
+  for(const project of ['libcore','art'])addLicense(path.dirname(licenses),'libcore',path.join(source,project,'NOTICE'));
   return {library,source};
 }

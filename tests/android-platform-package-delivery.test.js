@@ -7,22 +7,22 @@ const digest=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 function fixture(t){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-platform-delivery-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const native=path.join(root,'native'),directory=path.join(root,'input'),output=path.join(root,'runtime');
- fs.mkdirSync(path.join(native,'notices/platform-packages'),{recursive:true});fs.mkdirSync(directory);
- const notice=Buffer.from('Original component notice\n');fs.writeFileSync(path.join(native,'notices/platform-packages/NOTICE'),notice);
+ fs.mkdirSync(path.join(native,'license-inputs/platform-packages'),{recursive:true});fs.mkdirSync(directory);
+ const notice=Buffer.from('Original component notice\n');fs.writeFileSync(path.join(native,'license-inputs/platform-packages/NOTICE'),notice);
  const apk=path.join(directory,'Provider.apk');writeZipArchive(apk,[{name:'AndroidManifest.xml',data:fs.readFileSync(require('./helpers/manifest-fixtures').file(t,'android-framework-services/manifests/providers'))},{name:'classes.dex',data:Buffer.from('unchanged original code')}]);
- const bytes=fs.readFileSync(apk),definition={schemaVersion:1,androidApi:36,files:[{path:'Provider.apk',destination:'packages/Provider/Provider.apk',packageName:'owned.providers',size:bytes.length,sha256:digest(bytes)}],notices:[{path:'NOTICE',size:notice.length,sha256:digest(notice)}]};
+ const bytes=fs.readFileSync(apk),definition={schemaVersion:1,androidApi:36,license:'Apache-2.0',files:[{path:'Provider.apk',destination:'packages/Provider/Provider.apk',packageName:'owned.providers',size:bytes.length,sha256:digest(bytes)}]};
  const write=()=>fs.writeFileSync(path.join(native,'platform-packages-binary.json'),JSON.stringify(definition));write();
  return {root,native,directory,output,apk,bytes,definition,write};
 }
-test('Component delivery preserves original APK bytes, manifest declarations and notices without an image',async t=>{
+test('Component delivery preserves original APK bytes, manifest declarations and licence texts without an image',async t=>{
  const f=fixture(t),{platformPackageInputs,stagePlatformPackages}=await import('../src/modules/android/native/platform-package-delivery.mjs');
  const input=platformPackageInputs(f.native,f.directory),result=stagePlatformPackages({input,output:f.output});
  assert.deepEqual(input.catalog.packages,[{source:'packages/Provider/Provider.apk',packageName:'owned.providers',sharedUserId:null,authorities:['same','same','first','same','second','same'],resolvedAuthorities:false,sha256:digest(f.bytes),size:f.bytes.length}]);
  assert.deepEqual(fs.readFileSync(path.join(result.platform,input.catalog.packages[0].source)),f.bytes);
  assert.deepEqual(JSON.parse(fs.readFileSync(result.catalog)),input.catalog);
- assert.equal(fs.existsSync(path.join(result.notices,'provenance.json')),false);
- assert.equal(fs.readFileSync(path.join(result.notices,'NOTICE'),'utf8'),'Original component notice\n');
- assert.deepEqual(fs.readdirSync(f.output).sort(),['notices','platform']);
+ assert.equal(fs.existsSync(path.join(result.licenses,'provenance.json')),false);
+ assert.equal(fs.readFileSync(path.join(result.licenses,'Apache-2.0.txt'),'utf8'),'Original component notice\n');
+ assert.deepEqual(fs.readdirSync(f.output).sort(),['licenses','platform']);
  assert.deepEqual(fs.readdirSync(path.join(f.output,'platform/packages')),['Provider']);
 });
 test('Component inputs reject a wrong manifest identity, changed bytes and escaping file references',async t=>{
@@ -32,15 +32,9 @@ test('Component inputs reject a wrong manifest identity, changed bytes and escap
  f.definition.files[0].destination='packages/Provider/Provider.apk';f.write();fs.appendFileSync(f.apk,'changed');assert.throws(()=>platformPackageInputs(f.native,f.directory),/does not match its recorded release/);
  fs.writeFileSync(f.apk,f.bytes);const outside=path.join(f.root,'outside.apk');fs.renameSync(f.apk,outside);fs.symlinkSync(outside,f.apk);assert.throws(()=>platformPackageInputs(f.native,f.directory),/leaves its directory/);
 });
-test('Component notice text is optional and never compared with binary input pins',async t=>{
- const f=fixture(t),{platformPackageInputs,stagePlatformPackages}=await import('../src/modules/android/native/platform-package-delivery.mjs');t.mock.method(console,'warn',()=>{});
- const notice=path.join(f.native,'notices/platform-packages/NOTICE');fs.writeFileSync(notice,'Changed text');
- const input=platformPackageInputs(f.native,f.directory);assert.doesNotThrow(()=>stagePlatformPackages({input,output:f.output}));assert.equal(fs.readFileSync(path.join(f.output,'notices/platform-packages/NOTICE'),'utf8'),'Changed text');
- fs.unlinkSync(notice);const next=path.join(f.root,'without-notices');assert.doesNotThrow(()=>stagePlatformPackages({input:platformPackageInputs(f.native,f.directory),output:next}));assert.deepEqual(fs.readFileSync(path.join(next,'platform/packages/Provider/Provider.apk')),f.bytes);
-});
 test('The ordinary producer snapshot can inspect and stage APKs using only its fixed helper closure',async t=>{
  const f=fixture(t),native=path.resolve(__dirname,'../src/modules/android/native');
- for(const name of ['platform-package-delivery.mjs','platform-packages.mjs','binary-inputs.mjs','upstream/source-files.mjs']){const target=path.join(f.native,name);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(path.join(native,name),target);}
+ for(const name of ['platform-package-delivery.mjs','platform-packages.mjs','binary-inputs.mjs','upstream/source-files.mjs','upstream/licenses.mjs']){const target=path.join(f.native,name);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(path.join(native,name),target);}
  fs.writeFileSync(path.join(f.root,'profile.js'),'module.exports={};\n');
  const source=path.join(f.root,'snapshot');
  const {snapshotSources,snapshotBuildCompanions,sourceInventory}=await import('../src/modules/android/native/build-sources.mjs');

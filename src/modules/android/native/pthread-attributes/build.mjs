@@ -1,4 +1,4 @@
-import {copyOptional} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -78,6 +78,6 @@ export function preparePthreadAttributes({bionicSource,build,pthreadSource,shimS
  shim=replace(shim,marker,names.map(name=>'    E("'+name+'", klb_'+name+'),').join('\n')+'\n'+marker);
  shim=names.map(name=>'extern int klb_'+name+'();').join('\n')+'\n'+shim;
  fs.writeFileSync(shimSource,shim);
- const notices=path.join(directory,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
- return {object,notices,functions:names};
+ const licenses=path.join(directory,'licenses');addLicense(path.dirname(licenses),'pthread-attributes',path.join(source,'libc/NOTICE'));
+ return {object,licenses,functions:names};
 }

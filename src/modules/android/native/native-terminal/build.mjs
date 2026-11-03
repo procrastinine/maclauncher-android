@@ -1,4 +1,5 @@
-import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
+import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -71,8 +72,8 @@ export function prepareNativeTerminal({bionicSource,build,ninja,python,libc}){
     text=includeDependencies(text.replace(entry,entry+'\n    int terminalResult;\n    if(klj_terminal_ioctl_dispatch(fd,req,arg,&terminalResult))return terminalResult;'), '#include <stdint.h>\nextern int klj_terminal_ioctl_dispatch(int,unsigned long,uintptr_t,int *);');
     writeChanged(libc,text);
   }
-  const notices=path.join(output,'notices');
-  copyOptional(path.join(original,'NOTICE'),path.join(notices,'NOTICE'));
+  const licenses=path.join(output,'licenses');
+  addLicense(path.dirname(licenses),'native-terminal',path.join(original,'NOTICE'));
   writeChanged(path.join(output,'exports.json'),JSON.stringify({exports:names},null,2)+'\n');
-  return {objects,names,notices,output};
+  return {objects,names,licenses,output};
 }

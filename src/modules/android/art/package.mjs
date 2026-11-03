@@ -1,4 +1,4 @@
-import {copyOptional,isNoticePath} from '../native/upstream/source-files.mjs';
+import {includeLicenses} from '../native/upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -30,7 +30,6 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
     if(commonDeclaration.manifestRelative!=='runtime.json'||commonDeclaration.manifestSha256!==sha(path.join(commonRoot,'runtime.json')))
       throw Error('Android ART common runtime differs from its producer manifest.');
   }
-  const notices=[].concat(commonDeclaration?.notices||common.notices||[]);
   if(supplier.schemaVersion!==1||supplier.execution!=='art'||supplier.components?.image!=='image'||supplier.imageAcquisition?.delivery!=='explicit-download'||
     common.profile?.javaMajor!==21)throw Error('Android ART producer profiles are incompatible.');
   // The consumer extracts onto a case-sensitive volume. A development tree
@@ -46,7 +45,6 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
   const stage=fs.mkdtempSync(path.join(path.dirname(output),'.android-art-'));
   const activeDirectories=new Set();
   const copy=(from,to,owner)=>{
-    if(isNoticePath(path.relative(owner,from))){copyOptional(from,to);return;}
     const actual=fs.realpathSync(from),relative=path.relative(fs.realpathSync(owner),actual);
     if(relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw Error('Android ART producer member escapes its source.');
     const stat=fs.statSync(actual);
@@ -55,7 +53,10 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
       activeDirectories.add(actual);
       try{
         fs.mkdirSync(to,{recursive:true,mode:0o755});
-        for(const name of fs.readdirSync(actual).sort())copy(path.join(actual,name),path.join(to,name),owner);
+        for(const name of fs.readdirSync(actual).sort()){
+          if(name==='licenses'){includeLicenses(stage,path.join(actual,name));continue;}
+          copy(path.join(actual,name),path.join(to,name),owner);
+        }
       }finally{activeDirectories.delete(actual);}
     }else if(stat.isFile()){
       fs.mkdirSync(path.dirname(to),{recursive:true});
@@ -66,6 +67,7 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
     // Original in-tree aliases are materialized as regular files for the same
     // immutable package verifier used by other Android runtime downloads.
     for(const name of fs.readdirSync(supplierRoot).sort())if(name!==supplier.components.image&&name!=='runtime.json'){
+      if(name==='licenses'){includeLicenses(stage,path.join(supplierRoot,name));continue;}
       // A producer may supply its Cargo output as halRoot. Only the runtime
       // services and shared libraries belong in the downloaded adapter.
       if(name===supplier.components.halRoot){
@@ -76,13 +78,12 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
     copy(extractor,path.join(stage,'art/host/android-image-extract'),path.dirname(extractor));
     copy(sourceArchive,path.join(stage,'source.tar.gz'),path.dirname(sourceArchive));
     copy(path.join(commonRoot,'native/SDL3.framework'),path.join(stage,'native/SDL3.framework'),commonRoot);
-    copy(path.join(commonRoot,'notices'),path.join(stage,'notices'),commonRoot);
+    includeLicenses(stage,path.join(commonRoot,'licenses'));
     supplier.components={...supplier.components,imageExtractor:'host/android-image-extract'};
-    const {notices:supplierNotices,...supplierMetadata}=supplier;
-    metadata.validatePublicMetadata(supplierMetadata);
+    metadata.validatePublicMetadata(supplier);
     fs.writeFileSync(path.join(stage,'art/runtime.json'),JSON.stringify(supplier,null,2)+'\n');
     const dependencies=[];let minimumMacOS='0.0';
-    const files=metadata.fileInventory(stage).filter(relative=>!isNoticePath(relative)).map(relative=>{
+    const files=metadata.fileInventory(stage).map(relative=>{
       const file=path.join(stage,relative),stat=fs.statSync(file),record={path:relative,size:stat.size,mode:stat.mode&0o777,sha256:sha(file)};
       let commands;
       try{commands=metadata.readMachOLoadCommands(file);}catch{}
@@ -106,11 +107,7 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
     fs.writeFileSync(path.join(stage,'runtime.json'),JSON.stringify(manifest,null,2)+'\n');
     const declaration={id:'android-art',version,arch:'arm64',launcherArchitectures:['arm64'],minimumMacOS,
       directoryRelative:'android-art/'+version+'/arm64',manifestRelative:'runtime.json',manifestSha256:sha(path.join(stage,'runtime.json')),
-      sourceRelative:'source.tar.gz',sourceSha256:sourceHash,files:[...files,{path:'runtime.json',size:fs.statSync(path.join(stage,'runtime.json')).size,mode:0o644,sha256:sha(path.join(stage,'runtime.json'))}],
-      notices:[]};
-    // Each notice belongs to its exact common or ART supplier. Supplier paths
-    // are relative to the separately packaged ART component tree.
-    declaration.notices=[...notices,...[].concat(supplier.notices||[]).map(notice=>({...notice,path:'art/'+notice?.path}))];
+      sourceRelative:'source.tar.gz',sourceSha256:sourceHash,files:[...files,{path:'runtime.json',size:fs.statSync(path.join(stage,'runtime.json')).size,mode:0o644,sha256:sha(path.join(stage,'runtime.json'))}]};
     metadata.validateDeclaration(declaration);metadata.verifyPayload(stage,declaration);
     fs.renameSync(stage,output);return {root:output,declaration};
   }finally{fs.rmSync(stage,{recursive:true,force:true});}

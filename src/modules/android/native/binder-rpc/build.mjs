@@ -1,4 +1,5 @@
-import {copyOptional,writeChanged,copyChanged,prepareSourceTree,synchronizeSourceTree} from '../upstream/source-files.mjs';
+import {addLicense,includeLicenses} from '../upstream/licenses.mjs';
+import {writeChanged,copyChanged,prepareSourceTree} from '../upstream/source-files.mjs';
 import {exportSources} from '../upstream/source-export.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
 import fs from 'node:fs';
@@ -139,11 +140,11 @@ function prepareBinderRpc({nativeSource,systemCore,output,jni,services,keymap}){
   const identityLibrary=jni?.processLibrary;
   if(jni&&!identityLibrary)throw Error('Android Binder JNI requires the shared process identity owner');
   if(identityLibrary){flags.push('-DKLJ_BINDER_DESCRIPTOR_OWNER=1');prepareBinderLogicalIdentity(sources);}
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  copyOptional(path.join(source,'native/NOTICE'),path.join(notices,'aosp-native.txt'));
-  copyOptional(path.join(source,'core/libutils/NOTICE'),path.join(notices,'aosp-libutils.txt'));
+  const licenses=path.join(output,'licenses');
+  addLicense(path.dirname(licenses),'binder-rpc',path.join(source,'native/NOTICE'));
+  addLicense(path.dirname(licenses),'binder-rpc',path.join(source,'core/libutils/NOTICE'));
   if(jni)for(const [directory,name]of[['framework','aosp-framework'],['nativehelper','aosp-libnativehelper'],['libbase','aosp-libbase'],['bionic/libc','aosp-bionic'],['core/libcutils','aosp-libcutils']])
-    copyOptional(path.join(source,directory,'NOTICE'),path.join(notices,name+'.txt'));
+    addLicense(path.dirname(licenses),'binder-rpc',path.join(source,directory,'NOTICE'));
   const compiled=new Set(sources.map(file=>path.basename(file).replace(/-darwin(?=\.cpp$)/,'')));
   const moduleNames=jni?['libbinder_common_defaults','libbinder_android_defaults','libbinder_kernel_defaults','libbinder']:['libbinder_common_defaults'];
   const definitions=parseBlueprint(fs.readFileSync(path.join(binder,'Android.bp'),'utf8'),{file:'libs/binder/Android.bp'}).modules;
@@ -183,8 +184,8 @@ export function buildBinderRpc({nativeSource,systemCore,output,jni,services,ashm
   if(jni?.processLibrary)run('install_name_tool',['-change','@rpath/libklepton-jvm.dylib','@loader_path/libklepton-jvm.dylib',publication]);
   run('codesign',['--force','--sign','-',publication]);
   copyChanged(publication,library);
-  synchronizeSourceTree(path.join(prepared,'notices'),path.join(output,'notices'));
-  if(jni)synchronizeSourceTree(path.join(output,'ashmem-codec/notices'),path.join(output,'notices/aim-ashmem'));
+  includeLicenses(output,path.join(prepared,'licenses'));
+  if(jni)includeLicenses(output,path.join(output,'ashmem-codec/licenses'));
   return {library,flags:plan.flags,sources:plan.sources,output:prepared};
 }
 

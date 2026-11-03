@@ -64,7 +64,7 @@ export function exportHwuiSources({sources,registry,registryCache}={},destinatio
    const input=sources[record.key],hasParts=record.checks.some(check=>check.path==='.')&&typeof input==='object'&&input?.parts?.length;
    const verified=verifyHwuiSource(record,hasParts?input.root:input);
    if(hasParts)verified.roots=verifyHwuiSource({...record,checks:[]},input).roots;
-   for(const name of new Set([...(record.licensePaths||[]),...(record.noticeChecks||[]).map(check=>check.path)])){const file=original(verified,name,true);if(file)copyOptional(file,path.join(destination,'sources',record.key,name));}
+   for(const name of new Set([...(record.licensePaths||[]),...(record.licenseFiles||[])])){const file=original(verified,name,true);if(file)copyOptional(file,path.join(destination,'sources',record.key,name));}
    const names=[...new Set(selection(record,verified))].map(relative).sort();
    const selected=names.filter(name=>!names.some(parent=>name!==parent&&name.startsWith(parent+'/')));
    let exported;

@@ -248,7 +248,7 @@ node src/modules/android/native/build.mjs \
   --ndk-headers /path/to/android/ndk/sysroot/usr/include \
   --sndfile-headers /path/to/libsndfile/include \
   --codecs /path/to/portable/codecs \
-  --codec-notices /path/to/portable/codec/licenses \
+  --codec-licenses /path/to/portable/codec/licenses \
   --angle /path/to/recorded/ANGLE/libraries \
   --gles-headers src/external/krkrsdl2/external/krkrz/external/angle \
   --framework /path/to/verified/framework/artifact/directory \
@@ -285,7 +285,7 @@ and executable permissions preserve the destination and its modification time.
 Published permissions exclude set-user-ID, set-group-ID and sticky bits.
 Staging applies the same debug-record removal and signing to verified ANGLE
 copies while preserving the supplied Android framework library byte for byte.
-Source notices preserve licenses and pinned identities. A build emits its complete
+Licence texts live in the flat `licenses/` directory, with component associations in `licenses/components.txt`. Source records retain pinned identities. A build emits its complete
 product inventory, source identity and runtime profile for atomic staging.
 
 The native ANGLE build retains upstream's embedded internal Metal shader library.

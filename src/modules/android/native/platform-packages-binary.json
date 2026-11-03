@@ -27,10 +27,5 @@
       "size": 561460,
       "sha256": "1117b80968f3f88f2ea36c4b6a555ecd8b8000042b3ea65acd9d7be9838c183a"
     }
-  ],
-  "notices": [
-    {
-      "path": "NOTICE"
-    }
   ]
 }

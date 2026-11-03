@@ -1,4 +1,5 @@
-import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
+import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -27,7 +28,7 @@ export function prepareNativeSort({bionicSource,build,ninja,python}){
   const lookup=path.join(output,'lookup.c');
   writeChanged(lookup,'#include <string.h>\n'+names.map(name=>'extern void klj_sort_'+name+'(void);').join('\n')+'\nvoid *klj_sort_lookup(const char *name){\n'+names.map(name=>'if(!strcmp(name,"'+name+'"))return (void *)&klj_sort_'+name+';').join('\n')+'\nreturn 0;\n}\n');
   objects.push(compile('bionic-sort-lookup.o',lookup));
-  const notices=path.join(output,'notices');
-  copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
-  return {output,objects,names,notices};
+  const licenses=path.join(output,'licenses');
+  addLicense(path.dirname(licenses),'native-sort',path.join(source,'libc/NOTICE'));
+  return {output,objects,names,licenses};
 }

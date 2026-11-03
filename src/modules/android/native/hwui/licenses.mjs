@@ -1,4 +1,5 @@
-import {copyOptional} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
+import {optionalFiles} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -15,14 +16,13 @@ export function runtimeCargoPackages(meta){
  for(const id of meta.workspace_members)visit(id);return meta.packages.filter(pkg=>active.has(pkg.id));
 }
 
-/** Accompany the compiled product with candidates; Builds sealing judges them. */
-export async function collectHwuiNotices(ctx,{output,cargo={},rust,ndk,sourceFiles}={}){
- output=path.resolve(output||path.join(ctx.module||ctx.work||process.cwd(),'notices'));
- const records=[],sources=Object.values(ctx.originalSources||{}).map(value=>value.record),registry=[];
- const copy=(file,relative)=>{copyOptional(file,path.join(output,relative));records.push({path:relative});};
- for(const record of sources)for(const check of record.noticeChecks||[]){
+/** Collect the selected sources and accompany the product with its licence texts. */
+export async function collectHwuiLicenses(ctx,{output,cargo={},rust,ndk,sourceFiles}={}){
+ output=path.resolve(output||ctx.module||ctx.work||process.cwd());
+ const sources=Object.values(ctx.originalSources||{}).map(value=>value.record),registry=[];
+ for(const record of sources)for(const file of record.licenseFiles||[]){
   const selected=sourceFiles?.[record.key]||ctx.sources?.[record.key]||ctx.originalSources[record.key]?.input;
-  if(typeof selected==='string')copy(path.join(selected,check.path),check.output);
+  if(typeof selected==='string')addLicense(output,record.key,path.join(selected,file));
  }
  let lockBytes=Buffer.alloc(0);
  try{
@@ -33,16 +33,16 @@ export async function collectHwuiNotices(ctx,{output,cargo={},rust,ndk,sourceFil
   for(const pkg of runtimeCargoPackages(meta).filter(pkg=>pkg.source?.startsWith('registry+'))){
    const root=path.dirname(pkg.manifest_path),prefix=pkg.name+'-'+pkg.version,files=new Set(fs.readdirSync(root).filter(name=>/^(LICENSE|LICENCE|COPYING|COPYRIGHT|NOTICE|PATENTS)([._-]|$)/i.test(name)));
    if(pkg.license_file)files.add(pkg.license_file);
-   for(const file of files)copy(path.join(root,file),'rust/'+prefix+'/'+file);
-   registry.push({name:pkg.name,version:pkg.version,source:pkg.source,checksum:checksums.get([pkg.name,pkg.version,pkg.source].join('@')),license:pkg.license,noticeFiles:[...files]});
+   for(const file of files)addLicense(output,prefix,path.join(root,file),pkg.license);
+   registry.push({name:pkg.name,version:pkg.version,source:pkg.source,checksum:checksums.get([pkg.name,pkg.version,pkg.source].join('@')),license:pkg.license});
   }
  }catch(error){console.warn('Skipped optional Cargo accompanying files: '+error.message);}
  for(const [kind,input]of [['rust-standard-library',rust],['ndk',ndk]]){
   if(!input?.root)continue;
-  if(input.files)for(const item of input.files){const record=typeof item==='string'?{path:item}:item;copy(path.join(input.root,record.path),kind+'/'+(record.output||record.path));}
-  else{copyOptional(path.join(input.root,'COPYRIGHT-library.html'),path.join(output,kind,'COPYRIGHT-library.html'));copyOptional(path.join(input.root,'licenses'),path.join(output,kind,'licenses'));}
+  if(input.files)for(const item of input.files){const record=typeof item==='string'?{path:item}:item;addLicense(output,kind,path.join(input.root,record.path),record.license);}
+  else{addLicense(output,kind,path.join(input.root,'COPYRIGHT-library.html'));for(const file of optionalFiles(path.join(input.root,'licenses')))addLicense(output,kind,file,path.basename(file).replace(/\.[^.]+$/,''));}
  }
  const sourceRecords=path.join(ctx.module||ctx.work,'sources');fs.mkdirSync(sourceRecords,{recursive:true});
  fs.writeFileSync(path.join(sourceRecords,'SOURCES.json'),JSON.stringify({git:sources.map(source=>({project:source.project,repository:source.repository,revision:source.revision})),registry,cargoLockSha256:crypto.createHash('sha256').update(lockBytes).digest('hex')},null,2)+'\n');
- return {root:output,records,sourceRecords};
+ return {root:path.join(output,'licenses'),sourceRecords};
 }

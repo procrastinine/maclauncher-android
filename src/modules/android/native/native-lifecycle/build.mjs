@@ -1,4 +1,4 @@
-import {copyOptional} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -65,9 +65,9 @@ export function prepareNativeLifecycle({bionicSource,klepton,build}) {
   slink=replace(slink,'    (void)dso;\n    return pthread_atfork(prep, parent, child);','    return klj_guest_register_atfork(prep, parent, child, dso);');
   const slinkPath=path.join(output,'kl_libc_slink.c');
   fs.writeFileSync(slinkPath,'extern int klj_guest_cxa_thread_atexit_impl(void (*)(void*),void*,void*);\nextern int klj_guest_register_atfork(void (*)(void),void (*)(void),void (*)(void),void*);\n'+slink);
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
-  return {objects,shim:shimPath,slink:slinkPath,notices,
+  const licenses=path.join(output,'licenses');
+  addLicense(path.dirname(licenses),'native-lifecycle',path.join(source,'libc/NOTICE'));
+  return {objects,shim:shimPath,slink:slinkPath,licenses,
     abiFlags:['-DKLEPTON_TLS_DEFINES='+JSON.stringify(path.join(source,'libc/platform/bionic/tls_defines.h')),
       '-DKLEPTON_DEVICE_API_SOURCE='+JSON.stringify(path.join(source,'libc/include/bits/get_device_api_level_inlines.h'))],
     // Darwin requires explicitly named optional weak imports at final link.

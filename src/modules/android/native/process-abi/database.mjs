@@ -1,4 +1,4 @@
-import {copyOptional} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -66,7 +66,7 @@ extern "C" {\n${declarations.map(x=>x.declaration).join('\n')}\n}
  // Darwin passwd/group layouts differ even where the function names match.
  fs.writeFileSync(path.join(output,'lookup.cpp'),'extern "C" int klj_database_name_id(const char *name,int group_lookup){\nif(group_lookup){auto *value=getgrnam(name);return value?static_cast<int>(value->gr_gid):-1;}\nauto *value=getpwnam(name);return value?static_cast<int>(value->pw_uid):-1;\n}\nextern "C" void *klj_database_lookup(const char *name){\n'+declarations.map(x=>'if(!strcmp(name,"'+x.name+'"))return reinterpret_cast<void*>(&klj_bionic_'+x.name+');').join('\n')+'\nreturn nullptr;\n}\n');
  const objects=['grp_pwd','grp_pwd_file','lookup'].map(name=>{const object=path.join(output,name+'.o');execFileSync('clang++',[...flags,'-c',path.join(output,name+'.cpp'),'-o',object],{stdio:'inherit'});return object;});
- const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
- copyOptional(path.join(output,'core/libcutils/NOTICE'),path.join(notices,'APACHE-2.0.txt'));
- return {objects,notices,functions:declarations.map(x=>x.name)};
+ const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'database',path.join(source,'libc/NOTICE'));
+ addLicense(path.dirname(licenses),'database',path.join(output,'core/libcutils/NOTICE'));
+ return {objects,licenses,functions:declarations.map(x=>x.name)};
 }

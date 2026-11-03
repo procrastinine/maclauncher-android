@@ -1,4 +1,5 @@
-import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
+import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -90,7 +91,7 @@ export function prepareSyscalls({bionicSource,include,python,importsDirectory,ou
   for(const row of outputRows)lines.push(`{${row.number},${JSON.stringify(row.name)},${JSON.stringify(row.service)},SyscallMode::${row.mode},${row.voidResult?'true':'false'},${row.registers.length},{${row.registers.map(([offset,words])=>`{${offset},${words}}`).join(',')}}},`);
   lines.push('};');writeChanged(path.join(output,'syscalls.inc'),lines.join('\n')+'\n');
   writeChanged(path.join(output,'syscalls.json'),JSON.stringify(outputRows,null,2)+'\n');
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'syscalls-Bionic-NOTICE'));
-  return {directory:output,notices,entries:outputRows.length};
+  const licenses=path.join(output,'licenses');
+  addLicense(path.dirname(licenses),'syscall-sources',path.join(source,'libc/NOTICE'));
+  return {directory:output,licenses,entries:outputRows.length};
 }

@@ -1,4 +1,5 @@
-import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
+import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {exportSources} from '../binder-rpc/build.mjs';
@@ -18,7 +19,7 @@ export function prepareArm32LegacyCharacterData({bionicSource,output}){
  writeChanged(annotations,'#define __LIBC_HIDDEN__ __attribute__((visibility("hidden")))\n#include "openbsd-compat.h"\n');
  return {units:files.slice(0,2).map(file=>path.join(source,file)),include:path.join(source,'libc/upstream-openbsd/lib/libc/include'),
   includes:[path.join(source,'libc/upstream-openbsd/android/include')],annotations,
-  files,notices:files.filter(file=>file.endsWith('.c')||file.endsWith('.cpp')||file.endsWith('.h')).map(file=>path.join(source,file))};
+  files,licenses:files.filter(file=>file.endsWith('.c')||file.endsWith('.cpp')||file.endsWith('.h')).map(file=>path.join(source,file))};
 }
 
 /** Bionic's complete inline/out-of-line character family has one shared
@@ -40,6 +41,6 @@ export function prepareNativeCtype({bionicSource,build,ninja,python}){
  const lookup=path.join(output,'lookup.cpp');
  writeChanged(lookup,'#include <cstring>\n'+bindings.map(({symbol})=>`extern "C" void ${symbol}(void);`).join('\n')+'\nextern "C" void *klj_ctype_lookup(const char *name){\n'+bindings.map(({name,symbol})=>`if(!std::strcmp(name,"${name}"))return reinterpret_cast<void *>(&${symbol});`).join('\n')+'\nreturn nullptr;\n}\n');
  objects.push(compile('bionic-ctype-lookup.o',lookup,'clang++'));
- const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
- return {output,objects,names:bindings.map(binding=>binding.name),notices};
+ const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'native-ctype',path.join(source,'libc/NOTICE'));
+ return {output,objects,names:bindings.map(binding=>binding.name),licenses};
 }

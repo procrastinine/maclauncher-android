@@ -16,7 +16,7 @@ export const javaToolEnvironment=()=>Object.fromEntries(
   ['JDK_JAVAC_OPTIONS','JAVA_TOOL_OPTIONS','JDK_JAVA_OPTIONS','_JAVA_OPTIONS'].map(name=>[name,process.env[name]??null]));
 
 /** Native Minikin maps the original pattern data by filesystem path. Copy the
- * declared framework JAR's resources and any accompanying notices unchanged. */
+ * declared framework JAR's resources and any accompanying licenses unchanged. */
 export function stageFrameworkHyphenation(archive,output){
   const prefix='hyphen-data/',names=execFileSync('/usr/bin/unzip',['-Z1',archive,prefix+'*'],{encoding:'utf8',maxBuffer:4<<20})
     .trim().split(/\r?\n/).filter(name=>name&&!name.endsWith('/'));

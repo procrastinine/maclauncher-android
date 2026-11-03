@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const requiredInputs=['klepton','converter','jdk','sdl','vulkan-headers','sndfile-headers','codecs','codec-notices','angle','gles-headers','framework','output'];
+export const requiredInputs=['klepton','converter','jdk','sdl','vulkan-headers','sndfile-headers','codecs','codec-licenses','angle','gles-headers','framework','output'];
 export const platformTools=['aidl','aconfig','rust-toolchain','python'];
 export const optionalInputs=['ndk-headers','blueprint-parser','blueprint-parser-sources','ninja','build-work','tool-inputs','ndk','bionic-inputs','bionic-target'];
 

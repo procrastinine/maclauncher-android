@@ -1,4 +1,5 @@
-import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
+import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {exportSources} from '../binder-rpc/build.mjs';
@@ -38,8 +39,8 @@ export function prepareNativeRegex({bionicSource,build,ninja,python}){
   const lookup=path.join(output,'lookup.c');
   writeChanged(lookup,'#include <regex.h>\n#include <string.h>\nvoid *klj_regex_lookup(const char *name){\n'+prepared.names.map(name=>' if(!strcmp(name,"'+name+'"))return (void *)&'+name+';').join('\n')+'\n return NULL;\n}\n');
   objects.push(compile('lookup.o',lookup));
-  const notices=path.join(output,'notices');
-  copyOptional(path.join(prepared.source,'libc/NOTICE'),path.join(notices,'NOTICE'));
+  const licenses=path.join(output,'licenses');
+  addLicense(path.dirname(licenses),'native-regex',path.join(prepared.source,'libc/NOTICE'));
 
-  return {...prepared,output,namespace,objects,notices};
+  return {...prepared,output,namespace,objects,licenses};
 }

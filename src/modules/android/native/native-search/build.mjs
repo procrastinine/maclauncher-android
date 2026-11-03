@@ -1,4 +1,4 @@
-import {copyOptional} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -36,6 +36,6 @@ export function prepareNativeSearch({bionicSource,build}){
   const lookup=path.join(output,'lookup.c');
   fs.writeFileSync(lookup,'#include <string.h>\n#include <stddef.h>\n'+prepared.names.map(name=>`extern void klj_search_${name}(void);`).join('\n')+'\nvoid *klj_search_lookup(const char *name){\n'+prepared.names.map(name=>` if(!strcmp(name,"${name}"))return (void *)&klj_search_${name};`).join('\n')+'\n return NULL;\n}\n');
   const object=path.join(output,'lookup.o');execFileSync('clang',[...flags,'-c',lookup,'-o',object],{stdio:'inherit'});objects.push(object);
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(prepared.source,'libc/NOTICE'),path.join(notices,'NOTICE'));
-  return {...prepared,output,objects,notices};
+  const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'native-search',path.join(prepared.source,'libc/NOTICE'));
+  return {...prepared,output,objects,licenses};
 }

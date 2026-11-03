@@ -38,6 +38,5 @@ export function prepareSyncFence({pins,source,output,inputs,exportSources,source
     writeChanged(file,original.replace('#include <malloc.h>','#include <stdlib.h>').replace(ioctlTokens,name=>'KLJ_LINUX_'+name));
     return file;
   });
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
   return cSources;
 }

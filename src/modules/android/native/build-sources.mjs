@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {pathToFileURL} from 'node:url';
-import {copyOptional,isNoticePath} from './upstream/source-files.mjs';
 
 const digest=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 // Legacy producer paths may be aliases into this pinned source owner. Cache
@@ -21,7 +20,6 @@ export function sourceInventory(root,destination,{links=false,exclude=[]}={}){
     for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){
       const name=path.join(relative,entry.name),file=path.join(root,name);
       if(exclude.includes(name))continue;
-      if(isNoticePath(name)){if(destination)copyOptional(file,path.join(destination,name));continue;}
       if(entry.isDirectory()){visit(name);continue;}
       if(entry.isSymbolicLink()&&links){files.push({path:name,link:fs.readlinkSync(file)});continue;}
       if(!entry.isFile())throw Error('Android build source must be a regular file: '+name);
@@ -35,7 +33,7 @@ export function productInventory(root){
   return sourceInventory(root,undefined,{links:true,exclude:['build','source','sources','build-source.json','build-receipt.json']});
 }
 /** Private receipt inputs become logical source identities when publishing
- * notice metadata. Real paths remain available only to the local builder. */
+ * source metadata. Real paths remain available only to the local builder. */
 export function buildPathMappings({source,build,output,options}){
   const mappings=new Map();
   function add(directory,identity){

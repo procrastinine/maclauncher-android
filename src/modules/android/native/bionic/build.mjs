@@ -1,4 +1,5 @@
-import {copyOptional,prepareSourceTree,copyChanged,writeChanged} from '../upstream/source-files.mjs';
+import {addLicense,includeLicenses} from '../upstream/licenses.mjs';
+import {prepareSourceTree,copyChanged,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -22,7 +23,7 @@ function relative(value){
 }
 
 /** Supplied native components are verified inputs, like ANGLE and codecs.
- * Their source identities and notices travel with the runtime; source builders
+ * Their source identities and licenses travel with the runtime; source builders
  * can provide the same files without changing this runtime or loading policy. */
 export function readBionicInputs(file){
  const directory=path.dirname(path.resolve(file)),value=JSON.parse(fs.readFileSync(file,'utf8'));
@@ -35,8 +36,7 @@ export function readBionicInputs(file){
   if(!stat.isFile()||sha(source)!==entry.sha256)throw Error('Bionic '+name+' supplier differs from its declared bytes');
   artifacts[name]={...entry,file:source,destination};
  }
- const notices=[].concat(value.notices||[]).map(entry=>({...entry,file:typeof entry?.file==='string'?path.resolve(directory,entry.file):undefined}));
- return {...value,artifacts,notices};
+ return {...value,artifacts,licenses:path.join(directory,'licenses')};
 }
 
 export function bionicBindingInputs({build,familiesOutput=root}){
@@ -105,10 +105,10 @@ export function buildBionicGuests({ndk,jdk,build,output,familiesOutput=root}){
  return {products,generated};
 }
 
-export function stageBionicSuppliers({suppliers,output,notices}){
- fs.mkdirSync(output,{recursive:true});fs.mkdirSync(notices,{recursive:true});
+export function stageBionicSuppliers({suppliers,output,licenses}){
+ fs.mkdirSync(output,{recursive:true});
  for(const entry of Object.values(suppliers.artifacts))copyChanged(entry.file,path.join(output,entry.destination));
- for(const entry of suppliers.notices)copyOptional(entry.file,path.join(notices,entry.path));
+ includeLicenses(path.dirname(licenses),suppliers.licenses);
  const identity={schemaVersion:1,systemImage:suppliers.systemImage,artifacts:Object.fromEntries(Object.entries(suppliers.artifacts).map(([key,{sha256,source}])=>[key,{sha256,source}]))};
  const profile={schemaVersion:1,nativeAbi:'arm64-v8a',aaudioVersion:1,choreographerVersion:1,libandroidFacadeVersion:1,inodeBootstrap:'native/bionic/android-inode-bootstrap',inodeBootstrapSha256:suppliers.artifacts.inodeBootstrap.sha256,
   systemImage:{...suppliers.systemImage,extractor:'native/bionic/android-image-extract'},linkerConfigRunner:'native/bionic/linkerconfig-runner',linkerConfigRunnerSha256:suppliers.artifacts.linkerConfigRunner.sha256};
@@ -127,9 +127,8 @@ export function buildBionic({options,root:nativeRoot,build,output,flags,pathRoot
  const abi=buildBionicAbi({source:aim,build:path.join(build,'bionic'),output:directory,rustToolchain:options['rust-toolchain'],target:options['bionic-target']});
  const familiesOutput=generateBionicFamilies({ast:path.join(build,'arm32/imports/host-ast.json'),output:path.join(build,'bionic/families')});
  const guest=buildBionicGuests({ndk:options.ndk,jdk:options.jdk,build,output:directory,familiesOutput});
- const identity=stageBionicSuppliers({suppliers,output:directory,notices:path.join(output,'notices/bionic')});
+ const identity=stageBionicSuppliers({suppliers,output:directory,licenses:path.join(output,'licenses')});
  compileHostLibrary({name:'jsig-bridge.dylib',inputs:[path.join(root,'jsig-bridge.c')],flags,extra:[],directory:path.join(build,'host-objects'),output:path.join(directory,'jsig-bridge.dylib'),cwd:options.klepton,ninja:options.ninja,python:options.python,pathRoots});
- const notice=path.join(output,'notices/bionic/aim');fs.mkdirSync(notice,{recursive:true});
- for(const name of ['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md'])if(fs.existsSync(path.join(aim,name)))copyOptional(path.join(aim,name),path.join(notice,name));
+ for(const name of ['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md'])if(fs.existsSync(path.join(aim,name)))addLicense(output,'AIM',path.join(aim,name));
  return {binding:bionicBindingInputs({build,familiesOutput}),identity:{...identity,abiSourceRevision:abi.sourceRevision,jni:JSON.parse(fs.readFileSync(path.join(guest.generated,'jni-carrier-manifest.json'))),families:['android-assets-configuration-image-decoder','android-bitmap-hardware-buffer-native-window','android-looper','egl-gles','aaudio','android-choreographer']}};
 }

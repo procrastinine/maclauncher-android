@@ -33,5 +33,5 @@ export async function prepareNdkJni({declarationsDirectory,include,python,output
     await generateImports({include,python,output:declarationsDirectory});
   }
   const rows=emitNdkJniImports(JSON.parse(fs.readFileSync(path.join(declarationsDirectory,'host-ast.json'))),output);
-  return {source:path.join(import.meta.dirname,'adapter.c'),notices:path.join(declarationsDirectory,'notices'),declarationsDirectory,rows};
+  return {source:path.join(import.meta.dirname,'adapter.c'),licenses:path.join(declarationsDirectory,'licenses'),declarationsDirectory,rows};
 }

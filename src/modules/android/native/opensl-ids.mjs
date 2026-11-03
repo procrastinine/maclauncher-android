@@ -1,4 +1,3 @@
-import {copyOptional} from './upstream/source-files.mjs';
 import fs from 'node:fs';
 import {nativePathFlags} from './upstream/native-paths.mjs';
 import path from 'node:path';
@@ -26,8 +25,7 @@ export function prepareOpenSlIds({wilhelmSource,build,jni=[]}){
   const unit=path.join(directory,'ids.cpp'),object=path.join(directory,'ids.o');fs.writeFileSync(unit,text);
   execFileSync('clang++',[...nativePathFlags({source:wilhelmSource,build}),'-std=c++17','-arch','arm64','-mmacosx-version-min=13.0','-O2','-fPIC','-Wall','-Wextra','-Werror','-I'+path.join(source,'include'),...jni,'-c',unit,'-o',object],{stdio:'inherit'});
   fs.writeFileSync(path.join(build,'opensl-ids.h'),names.map(name=>'extern const struct SLInterfaceID_ *const '+name+';').join('\n')+'\nvoid *klj_opensl_iid_lookup(const char *name);\n');
-  const notices=path.join(directory,'notices');fs.mkdirSync(notices,{recursive:true});
-  return {object,notices,names};
+  return {object,names};
 }
 
 export function openSlIdSource(source){

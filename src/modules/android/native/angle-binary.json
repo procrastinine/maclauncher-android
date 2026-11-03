@@ -28,57 +28,5 @@
       ],
       "minimumMacOS": "12.0"
     }
-  ],
-  "notices": [
-    {
-      "name": "ANGLE",
-      "url": "https://chromium.googlesource.com/angle/angle/+/cbc4153da8d5796b0fbb3cf288e97bee19436191/LICENSE",
-      "file": "ANGLE.txt"
-    },
-    {
-      "name": "ASTC-Encoder",
-      "url": "https://chromium.googlesource.com/external/github.com/ARM-software/astc-encoder/+/2319d9c4d4af53a7fc7c52985e264ce6e8a02a9b/LICENSE.txt",
-      "file": "ASTC-Encoder.txt"
-    },
-    {
-      "name": "glslang",
-      "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/glslang/+/38f6708b6b6f213010c51ffa8f577a7751e12ce7/LICENSE.txt",
-      "file": "glslang.txt"
-    },
-    {
-      "name": "SPIRV-Cross",
-      "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/SPIRV-Cross/+/b8fcf307f1f347089e3c46eb4451d27f32ebc8d3/LICENSE",
-      "file": "SPIRV-Cross.txt"
-    },
-    {
-      "name": "SPIRV-Headers",
-      "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/SPIRV-Headers/+/97e96f9e9defeb4bba3cfbd034dec516671dd7a3/LICENSE",
-      "file": "SPIRV-Headers.txt"
-    },
-    {
-      "name": "SPIRV-Tools",
-      "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/SPIRV-Tools/+/3aeaaa088d37b86cff036eee1a9bf452abad7d9d/LICENSE",
-      "file": "SPIRV-Tools.txt"
-    },
-    {
-      "name": "Chromium-Abseil",
-      "url": "https://chromium.googlesource.com/chromium/src/+/140.0.7339.81/third_party/abseil-cpp/LICENSE",
-      "file": "Chromium-Abseil.txt"
-    },
-    {
-      "name": "Chromium-Zlib",
-      "url": "https://chromium.googlesource.com/chromium/src/+/140.0.7339.81/third_party/zlib/LICENSE",
-      "file": "Chromium-Zlib.txt"
-    },
-    {
-      "name": "Khronos-Headers",
-      "url": "https://chromium.googlesource.com/angle/angle/+/cbc4153da8d5796b0fbb3cf288e97bee19436191/include/KHR/khrplatform.h",
-      "file": "Khronos-Headers.txt"
-    },
-    {
-      "name": "libcxx",
-      "url": "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libcxx.git/+/adbb4a5210ae2a8a4e27fa6199221156c02a9b1a/LICENSE.TXT",
-      "file": "libcxx.txt"
-    }
   ]
 }

@@ -1,4 +1,4 @@
-import {copyOptional} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -25,7 +25,7 @@ function read(source,file){
 /** Stage the original prebuilt font modules; no font family or fallback is synthesized. */
 export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={}){
   if(!output)throw Error('An Android font output directory is required');
-  const modules=[],packages=new Map(),licenses=new Map(),inputs=[];
+  const modules=[],packages=new Map(),licenseModules=new Map(),inputs=[];
   for(const supplier of suppliers){
     const source={...supplier,checkout:sources[supplier.key]||path.join(repository,supplier.path),revision:sourcePins[supplier.key]};
     if(!/^[a-f0-9]{40}$/.test(source.revision||''))throw Error(`Missing Android font source revision: ${supplier.key}`);
@@ -39,7 +39,7 @@ export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={})
       for(const declaration of parsed.modules){
         const module={...declaration,source,file,directory:path.posix.dirname(file)};
         if(module.type==='package')packages.set(`${source.key}:${module.directory}`,module);
-        else if(module.type==='license')licenses.set(`${source.key}:${module.properties.name}`,module);
+        else if(module.type==='license')licenseModules.set(`${source.key}:${module.properties.name}`,module);
         else modules.push(module);
       }
     }
@@ -52,7 +52,7 @@ export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={})
     if(!safe(name)||name.includes('/')||byName.has(name))throw Error(`Invalid or duplicate Android font module: ${name}`);
     byName.set(name,module);
   }
-  const root=path.join(output,'android-root'),notices=path.join(output,'notices'),products=[],copiedNotices=new Map();
+  const root=path.join(output,'android-root'),licenses=path.join(output,'licenses'),products=[];
   const fontDirectory=path.join(root,'system/fonts'),etcDirectory=path.join(root,'system/etc');
   fs.rmSync(fontDirectory,{recursive:true,force:true});
   fs.mkdirSync(fontDirectory,{recursive:true});fs.mkdirSync(etcDirectory,{recursive:true});
@@ -69,18 +69,15 @@ export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={})
       directory=path.posix.dirname(directory);
     }
     const names=[].concat(module.properties.licenses||owner?.properties.default_applicable_licenses||[]);
-    const result=[];
     for(const name of names){
-      const license=licenses.get(`${module.source.key}:${name}`);
+      const license=licenseModules.get(`${module.source.key}:${name}`);
       if(!license)continue;
       const texts=[].concat(license.properties.license_text||[]);
       for(const file of texts){
-        const original=path.posix.normalize(path.posix.join(license.directory,file)),key=`${module.source.key}:${original}`;
-        if(!copiedNotices.has(key)){const target=path.join(notices,module.source.key,original);copyOptional(path.join(module.source.checkout,original),target);copiedNotices.set(key,{path:path.relative(output,target)});}
-        result.push({name,kinds:license.properties.license_kinds,notice:copiedNotices.get(key).path});
+        const original=path.posix.normalize(path.posix.join(license.directory,file));
+        addLicense(output,module.properties.name,path.join(module.source.checkout,original),name);
       }
     }
-    return result;
   }
   for(const module of fontModules){
     const p=module.properties;
@@ -94,7 +91,7 @@ export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={})
     const filename=p.filename||p.name;
     if(!safe(filename)||filename.includes('/'))throw Error(`Invalid installed font filename: ${filename}`);
     const item=copy(module,original,path.join(fontDirectory,filename));
-    item.licenses=copyLicenses(module);item.required=p.required||[];
+    copyLicenses(module);item.required=p.required||[];
     if(module.type==='prebuilt_versioned_font')item.version={flag:p.versionFlag,value:p.defaultVersion};
     products.push(item);
     for(const alias of list(p.symlinks||[],`${p.name}.symlinks`)){
@@ -108,7 +105,7 @@ export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={})
   for(const module of configModules){
     // No product-specific CJK flag is set: use the original module's default src.
     const p=module.properties,item=copy(module,p.src,path.join(etcDirectory,p.name));
-    item.licenses=copyLicenses(module);products.push(item);
+    copyLicenses(module);products.push(item);
     const xml=fs.readFileSync(path.join(output,item.path),'utf8').replace(/<!--[\s\S]*?-->/g,'');
     for(const match of xml.matchAll(/<font\b[^>]*>([\s\S]*?)<\/font>/g)){
       const file=match[1].replace(/<[^>]+>/g,'').trim();
@@ -117,7 +114,7 @@ export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={})
     }
   }
   if(!configModules.length||!fontModules.length)throw Error('The original Android font component is empty');
-  const inventory={schemaVersion:1,suppliers:suppliers.map(({key,url})=>({key,url,revision:sourcePins[key]})),inputs,products,notices:[...copiedNotices.values()],configurationFontFiles:[...references].sort()};
+  const inventory={schemaVersion:1,suppliers:suppliers.map(({key,url})=>({key,url,revision:sourcePins[key]})),inputs,products,configurationFontFiles:[...references].sort()};
   fs.writeFileSync(path.join(output,'font-resources.json'),JSON.stringify(inventory,null,2)+'\n');
-  return {root,notices,inventory,fontCount:fontModules.length,configCount:configModules.length};
+  return {root,licenses,inventory,fontCount:fontModules.length,configCount:configModules.length};
 }

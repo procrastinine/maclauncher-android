@@ -1,4 +1,4 @@
-import {copyOptional} from '../upstream/source-files.mjs';
+import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -70,7 +70,7 @@ export function buildCompilerRuntime({archive,notice,linker,output,aeabi,include
     return file;
   });
   execFileSync(linker,['-flavor','gnu','-shared','--hash-style=both','--soname=libandroid-arm32-builtins.so',...objects,...versions,'--whole-archive',prepared,'--no-whole-archive','--no-as-needed',...dependencies,'-o',library],{stdio:'inherit'});
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(notice,path.join(notices,'compiler-rt-NOTICE'));
-  for(const family of portableFamilies)for(const file of family.notices||[])copyOptional(file,path.join(notices,'bionic-'+path.basename(file)));
-  return {library,notices,exported};
+  const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'compiler-rt',notice);
+  for(const family of portableFamilies)for(const file of family.licenses||[])addLicense(path.dirname(licenses),'compiler-rt',file);
+  return {library,licenses,exported};
 }

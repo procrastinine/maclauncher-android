@@ -1,4 +1,5 @@
-import {copyOptional,writeOptional,prepareSourceTree,writeChanged} from './upstream/source-files.mjs';
+import {addLicense} from './upstream/licenses.mjs';
+import {prepareSourceTree,writeChanged} from './upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {exportSources} from './binder-rpc/build.mjs';
@@ -25,9 +26,10 @@ export function prepareLibraryNamespaces({bionicSource,artSource,output}){
   const apex=slice(loader,'constexpr const char* kApexPath =','\n');
   const location=slice(loader,'std::optional<std::string> FindApexNamespaceName(', '\n}  // namespace android::nativeloader');
   writeChanged(path.join(temporary,'art-namespace.inc'),loader.slice(0,loader.indexOf('*/')+2)+'\n'+apex+'\n'+location);
-  const notices=path.join(temporary,'notices');fs.mkdirSync(notices);
-  copyOptional(path.join(bionic,'libc/NOTICE'),path.join(notices,'bionic.txt'));
-  writeOptional(path.join(notices,'art-native-loader.txt'),api.slice(0,api.indexOf('#ifndef')));
+  const licenses=path.join(temporary,'licenses');
+  addLicense(path.dirname(licenses),'library-namespace-source',path.join(bionic,'libc/NOTICE'));
+  const license=path.join(temporary,'art-native-loader-license.txt');writeChanged(license,api.slice(0,api.indexOf('#ifndef')));
+  addLicense(temporary,'ART native loader',license);fs.rmSync(license,{force:true});
  });
- return {include:output,nativeLoaderInclude:path.join(output,'art/libnativeloader/include'),nativeBridgeInclude:path.join(output,'art/libnativebridge/include'),notices:path.join(output,'notices')};
+ return {include:output,nativeLoaderInclude:path.join(output,'art/libnativeloader/include'),nativeBridgeInclude:path.join(output,'art/libnativebridge/include'),licenses:path.join(output,'licenses')};
 }
