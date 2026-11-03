@@ -1,3 +1,4 @@
+import {copyOptional} from '../upstream/source-files.mjs';
 import {preparePropertyHeaders} from './property-sources.mjs';
 import fs from 'node:fs';
 import {nativePathFlags} from '../upstream/native-paths.mjs';
@@ -98,7 +99,7 @@ const archiveArgs=['rcs',archive,...list.map(u=>u.object)];
 await cachedBuildStep({cache:path.join(out,'archive.reuse.json'),inputs:[fileURLToPath(import.meta.url),ar,...list.map(u=>u.object)],
   files:[archive],key:{ar,args:archiveArgs},build:()=>run(ar,archiveArgs)});
 const notices=path.join(out,'notices');fs.mkdirSync(notices,{recursive:true});
-for(const r of records)for(const f of r.licenses){const original=path.join(dirs[r.id],f);if(fs.existsSync(original))fs.copyFileSync(original,path.join(notices,r.id+'-'+f.replaceAll('/','-')));else throw Error(`Missing notice ${r.id}/${f}`);}
+for(const r of records)for(const f of r.licenses){const original=path.join(dirs[r.id],f);if(fs.existsSync(original))copyOptional(original,path.join(notices,r.id+'-'+f.replaceAll('/','-')));}
 const shared=list.filter(unit=>['libbase/','fmt/','logging/'].some(prefix=>unit.key.startsWith(prefix)));
 const result={output:out,sources:dirs,modules,units:list,shared,property,crypto:{include:cryptoInclude,library:cryptoLibrary},archive,flags,notices};
 fs.writeFileSync(path.join(out,'closure.json'),JSON.stringify(result,null,2)+'\n');

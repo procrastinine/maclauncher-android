@@ -421,7 +421,7 @@
         },
         {
           "kind": "json",
-          "path": "src/modules/android/native/notices/aosp-apache-http/source.json",
+          "path": "src/modules/android/native/sources/aosp-apache-http/source.json",
           "property": "revision"
         }
       ]
@@ -1582,7 +1582,7 @@
       "pinRefs": [
         {
           "kind": "json",
-          "path": "src/modules/android/native/notices/robolectric-portability/source.json",
+          "path": "src/modules/android/native/sources/robolectric-portability/source.json",
           "property": "commit"
         }
       ],

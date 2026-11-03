@@ -1,3 +1,4 @@
+import {copyOptional,optionalFiles,prepareSourceTree,writeChanged} from './upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -8,7 +9,6 @@ import {prepareAngleRgb565} from './angle-source.mjs';
 import {prepareAngleFramebufferFlip} from './angle-flip-source.mjs';
 import {prepareAngleVulkan} from './angle-vulkan-source.mjs';
 import {prepareAngleIdentity} from './angle-identity-source.mjs';
-import {prepareSourceTree,writeChanged} from './upstream/source-files.mjs';
 import {nativePathFlags} from './upstream/native-paths.mjs';
 
 const root=path.dirname(fileURLToPath(import.meta.url));
@@ -71,16 +71,17 @@ try{
 }finally{fs.rmSync(publication,{recursive:true,force:true});}
 const stock=JSON.parse(fs.readFileSync(path.join(root,'angle-binary.json')));
 const notices=[...stock.notices];
-prepareSourceTree(path.join(options.output,'notices'),temporary=>{
-  for(const notice of stock.notices)writeChanged(path.join(temporary,notice.file),fs.readFileSync(path.join(root,'notices/angle',notice.file)));
+{
+  const temporary=path.join(options.output,'notices');
+  for(const notice of stock.notices)copyOptional(path.join(root,'notices/angle',notice.file),path.join(temporary,notice.file));
   const suppliers=[['JsonCpp','third_party/jsoncpp/source/LICENSE','https://github.com/open-source-parsers/jsoncpp'],['RapidJSON','third_party/rapidjson/src/license.txt','https://github.com/Tencent/rapidjson']];
   if(backend==='metal-vulkan'){
     suppliers.push(['VulkanMemoryAllocator','third_party/vulkan_memory_allocator/LICENSE.txt','https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator']);
-    for(const license of fs.readdirSync(path.join(source,'third_party/vulkan-headers/src/LICENSES')))
+    for(const license of optionalFiles(path.join(source,'third_party/vulkan-headers/src/LICENSES')).map(file=>path.basename(file)))
       suppliers.push(['Vulkan-Headers-'+license.replace(/\.[^.]+$/,''),'third_party/vulkan-headers/src/LICENSES/'+license,'https://github.com/KhronosGroup/Vulkan-Headers']);
   }
-  for(const [name,file,url] of suppliers){const data=fs.readFileSync(path.join(source,file)),notice={name,url,file:name+'.txt'};notices.push(notice);writeChanged(path.join(temporary,notice.file),data);}
-});
+  for(const [name,file,url] of suppliers){const notice={name,url,file:name+'.txt'};notices.push(notice);copyOptional(path.join(source,file),path.join(temporary,notice.file));}
+}
 const adaptations=['angle-source.mjs','angle-flip-source.mjs','angle-flip-source.json','angle-identity-source.mjs','angle-sync-source.mjs','angle-fence-completion.h','angle-current-source.mjs','angle-debug-source.mjs','angle-debug-callback.h','angle-blob-source.mjs','angle-blob-callback.h','angle-dither-source.mjs',...(backend==='metal-vulkan'?['angle-vulkan-source.mjs','angle-vulkan-image-source.mjs']:[])].map(file=>({file,sha256:digest(fs.readFileSync(path.join(root,file)))}));
 const internalShaders=fs.readFileSync(path.join(output,'obj/src/libANGLE/renderer/metal/angle_metal_backend.ninja'),'utf8').includes('-DANGLE_METAL_HAS_PREBUILT_INTERNAL_SHADERS')?'embedded-metallib':'runtime-source';
 const programBinaryVersion=fs.readFileSync(path.join(output,'gen/angle/ANGLEShaderProgramVersion.h'),'utf8').match(/^#define ANGLE_PROGRAM_VERSION "([a-f0-9]+)"$/m)?.[1];

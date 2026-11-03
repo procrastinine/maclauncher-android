@@ -1,3 +1,4 @@
+import {copyOptional} from '../native/upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -63,9 +64,8 @@ export function exportHwuiSources({sources,registry,registryCache}={},destinatio
    const input=sources[record.key],hasParts=record.checks.some(check=>check.path==='.')&&typeof input==='object'&&input?.parts?.length;
    const verified=verifyHwuiSource(record,hasParts?input.root:input);
    if(hasParts)verified.roots=verifyHwuiSource({...record,checks:[]},input).roots;
-   if(record.noticeChecks?.length)verifyHwuiSource({...record,checks:record.noticeChecks},sources[record.key]);
-   const licenses=(record.licensePaths||[]).filter(name=>original(verified,name,true));
-   const names=[...new Set([...selection(record,verified),...licenses,...(record.noticeChecks||[]).map(check=>check.path)])].map(relative).sort();
+   for(const name of new Set([...(record.licensePaths||[]),...(record.noticeChecks||[]).map(check=>check.path)])){const file=original(verified,name,true);if(file)copyOptional(file,path.join(destination,'sources',record.key,name));}
+   const names=[...new Set(selection(record,verified))].map(relative).sort();
    const selected=names.filter(name=>!names.some(parent=>name!==parent&&name.startsWith(parent+'/')));
    let exported;
    try{

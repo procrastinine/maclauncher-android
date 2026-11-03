@@ -1,8 +1,8 @@
+import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {exportSources} from '../binder-rpc/build.mjs';
 import {compileHostObject} from '../host-compile.mjs';
-import {writeChanged} from '../upstream/source-files.mjs';
 
 const pins=JSON.parse(fs.readFileSync(new URL('../source-pins.json',import.meta.url)));
 
@@ -20,7 +20,6 @@ export function prepareNativeLocale({bionicSource,build,ninja,python}){
   const unit=path.join(import.meta.dirname,'locale.c');
   const object=compileHostObject({name:'bionic-locale-record.o',inputs:[unit],flags:['-std=c11','-arch','arm64','-mmacosx-version-min=13.0','-O2','-fPIC','-Wall','-Wextra','-Werror','-I'+output],directory:path.join(build,'host-objects'),cwd:source,ninja,python}).output;
   const notices=path.join(output,'notices');
-  writeChanged(path.join(notices,'NOTICE'),fs.readFileSync(path.join(source,'libc/NOTICE')));
-  writeChanged(path.join(notices,'source.json'),JSON.stringify({project:'Bionic locale record',revision:pins.aospBionic,units:['libc/include/locale.h'],adaptation:'Original complete lconv declaration, field-by-field record view over the existing physical locale and string owner.'},null,2)+'\n');
+  copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
   return {output,objects:[object],names:['localeconv'],notices};
 }

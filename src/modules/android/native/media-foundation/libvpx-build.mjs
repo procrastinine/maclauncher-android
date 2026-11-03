@@ -1,10 +1,10 @@
+import {copyOptional,copyChanged,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {exportSources} from '../binder-rpc/build.mjs';
-import {copyChanged,writeChanged} from '../upstream/source-files.mjs';
 import {nativePathFlags,nativeFlagsString} from '../upstream/native-paths.mjs';
 
 const root=import.meta.dirname;
@@ -35,7 +35,6 @@ export function buildLibvpx({source=path.resolve(root,'../../../../..',pin.sourc
   execFileSync('make',['-j'+Math.max(1,Math.min(8,os.availableParallelism())),'libvpx.a'],{cwd:build,stdio:'inherit'});
   const library=path.join(output,'libvpx.a');copyChanged(path.join(build,'libvpx.a'),library);
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  for(const file of ['LICENSE','PATENTS','AUTHORS'])copyChanged(path.join(original,file),path.join(notices,file));
-  writeChanged(path.join(notices,'source.json'),JSON.stringify({...pin,license:'BSD-3-Clause; PATENTS grant',options},null,2)+'\n');
+  for(const file of ['LICENSE','PATENTS','AUTHORS'])copyOptional(path.join(original,file),path.join(notices,file));
   return {library,include:original,source:original,notices};
 }

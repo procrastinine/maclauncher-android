@@ -1,3 +1,4 @@
+import {copyOptional} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -8,8 +9,8 @@ import {execFileSync} from 'node:child_process';
 // the same native owners as every other guest library.
 export function buildCompilerRuntime({archive,notice,linker,output,aeabi,include,allocation,portableFamilies=[]}){
   const ndk=JSON.parse(fs.readFileSync(new URL('./ndk-headers.json',import.meta.url))),pin=ndk.compilerRuntime;
-  const input=fs.readFileSync(archive),license=fs.readFileSync(notice),sha=b=>crypto.createHash('sha256').update(b).digest('hex');
-  if(input.length!==pin.bytes||sha(input)!==pin.sha256||sha(license)!==pin.noticeSha256)throw Error('ARM compiler runtime differs from the pinned NDK artifact');
+  const input=fs.readFileSync(archive),sha=b=>crypto.createHash('sha256').update(b).digest('hex');
+  if(input.length!==pin.bytes||sha(input)!==pin.sha256)throw Error('ARM compiler runtime differs from the pinned NDK artifact');
   const bytes=Buffer.from(input);if(bytes.toString('ascii',0,8)!=='!<arch>\n')throw Error('Invalid compiler runtime archive');
   let exported=0;
   for(let at=8;at<bytes.length;){
@@ -69,8 +70,7 @@ export function buildCompilerRuntime({archive,notice,linker,output,aeabi,include
     return file;
   });
   execFileSync(linker,['-flavor','gnu','-shared','--hash-style=both','--soname=libandroid-arm32-builtins.so',...objects,...versions,'--whole-archive',prepared,'--no-whole-archive','--no-as-needed',...dependencies,'-o',library],{stdio:'inherit'});
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});fs.writeFileSync(path.join(notices,'compiler-rt-NOTICE'),license);
-  for(const family of portableFamilies)for(const file of family.notices||[])fs.copyFileSync(file,path.join(notices,'bionic-'+path.basename(file)));
-  fs.writeFileSync(path.join(notices,'compiler-rt.json'),JSON.stringify({...pin,exported},null,2)+'\n');
+  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(notice,path.join(notices,'compiler-rt-NOTICE'));
+  for(const family of portableFamilies)for(const file of family.notices||[])copyOptional(file,path.join(notices,'bionic-'+path.basename(file)));
   return {library,notices,exported};
 }

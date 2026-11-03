@@ -1,3 +1,4 @@
+import {copyOptional,prepareSourceTree,copyChanged} from '../../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -10,7 +11,6 @@ import {prepareAidl} from './aidl.mjs';
 import {prepareFlags} from './flags.mjs';
 import {prepareCrypto} from './crypto.mjs';
 import {nativeRustPathEnvironment} from '../../upstream/native-paths.mjs';
-import {prepareSourceTree,copyChanged} from '../../upstream/source-files.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const version=text=>text.match(/^version\s*=\s*"([^"]+)"/m)[1];
@@ -153,7 +153,6 @@ export function prepareKeyStoreRust(context) {
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
   // The source exporter owns notices for AOSP inputs. Cargo's lock identifies
   // the exact registry closure; package source licenses accompany distribution.
-  copyChanged(path.join(here,'Cargo.lock'),path.join(notices,'Cargo.lock'));
   return {workspace,env,runCargo,crypto:{archives:crypto.archives},notices,aidl:{records:[...aidl.records.values()].filter(r=>aidl.generated.has(r.name))},
     rustLibrary:path.join(output,'cargo-target/release/libkeystore_bootstrap.a')};
 }
@@ -167,9 +166,8 @@ export function buildKeyStoreRust(context) {
     const root=path.dirname(pkg.manifest_path),destination=path.join(result.notices,'crates',pkg.name+'-'+pkg.version);
     const files=new Set(fs.globSync(['LICENSE*','LICENCE*','COPYING*','NOTICE*'],{cwd:root}));
     if(pkg.license_file)files.add(pkg.license_file);
-    for(const relative of files)if(fs.statSync(path.join(root,relative)).isFile())write(path.join(destination,relative),fs.readFileSync(path.join(root,relative)));
+    for(const relative of files)copyOptional(path.join(root,relative),path.join(destination,relative));
     crates.push({name:pkg.name,version:pkg.version,source:pkg.source,license:pkg.license});
   }
-  write(path.join(result.notices,'crates.json'),JSON.stringify(crates,null,2)+'\n');
   return {rustLibrary:result.rustLibrary,crypto:result.crypto,notices:result.notices,aidl:result.aidl};
 }

@@ -1,3 +1,4 @@
+import {copyOptional} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -77,7 +78,6 @@ export function preparePthreadAttributes({bionicSource,build,pthreadSource,shimS
  shim=replace(shim,marker,names.map(name=>'    E("'+name+'", klb_'+name+'),').join('\n')+'\n'+marker);
  shim=names.map(name=>'extern int klb_'+name+'();').join('\n')+'\n'+shim;
  fs.writeFileSync(shimSource,shim);
- const notices=path.join(directory,'notices');fs.mkdirSync(notices,{recursive:true});fs.copyFileSync(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
- fs.writeFileSync(path.join(notices,'source.json'),JSON.stringify({project:'Bionic pthread attributes',url:'https://android.googlesource.com/platform/bionic',revision:pins.aospBionic,units:['libc/bionic/pthread_attr.cpp','libc/bionic/pthread_mutex.cpp'],functions:names},null,2)+'\n');
+ const notices=path.join(directory,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
  return {object,notices,functions:names};
 }

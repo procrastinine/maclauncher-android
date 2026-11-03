@@ -1,3 +1,4 @@
+import {copyOptional,prepareSourceTree} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -11,7 +12,6 @@ import {buildNativeHal} from './hal-build.mjs';
 import {buildKeyStoreRust} from './rust/build.mjs';
 import {buildAttestationIds} from './attestation-id.mjs';
 import {linkKeyStore} from './link.mjs';
-import {prepareSourceTree} from '../upstream/source-files.mjs';
 
 const nativeRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const pins=JSON.parse(fs.readFileSync(path.join(nativeRoot,'source-pins.json')));
@@ -72,9 +72,9 @@ export async function buildKeyStore(context) {
     nativeCheckout:checkouts.native,nativeRevision:pins.aospNative,binder,
     foundation,wrapper,rustLibrary:rust.rustLibrary,attestation,nativeHal,
     crypto:{...rust.crypto,crypto:boringssl.crypto},processLibrary});
-  fs.cpSync(foundation.notices,path.join(notices,'foundation'),{recursive:true});
+  copyOptional(foundation.notices,path.join(notices,'foundation'));
   if(path.resolve(rust.notices)!==path.resolve(notices))
-    fs.cpSync(rust.notices,path.join(notices,'rust'),{recursive:true});
+    copyOptional(rust.notices,path.join(notices,'rust'));
   for(const name of ['framework','bionic','boringssl']){
     for(const file of fs.globSync(['**/NOTICE','**/NOTICE.*','**/LICENSE','**/LICENSE.*'],{cwd:sources[name]})){
       const source=path.join(sources[name],file);

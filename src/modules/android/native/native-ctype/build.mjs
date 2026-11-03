@@ -1,8 +1,8 @@
+import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {exportSources} from '../binder-rpc/build.mjs';
 import {compileHostObject} from '../host-compile.mjs';
-import {writeChanged} from '../upstream/source-files.mjs';
 import {prepareNativeMultibyte} from './multibyte.mjs';
 
 const pins=JSON.parse(fs.readFileSync(new URL('../source-pins.json',import.meta.url)));
@@ -40,7 +40,6 @@ export function prepareNativeCtype({bionicSource,build,ninja,python}){
  const lookup=path.join(output,'lookup.cpp');
  writeChanged(lookup,'#include <cstring>\n'+bindings.map(({symbol})=>`extern "C" void ${symbol}(void);`).join('\n')+'\nextern "C" void *klj_ctype_lookup(const char *name){\n'+bindings.map(({name,symbol})=>`if(!std::strcmp(name,"${name}"))return reinterpret_cast<void *>(&${symbol});`).join('\n')+'\nreturn nullptr;\n}\n');
  objects.push(compile('bionic-ctype-lookup.o',lookup,'clang++'));
- const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});writeChanged(path.join(notices,'NOTICE'),fs.readFileSync(path.join(source,'libc/NOTICE')));
- writeChanged(path.join(notices,'source.json'),JSON.stringify({project:'Bionic character classification and multibyte conversion',revision:pins.aospBionic,units:['libc/bionic/ctype.cpp','libc/include/ctype.h',...multibyte.units.map(file=>'libc/'+file)],adaptation:'Original complete units and Android state layouts, with one owned symbol namespace and physical errno mapping.'},null,2)+'\n');
+ const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
  return {output,objects,names:bindings.map(binding=>binding.name),notices};
 }

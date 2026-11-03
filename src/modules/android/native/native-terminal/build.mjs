@@ -1,10 +1,10 @@
+import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {exportSources} from '../binder-rpc/build.mjs';
 import {compileHostObject} from '../host-compile.mjs';
-import {writeChanged} from '../upstream/source-files.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
 
 const pins=JSON.parse(fs.readFileSync(new URL('../source-pins.json',import.meta.url)));
@@ -72,8 +72,7 @@ export function prepareNativeTerminal({bionicSource,build,ninja,python,libc}){
     writeChanged(libc,text);
   }
   const notices=path.join(output,'notices');
-  writeChanged(path.join(notices,'NOTICE'),fs.readFileSync(path.join(original,'NOTICE')));
-  writeChanged(path.join(notices,'source.json'),JSON.stringify({project:'Bionic terminal interfaces',revision:pins.aospBionic,units:['libc/bionic/termios.cpp','libc/include/bits/termios_inlines.h','libc/include/bits/termios_winsize_inlines.h',...headers.map(file=>'libc/kernel/uapi/'+file)],adaptation:'Original complete terminal implementation, shared ioctl translation of physical Darwin terminal flags, control indices, speeds and records.'},null,2)+'\n');
+  copyOptional(path.join(original,'NOTICE'),path.join(notices,'NOTICE'));
   writeChanged(path.join(output,'exports.json'),JSON.stringify({exports:names},null,2)+'\n');
   return {objects,names,notices,output};
 }

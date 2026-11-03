@@ -1,3 +1,4 @@
+import {copyOptional} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -116,7 +117,6 @@ export function prepareWideStdio({bionicSource,compilerRtSource,klepton,build,sh
   }
   if(table){const text=fs.readFileSync(table,'utf8');fs.writeFileSync(table,text.replace(/^KL_FWD\((\w+)\).*\n/gm,(line,name)=>exports.includes(name)?'':line));}
   if(libcSource){const text=fs.readFileSync(libcSource,'utf8');fs.writeFileSync(libcSource,removeFunction(text,'int    klb_swprintf('));}
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});fs.copyFileSync(path.join(libc,'NOTICE'),path.join(notices,'Bionic-NOTICE'));fs.copyFileSync(path.join(rtSource,'LICENSE.TXT'),path.join(notices,'CompilerRT-LICENSE'));
-  fs.writeFileSync(path.join(notices,'source.json'),JSON.stringify({bionic:pins.aospBionic,compilerRt:compilerRtRevision,formatter:'libc/stdio/vfwprintf.cpp',module:'libc_gdtoa',units,exports,compilerHelpers:[...provided]},null,2)+'\n');
+  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(libc,'NOTICE'),path.join(notices,'Bionic-NOTICE'));copyOptional(path.join(rtSource,'LICENSE.TXT'),path.join(notices,'CompilerRT-LICENSE'));
   return {objects,notices,output,exports};
 }

@@ -15,16 +15,16 @@ export async function buildArtRuntime({inputs,check=false}){
  if(fs.existsSync(path.join(options.output,'runtime')))throw Error('ART supplier output already exists.');
  if(providedArchive!==undefined&&(!path.isAbsolute(providedArchive)||!fs.statSync(providedArchive).isFile()))throw Error('ART sourceArchive must be an absolute source archive path.');
  const toolPath=value=>typeof value==='string'?value:value?.path;
- const hwui=hwuiSources||(options.hwui?{sources:options.hwui.sources,registry:path.join(options.hwui.notices||path.join(options.output,'runtime/licenses/hwui'),'SOURCES.json'),registryCache:options.hwui.noticeInputs?.cargo?.registryCache||path.join(toolPath(options.hwui.tools?.cargoHome)||'','registry/cache')}:undefined);
+ const hwui=hwuiSources||(options.hwui?{sources:options.hwui.sources,registry:path.join(options.hwui.work||path.join(options.output,'build/hwui'),'module/sources/SOURCES.json'),registryCache:options.hwui.noticeInputs?.cargo?.registryCache||path.join(toolPath(options.hwui.tools?.cargoHome)||'','registry/cache')}:undefined);
  const bridge=options.nativeBridge;
  let ndkHeaders=bridge?.ndkHeaders||sources.ndkHeaders;
  if(!ndkHeaders&&bridge?.imports?.directory){const input=path.join(bridge.imports.directory,'guest-input.json');if(fs.existsSync(input))ndkHeaders=JSON.parse(fs.readFileSync(input)).include;}
- const bridgeSources=nativeBridgeSources||((bridge||options.inputs?.nativeBridge)?{ndkHeaders,arm32Notices:bridge?.arm32?.notices}:undefined);
+ const bridgeSources=nativeBridgeSources||((bridge||options.inputs?.nativeBridge)?{ndkHeaders,arm32Sources:bridge?.arm32?.sources}:undefined);
  const checkouts={...(bridge?.bionicSource?{'aosp-bionic':bridge.bionicSource}:{}),...(bridge?.artSource?{'aosp-art':bridge.artSource}:{}),...(bridge?.ffi?.source?{libffi:bridge.ffi.source}:{}),...(bridge?.arm32?.source?{dynarmic:bridge.arm32.source}:{}),...sourceCheckouts};
  if(!providedArchive&&options.inputs?.hwuiLibrary&&!hwui)throw Error('ART HWUI source export requires its original sources and registry inputs.');
  const exportSources=()=>exportArtSourceArchive({output:path.join(options.output,'source.tar.gz'),sources,unicorn:runner.unicorn,sourceCheckouts:checkouts,hwuiSources:hwui,nativeBridgeSources:bridgeSources});
  // Newly compiled HWUI supplies its active Cargo identities through the normal
- // component notices. All other declared source inputs can be exported first.
+ // component source output. All other declared source inputs can be exported first.
  const afterBuild=!providedArchive&&options.hwui&&typeof hwui?.registry==='string'&&!fs.existsSync(hwui.registry);
  let sourceArchive=providedArchive||(!afterBuild&&exportSources());
  const workspace=buildWork||path.join(options.output,'build');

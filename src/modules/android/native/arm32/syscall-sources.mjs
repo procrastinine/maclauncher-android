@@ -1,9 +1,9 @@
+import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {exportSources} from '../binder-rpc/build.mjs';
 import {preparePrctlConstants} from '../process-abi/prctl.mjs';
-import {writeChanged} from '../upstream/source-files.mjs';
 
 const pins=JSON.parse(fs.readFileSync(new URL('../source-pins.json',import.meta.url)));
 
@@ -91,6 +91,6 @@ export function prepareSyscalls({bionicSource,include,python,importsDirectory,ou
   lines.push('};');writeChanged(path.join(output,'syscalls.inc'),lines.join('\n')+'\n');
   writeChanged(path.join(output,'syscalls.json'),JSON.stringify(outputRows,null,2)+'\n');
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  fs.copyFileSync(path.join(source,'libc/NOTICE'),path.join(notices,'syscalls-Bionic-NOTICE'));
+  copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'syscalls-Bionic-NOTICE'));
   return {directory:output,notices,entries:outputRows.length};
 }

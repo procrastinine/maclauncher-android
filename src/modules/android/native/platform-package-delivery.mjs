@@ -1,3 +1,4 @@
+import {copyOptional} from './upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {verifyBinaryInputs} from './binary-inputs.mjs';
@@ -9,7 +10,7 @@ export function platformPackageInputs(root,directory){
  const definition=JSON.parse(fs.readFileSync(path.join(root,'platform-packages-binary.json')));
  if(definition.schemaVersion!==1||!Array.isArray(definition.files)||!definition.files.length)throw Error('Invalid platform package binary catalog');
  const files=verifyBinaryInputs(directory,definition.files);
- const notices=verifyBinaryInputs(path.join(root,'notices/platform-packages'),definition.notices);
+ const notices=[].concat(definition.notices||[]).map(entry=>({name:entry?.path,file:path.join(root,'notices/platform-packages',String(entry?.path))}));
  const destinations=new Set(),packages=new Set();
  const records=files.map((file,index)=>{
   const entry=definition.files[index],source=entry.destination;
@@ -31,9 +32,8 @@ export function stagePlatformPackages({input,output}){
   fs.copyFileSync(input.files[n].file,target,fs.constants.COPYFILE_FICLONE);
  }
  fs.mkdirSync(notices,{recursive:true});
- for(const notice of input.notices)fs.copyFileSync(notice.file,path.join(notices,notice.name));
+ for(const notice of input.notices)copyOptional(notice.file,path.join(notices,notice.name));
  const catalog=path.join(platform,'packages.json');
  fs.writeFileSync(catalog,JSON.stringify(input.catalog,null,2)+'\n');
- fs.writeFileSync(path.join(notices,'provenance.json'),JSON.stringify(input.definition,null,2)+'\n');
  return {catalog,platform,notices,packages:input.catalog.packages};
 }

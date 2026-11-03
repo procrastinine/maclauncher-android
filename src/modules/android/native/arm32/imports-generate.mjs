@@ -1,9 +1,9 @@
+import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {cachedBuildStep} from '../upstream/build-step.mjs';
-import {writeChanged} from '../upstream/source-files.mjs';
 import {generateSignalAbi} from './signal-abi.mjs';
 import {mediaInterfaceCounts} from './media-lengths.mjs';
 
@@ -358,17 +358,11 @@ export async function generateImports({include,python,output,ownerHeaders=[],gra
   writeChanged(path.join(output,'header-inventory.json'),JSON.stringify(inventory,null,2)+'\n');
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
   refreshDescriptors({include,python,output,graphicsRegistry:graphicsRegistry||null,clang});
-  let notice;
   for(let ancestor=path.dirname(include);;ancestor=path.dirname(ancestor)){
     const candidate=path.join(ancestor,'NOTICE');
-    if(fs.existsSync(candidate)){
-      const bytes=fs.readFileSync(candidate);
-      if(crypto.createHash('sha256').update(bytes).digest('hex')===pin.noticeSha256){notice=bytes;break;}
-    }
+    if(fs.existsSync(candidate)){copyOptional(candidate,path.join(notices,'android-ndk.txt'));break;}
     if(path.dirname(ancestor)===ancestor)break;
   }
-  if(!notice)throw Error('Original NDK NOTICE was not found above its header tree');
-  writeChanged(path.join(notices,'android-ndk.txt'),notice);
   return {output,guest:data.guest,host:data.host};
 }
 

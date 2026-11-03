@@ -1,17 +1,36 @@
-const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto'),zlib=require('node:zlib');
-const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),blob=b=>crypto.createHash('sha1').update('blob '+b.length+'\0').update(b).digest('hex');
-function tar(files){return Buffer.concat([...Object.entries(files).flatMap(([name,body])=>{const bytes=Buffer.from(body),h=Buffer.alloc(512);h.write(name);h.write('0000644\0',100);h.write('0000000\0',108);h.write('0000000\0',116);h.write(bytes.length.toString(8).padStart(11,'0')+'\0',124);h.write('00000000000\0',136);h.fill(32,148,156);h[156]=48;h.write('ustar\0',257);h.write('00',263);const sum=[...h].reduce((a,b)=>a+b,0);h.write(sum.toString(8).padStart(6,'0')+'\0 ',148);return[h,bytes,Buffer.alloc((512-bytes.length%512)%512)];}),Buffer.alloc(1024)]);}
-test('HWUI notices preserve original attribution and locked offline crate license bytes',async t=>{
- const {collectHwuiNotices}=await import('../src/modules/android/native/hwui/notices.mjs');const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'hwui-notices-'));t.after(()=>fs.rmSync(tmp,{recursive:true,force:true}));const write=(file,bytes)=>{fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,bytes);};const root=path.join(tmp,'source'),work=path.join(tmp,'work');fs.mkdirSync(work);const license=Buffer.from('Original fixture license\n'),unit=Buffer.from('/* Copyright original source owner. Licensed under the Apache License, Version 2.0. */\nint original(){return 1;}\n');write(path.join(root,'LICENSE'),license);write(path.join(root,'source.cpp'),unit);write(path.join(root,'UNRELATED-GPL'),Buffer.from('Unrelated tool license'));
- const record={key:'fixture',project:'fixture/source',repository:'https://example.invalid/source',revision:'a'.repeat(40),checks:[{path:'source.cpp',type:'blob',mode:33188,object:blob(unit)}],noticeChecks:[{path:'LICENSE',type:'blob',mode:33188,object:blob(license),output:'fixture/LICENSE'}]};
- const crate=zlib.gzipSync(tar({'dependency-1.0.0/LICENSE':'Original dependency license\n','dependency-1.0.0/src/lib.rs':'pub fn exact(){}\n'})),cache=path.join(tmp,'cache');write(path.join(cache,'registry/dependency-1.0.0.crate'),crate);const manifest=path.join(work,'cargo/Cargo.toml'),lock=path.join(work,'cargo/Cargo.lock');write(manifest,'[workspace]\n');write(lock,'version = 4\n[[package]]\nname = "dependency"\nversion = "1.0.0"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\nchecksum = "'+sha(crate)+'"\n');const source='registry+https://github.com/rust-lang/crates.io-index',id=source+'#dependency@1.0.0',meta={workspace_members:['workspace'],resolve:{nodes:[{id:'workspace',deps:[{pkg:id,dep_kinds:[{kind:null}]}]},{id,deps:[]}]},packages:[{id,name:'dependency',version:'1.0.0',source,license:'MIT',license_file:null}]};const cargo=path.join(tmp,'cargo');write(cargo,'#!'+process.execPath+'\nconst fs=require("fs");if(!process.argv.includes("--offline")||!process.argv.includes("--locked"))process.exit(7);process.stdout.write('+JSON.stringify(JSON.stringify(meta))+');\n');fs.chmodSync(cargo,0o755);
- const rust=path.join(tmp,'rust'),ndk=path.join(tmp,'ndk');write(path.join(rust,'COPYRIGHT-library.html'),'<p><b>License:</b> MIT</p>');write(path.join(rust,'licenses/MIT.txt'),'Original Rust MIT license');write(path.join(ndk,'NOTICE'),'Original NDK notice');const ctx={work,module:path.join(work,'module'),components:path.join(work,'components'),tools:{cargo,cargoHome:cache},sources:{fixture:root},originalSources:{fixture:{record,input:root}}},options={output:path.join(work,'notices'),sourceUnits:[{source:'fixture',path:'source.cpp'}],cargo:{manifest,lock,registryCache:cache,features:[]},rust:{root:rust,version:'fixture'},ndk:{root:ndk,version:'fixture',files:['NOTICE']}};
- const result=await collectHwuiNotices(ctx,options);assert.equal(fs.readFileSync(path.join(result.root,'fixture/LICENSE'),'utf8'),license.toString());assert.equal(fs.readFileSync(path.join(result.root,'rust/dependency-1.0.0/LICENSE'),'utf8'),'Original dependency license\n');assert.match(fs.readFileSync(path.join(result.root,'sources/AOSP-source-notices.txt'),'utf8'),/Copyright original source owner/);assert.equal(result.records.some(r=>r.path.includes('UNRELATED')),false);assert.equal(result.records.some(r=>r.path==='SOURCES.json'),false);assert.equal(fs.existsSync(path.join(result.root,'SOURCES.json')),true);assert.equal(fs.readFileSync(path.join(result.root,'rust-standard-library/licenses/MIT.txt'),'utf8'),'Original Rust MIT license');assert.deepEqual(fs.readFileSync(path.join(root,'source.cpp')),unit);assert.ok(result.records.every(r=>sha(fs.readFileSync(path.join(result.root,r.path)))===r.sha256));
- const original=fs.readFileSync(path.join(cache,'registry/dependency-1.0.0.crate'));fs.appendFileSync(path.join(cache,'registry/dependency-1.0.0.crate'),'tampered');await assert.rejects(collectHwuiNotices(ctx,{...options,output:path.join(work,'tampered')}),/Authenticated offline crate archive/);assert.equal(fs.existsSync(path.join(work,'tampered')),false);fs.writeFileSync(path.join(cache,'registry/dependency-1.0.0.crate'),original);fs.appendFileSync(path.join(root,'LICENSE'),'changed');await assert.rejects(collectHwuiNotices(ctx,{...options,output:path.join(work,'changed')}),/Original source content differs/);assert.equal(fs.existsSync(path.join(work,'changed')),false);
-});
-test('HWUI notice collector requires explicit toolchain notices before writing output',async()=>{const {collectHwuiNotices}=await import('../src/modules/android/native/hwui/notices.mjs');await assert.rejects(collectHwuiNotices({}),/Explicit original Rust standard-library and Android NDK notice inputs/);});
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 
-test('HWUI crate notices follow normal runtime edges and exclude host macros and build tools',async()=>{
+test('HWUI copies accompanying candidates without checking licence bytes or filtering toolchain text',async t=>{
+ const {collectHwuiNotices}=await import('../src/modules/android/native/hwui/notices.mjs');
+ const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'hwui-candidates-'));t.after(()=>fs.rmSync(tmp,{recursive:true,force:true}));
+ const write=(name,text)=>{const file=path.join(tmp,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,text);return file;};
+ const unit='/* Copyright original owner. */\nint original(){return 1;}\n';write('source/LICENSE','Changed accompanying text\n');write('source/unit.cpp',unit);
+ const manifest=write('cargo/Cargo.toml','[workspace]\n'),lock=write('cargo/Cargo.lock','version = 4\n');
+ const dependency=write('registry/dependency/LICENSE','Dependency text\n'),source='registry+https://github.com/rust-lang/crates.io-index',id=source+'#dependency@1.0.0';
+ write('cargo/Cargo.lock','version = 4\n[[package]]\nname = \"dependency\"\nversion = \"1.0.0\"\nsource = \"'+source+'\"\nchecksum = \"'+'a'.repeat(64)+'\"\n');
+ const meta={workspace_members:['workspace'],resolve:{nodes:[{id:'workspace',deps:[{pkg:id,dep_kinds:[{kind:null}]}]},{id,deps:[]}]},packages:[{id,name:'dependency',version:'1.0.0',source,manifest_path:path.join(path.dirname(dependency),'Cargo.toml')}]};
+ const cargo=write('cargo-tool','#!'+process.execPath+'\nprocess.stdout.write('+JSON.stringify(JSON.stringify(meta))+');');fs.chmodSync(cargo,0o755);
+ write('rust/COPYRIGHT-library.html','Copyright page');write('rust/licenses/MIT.txt','MIT text');write('rust/licenses/ISC.txt','ISC text');write('ndk/NOTICE','NDK text');
+ const root=path.join(tmp,'source'),record={key:'fixture',project:'fixture/source',revision:'a'.repeat(40),noticeChecks:[{path:'LICENSE',output:'fixture/LICENSE',object:'obsolete'}]};
+ const result=await collectHwuiNotices({work:tmp,module:tmp,tools:{cargo,cargoHome:tmp},sources:{fixture:root},originalSources:{fixture:{record,input:root}}},
+  {output:path.join(tmp,'output'),cargo:{manifest,lock,features:[],lockSha256:'obsolete'},rust:{root:path.join(tmp,'rust')},ndk:{root:path.join(tmp,'ndk'),files:[{path:'NOTICE',sha256:'obsolete'}]}});
+ assert.equal(fs.readFileSync(path.join(result.root,'fixture/LICENSE'),'utf8'),'Changed accompanying text\n');
+ assert.equal(fs.existsSync(path.join(result.root,'sources/fixture/unit.cpp')),false);assert.equal(fs.readFileSync(path.join(root,'unit.cpp'),'utf8'),unit);assert.equal(JSON.parse(fs.readFileSync(path.join(result.sourceRecords,'SOURCES.json'))).registry[0].checksum,'a'.repeat(64));
+ assert.equal(fs.readFileSync(path.join(result.root,'rust/dependency-1.0.0/LICENSE'),'utf8'),'Dependency text\n');
+ assert.equal(fs.readFileSync(path.join(result.root,'rust-standard-library/licenses/ISC.txt'),'utf8'),'ISC text');
+ assert.equal(fs.readFileSync(path.join(result.root,'ndk/NOTICE'),'utf8'),'NDK text');
+ assert(result.records.every(row=>Object.keys(row).length===1&&typeof row.path==='string'));
+});
+
+test('missing accompanying sources and toolchain files warn and do not reject HWUI collection',async t=>{
+ const {collectHwuiNotices}=await import('../src/modules/android/native/hwui/notices.mjs');
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'hwui-missing-candidates-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const warnings=[];t.mock.method(console,'warn',message=>warnings.push(message));
+ const result=await collectHwuiNotices({work:root,module:root},{output:path.join(root,'output'),rust:{root:path.join(root,'missing')},ndk:{root:path.join(root,'missing'),files:['NOTICE']}});
+ assert.equal(result.root,path.join(root,'output'));assert(warnings.length>=3);assert(fs.existsSync(path.join(result.sourceRecords,'SOURCES.json')));assert.equal(fs.existsSync(path.join(result.root,'SOURCES.json')),false);
+});
+
+test('HWUI crate selection follows normal runtime edges and excludes host macros and build tools',async()=>{
  const {runtimeCargoPackages}=await import('../src/modules/android/native/hwui/notices.mjs');
  const edge=(pkg,kind=null)=>({pkg,dep_kinds:[{kind}]}),packages=['app','runtime','shared','build-tool','build-child','macro','macro-child','dev-tool'].map(id=>({id,targets:[{kind:[id==='macro'?'proc-macro':'lib']}]}));
  const meta={packages,workspace_members:['app'],resolve:{nodes:[
@@ -19,14 +38,4 @@ test('HWUI crate notices follow normal runtime edges and exclude host macros and
   {id:'runtime',deps:[edge('shared')]},{id:'shared',deps:[]},{id:'build-tool',deps:[edge('build-child')]},{id:'build-child',deps:[]},
   {id:'macro',deps:[edge('macro-child')]},{id:'macro-child',deps:[]},{id:'dev-tool',deps:[]}]}};
  assert.deepEqual(runtimeCargoPackages(meta).map(pkg=>pkg.id),['app','runtime','shared']);
-});
-
-test('Rust notice texts are selected from the copyright page expressions without exceptions',async t=>{
- const {rustLibraryNoticeFiles}=await import('../src/modules/android/native/hwui/notices.mjs');
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'rust-notice-selection-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));fs.mkdirSync(path.join(root,'licenses'));
- fs.writeFileSync(path.join(root,'COPYRIGHT-library.html'),'<p><b>License:</b> MIT OR Apache-2.0 WITH LLVM-exception</p>');
- for(const name of ['MIT','Apache-2.0','LLVM-exception','ISC','OFL-1.1','GPL-2.0-only'])fs.writeFileSync(path.join(root,'licenses',name+'.txt'),name);
- assert.deepEqual(rustLibraryNoticeFiles(root),['COPYRIGHT-library.html','licenses/Apache-2.0.txt','licenses/LLVM-exception.txt','licenses/MIT.txt']);
- fs.appendFileSync(path.join(root,'COPYRIGHT-library.html'),'<p><b>License:</b> OFL-1.1 AND GPL-2.0-only</p>');
- assert(rustLibraryNoticeFiles(root).includes('licenses/OFL-1.1.txt'));assert(rustLibraryNoticeFiles(root).includes('licenses/GPL-2.0-only.txt'));
 });

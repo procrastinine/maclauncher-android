@@ -1,3 +1,4 @@
+import {copyOptional} from '../upstream/source-files.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -103,7 +104,6 @@ export function prepareNonlocalJump({bionicSource,klepton,build}){
   fs.writeFileSync(lookup,'#include <string.h>\n#include <stddef.h>\n'+names.map(name=>`extern void klj_jump_${name}(void);`).join('\n')+'\nvoid *klj_nonlocal_jump_lookup(const char *name){\n'+names.map(name=>` if(!strcmp(name,"${name}"))return (void *)&klj_jump_${name};`).join('\n')+'\n return NULL;\n}\n');
   const object=path.join(output,'lookup.o');execFileSync('clang',[...flags,'-c',lookup,'-o',object],{stdio:'inherit'});objects.push(object);
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  fs.copyFileSync(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
-  fs.writeFileSync(path.join(notices,'source.json'),JSON.stringify({project:'Bionic nonlocal jumps',url:'https://android.googlesource.com/platform/bionic',revision:pins.aospBionic,units,namespace:names},null,2)+'\n');
+  copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
   return {output,objects,notices,names};
 }

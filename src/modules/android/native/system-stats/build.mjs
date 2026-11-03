@@ -1,3 +1,4 @@
+import {copyOptional} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {exportSources} from '../binder-rpc/build.mjs';
@@ -31,9 +32,6 @@ export function prepareStatsService({source,output}) {
   const selected=[...files].sort();
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
   const provenance={project:'platform/packages/modules/StatsD',url:'https://android.googlesource.com/platform/packages/modules/StatsD',revision:pin,module:'service-statsd',license:'Apache-2.0',files:selected.map(file=>path.relative(exported,file))};
-  fs.writeFileSync(path.join(notices,'source.json'),JSON.stringify(provenance,null,2)+'\n');
-  fs.copyFileSync(path.join(directory,'Android.bp'),path.join(notices,'Android.bp'));
-  fs.copyFileSync(path.join(nativeRoot,'notices/aosp-framework/LICENSE'),path.join(notices,'LICENSE'));
-  fs.writeFileSync(path.join(notices,'NOTICE'),selected.map(file=>path.relative(exported,file)+'\n'+fs.readFileSync(file,'utf8').split('package ')[0].trim()).join('\n\n')+'\n');
+  copyOptional(path.join(nativeRoot,'notices/aosp-framework/LICENSE'),path.join(notices,'LICENSE'));
   return {files:selected,notices};
 }

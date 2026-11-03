@@ -1,3 +1,4 @@
+import {copyOptional,writeChanged,copyChanged,prepareSourceTree,synchronizeSourceTree} from '../upstream/source-files.mjs';
 import {exportSources} from '../upstream/source-export.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
 import fs from 'node:fs';
@@ -10,7 +11,6 @@ import {parseBlueprint,readModuleList} from '../upstream/blueprint.mjs';
 import {extendBinder} from './ndk-build.mjs';
 import {useSharedFoundation} from './foundation-sources.mjs';
 import {prepareNativeTrace} from './tracing-sources.mjs';
-import {writeChanged,copyChanged,prepareSourceTree,synchronizeSourceTree} from '../upstream/source-files.mjs';
 import {compileHostLibrary,compileHostObject} from '../host-compile.mjs';
 import {buildAshmemCodec} from './ashmem-codec.mjs';
 import {prepareBinderLifetime} from './lifetime-sources.mjs';
@@ -140,20 +140,16 @@ function prepareBinderRpc({nativeSource,systemCore,output,jni,services,keymap}){
   if(jni&&!identityLibrary)throw Error('Android Binder JNI requires the shared process identity owner');
   if(identityLibrary){flags.push('-DKLJ_BINDER_DESCRIPTOR_OWNER=1');prepareBinderLogicalIdentity(sources);}
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  fs.copyFileSync(path.join(source,'native/NOTICE'),path.join(notices,'aosp-native.txt'));
-  fs.copyFileSync(path.join(source,'core/libutils/NOTICE'),path.join(notices,'aosp-libutils.txt'));
+  copyOptional(path.join(source,'native/NOTICE'),path.join(notices,'aosp-native.txt'));
+  copyOptional(path.join(source,'core/libutils/NOTICE'),path.join(notices,'aosp-libutils.txt'));
   if(jni)for(const [directory,name]of[['framework','aosp-framework'],['nativehelper','aosp-libnativehelper'],['libbase','aosp-libbase'],['bionic/libc','aosp-bionic'],['core/libcutils','aosp-libcutils']])
-    fs.copyFileSync(path.join(source,directory,'NOTICE'),path.join(notices,name+'.txt'));
+    copyOptional(path.join(source,directory,'NOTICE'),path.join(notices,name+'.txt'));
   const compiled=new Set(sources.map(file=>path.basename(file).replace(/-darwin(?=\.cpp$)/,'')));
   const moduleNames=jni?['libbinder_common_defaults','libbinder_android_defaults','libbinder_kernel_defaults','libbinder']:['libbinder_common_defaults'];
   const definitions=parseBlueprint(fs.readFileSync(path.join(binder,'Android.bp'),'utf8'),{file:'libs/binder/Android.bp'}).modules;
   const modules=moduleNames.map(name=>({name,manifest:'libs/binder/Android.bp',definition:definitions.find(module=>module.properties.name===name).properties,sources:publisherList(binder,name,'srcs').map(file=>({path:file.startsWith(':')?file:'libs/binder/'+file,
     disposition:compiled.has(file)?'included':name==='libbinder_android_defaults'?'darwin-adapter':'system-service-dependency',
     ...(!compiled.has(file)?{reason:name==='libbinder_android_defaults'?'OS_darwin.cpp owns sockets, mappings, descriptor credentials and clocks on macOS.':'Requires the Android system servicemanager/AIDL daemon interface; package-scoped installed services currently use original Binder RPC and the shared service broker.'}:{})}))}));
-  fs.writeFileSync(path.join(notices,'source.json'),JSON.stringify({project:'Android Binder and libutils',url:'https://android.googlesource.com/platform/frameworks/native',revision:pins.aospNative,modules,
-    dependencies:[{project:'platform/system/core',revision:pins.aospSystemCore,module:'libutils_binder_impl_defaults_nodeps',sources:publisherList(utils,'libutils_binder_impl_defaults_nodeps','srcs').map(file=>'libutils/binder/'+file)},
-      ...(jni?[{project:'platform/system/core',revision:pins.aospSystemCore,sources:['libutils/Threads.cpp','libutils/Timers.cpp','libutils/SystemClock.cpp','libcutils/native_handle.cpp','libcutils/properties.cpp']}]:[])],
-    compiledSources:sources.map(file=>path.relative(output,file)),platformAdapters:['OS_darwin.cpp',...(jni?['shared-memory.cpp','properties.cpp','ParcelTransport.cpp','JniRuntime.cpp','ObjectParcel.cpp']:[])]},null,2)+'\n');
   return {flags,sources,cSources,os,output};
 }
 

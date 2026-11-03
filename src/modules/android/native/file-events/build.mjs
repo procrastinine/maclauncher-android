@@ -1,3 +1,4 @@
+import {copyOptional} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -37,7 +38,6 @@ export function buildFileEvents({checkout,output,jdk}) {
     objects.push(object);
   }
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  fs.copyFileSync(path.join(source,'LICENSE'),path.join(notices,'LICENSE'));
-  fs.writeFileSync(path.join(notices,'source.json'),JSON.stringify({project:'libinotify-kqueue',url:'https://github.com/libinotify-kqueue/libinotify-kqueue',revision:pins.libinotifyKqueue,units:family},null,2)+'\n');
+  copyOptional(path.join(source,'LICENSE'),path.join(notices,'LICENSE'));
   return {objects,include:source,notices};
 }

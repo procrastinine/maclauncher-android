@@ -1,3 +1,4 @@
+import {copyOptional} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -65,9 +66,7 @@ export function prepareNativeLifecycle({bionicSource,klepton,build}) {
   const slinkPath=path.join(output,'kl_libc_slink.c');
   fs.writeFileSync(slinkPath,'extern int klj_guest_cxa_thread_atexit_impl(void (*)(void*),void*,void*);\nextern int klj_guest_register_atfork(void (*)(void),void (*)(void),void (*)(void),void*);\n'+slink);
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  fs.copyFileSync(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
-  fs.writeFileSync(path.join(notices,'source.json'),JSON.stringify({project:'Bionic native lifecycle',url:'https://android.googlesource.com/platform/bionic',revision:pins.aospBionic,units:units.map(name=>'libc/bionic/'+name+'.cpp'),
-    headers:['libc/bionic/atexit.h','libc/platform/bionic/tls_defines.h','libc/include/bits/get_device_api_level_inlines.h']},null,2)+'\n');
+  copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
   return {objects,shim:shimPath,slink:slinkPath,notices,
     abiFlags:['-DKLEPTON_TLS_DEFINES='+JSON.stringify(path.join(source,'libc/platform/bionic/tls_defines.h')),
       '-DKLEPTON_DEVICE_API_SOURCE='+JSON.stringify(path.join(source,'libc/include/bits/get_device_api_level_inlines.h'))],

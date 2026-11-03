@@ -1,3 +1,4 @@
+import {copyOptional} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -67,16 +68,15 @@ export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={})
       if(directory==='.')break;
       directory=path.posix.dirname(directory);
     }
-    const names=list(module.properties.licenses||owner?.properties.default_applicable_licenses,`${module.properties.name}.licenses`);
+    const names=[].concat(module.properties.licenses||owner?.properties.default_applicable_licenses||[]);
     const result=[];
     for(const name of names){
       const license=licenses.get(`${module.source.key}:${name}`);
-      if(!license)throw Error(`Missing original font license: ${name}`);
-      const texts=list(license.properties.license_text,`${name}.license_text`);
-      if(!texts.length)throw Error(`Missing original font license text: ${name}`);
+      if(!license)continue;
+      const texts=[].concat(license.properties.license_text||[]);
       for(const file of texts){
         const original=path.posix.normalize(path.posix.join(license.directory,file)),key=`${module.source.key}:${original}`;
-        if(!copiedNotices.has(key))copiedNotices.set(key,copy(license,file,path.join(notices,module.source.key,original)));
+        if(!copiedNotices.has(key)){const target=path.join(notices,module.source.key,original);copyOptional(path.join(module.source.checkout,original),target);copiedNotices.set(key,{path:path.relative(output,target)});}
         result.push({name,kinds:license.properties.license_kinds,notice:copiedNotices.get(key).path});
       }
     }

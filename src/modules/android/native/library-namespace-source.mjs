@@ -1,7 +1,7 @@
+import {copyOptional,writeOptional,prepareSourceTree,writeChanged} from './upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {exportSources} from './binder-rpc/build.mjs';
-import {prepareSourceTree,writeChanged} from './upstream/source-files.mjs';
 
 /** Keep original Bionic namespace access semantics and original ART flags.
  * Only the image registry's surrounding namespace representation differs. */
@@ -26,8 +26,8 @@ export function prepareLibraryNamespaces({bionicSource,artSource,output}){
   const location=slice(loader,'std::optional<std::string> FindApexNamespaceName(', '\n}  // namespace android::nativeloader');
   writeChanged(path.join(temporary,'art-namespace.inc'),loader.slice(0,loader.indexOf('*/')+2)+'\n'+apex+'\n'+location);
   const notices=path.join(temporary,'notices');fs.mkdirSync(notices);
-  fs.copyFileSync(path.join(bionic,'libc/NOTICE'),path.join(notices,'bionic.txt'));
-  writeChanged(path.join(notices,'art-native-loader.txt'),api.slice(0,api.indexOf('#ifndef')));
+  copyOptional(path.join(bionic,'libc/NOTICE'),path.join(notices,'bionic.txt'));
+  writeOptional(path.join(notices,'art-native-loader.txt'),api.slice(0,api.indexOf('#ifndef')));
  });
  return {include:output,nativeLoaderInclude:path.join(output,'art/libnativeloader/include'),nativeBridgeInclude:path.join(output,'art/libnativebridge/include'),notices:path.join(output,'notices')};
 }

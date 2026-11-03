@@ -17,8 +17,7 @@
     "url": "https://dl.google.com/android/repository/sys-img/google_apis_playstore/arm64-v8a-playstore-ps16k-36_r07.zip",
     "sha256": "182f51ad2b04bbb9cd9464d3e0396a81201db6d9659e1fde5951b6efc1e0a00e",
     "component": "system/priv-app/SettingsProvider/SettingsProvider.apk",
-    "componentNotice": "system/etc/NOTICE.xml.gz: //system/priv-app/SettingsProvider/SettingsProvider.apk",
-    "componentNoticeSha256": "38751245389e1e23f73e6f5384b5cbe7fa972cc4410c5adc9c04b082a0b9561a"
+    "componentNotice": "system/etc/NOTICE.xml.gz: //system/priv-app/SettingsProvider/SettingsProvider.apk"
   },
   "files": [
     {
@@ -31,9 +30,7 @@
   ],
   "notices": [
     {
-      "path": "NOTICE",
-      "size": 10695,
-      "sha256": "38751245389e1e23f73e6f5384b5cbe7fa972cc4410c5adc9c04b082a0b9561a"
+      "path": "NOTICE"
     }
   ]
 }

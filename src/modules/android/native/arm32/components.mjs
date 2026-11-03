@@ -8,7 +8,7 @@ export function arm32BuildProducts(output){
  return {library:path.join(output,components.bindings.jvm),
   cpu:{archive:path.join(output,components.cpu.archive),dependencies:components.cpu.dependencies.map(file=>path.join(output,file))},
   preloads:Object.fromEntries(components.preloads.map(item=>[item.name,path.join(output,item.build)])),
-  notices:path.join(output,components.notices)};
+  sources:path.join(output,'sources'),notices:path.join(output,components.notices)};
 }
 export function prepareArm32Components(output){
  const file=path.join(output,'arm32-components.h');

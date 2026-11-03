@@ -1,8 +1,8 @@
+import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {exportSources} from '../binder-rpc/build.mjs';
 import {compileHostObject} from '../host-compile.mjs';
-import {writeChanged} from '../upstream/source-files.mjs';
 const pins=JSON.parse(fs.readFileSync(new URL('../source-pins.json',import.meta.url)));
 
 /** Original Bionic PATH/script/argv handling above the shared native process
@@ -39,7 +39,6 @@ export function prepareNativeExec({bionicSource,klepton,build,ninja,python}){
  const symbol=name=>'klj_exec_'+name+(variadic.some(d=>d.name===name)?'_thunk':'');
  const lookup=path.join(output,'lookup.cpp');writeChanged(lookup,'#include <cstring>\n'+names.map(name=>`extern "C" void ${symbol(name)}(void);`).join('\n')+'\nextern "C" void *klj_exec_lookup(const char *name){\n'+names.map(name=>`if(!std::strcmp(name,"${name}"))return reinterpret_cast<void *>(&${symbol(name)});`).join('\n')+'\nreturn nullptr;\n}\n');
  objects.push(compile('bionic-exec-lookup.o',lookup));
- const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});writeChanged(path.join(notices,'NOTICE'),fs.readFileSync(path.join(source,'libc/NOTICE')));
- writeChanged(path.join(notices,'source.json'),JSON.stringify({project:'Bionic process execution',revision:pins.aospBionic,units,adaptation:'Original PATH, argv, environment and script handling; physical execve, access and descriptor paths use the existing native namespace.'},null,2)+'\n');
+ const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
  return {output,objects,names,notices,thunks};
 }

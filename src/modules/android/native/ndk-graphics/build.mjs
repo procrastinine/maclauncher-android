@@ -1,3 +1,4 @@
+import {copyOptional} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -127,16 +128,11 @@ export function buildNdkGraphics({output,frameworkSource,skiaSource,nativeSource
   for(const name of ['libandroid-binder-rpc.dylib','libklepton-jvm.dylib'])
     run('install_name_tool',['-change','@rpath/'+name,'@loader_path/'+name,library]);
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  fs.copyFileSync(path.join(sources.framework,'NOTICE'),path.join(notices,'AOSP-NOTICE'));
+  copyOptional(path.join(sources.framework,'NOTICE'),path.join(notices,'AOSP-NOTICE'));
   for(const relative of fs.globSync(['**/LICENSE','**/LICENSE.*','**/NOTICE','**/NOTICE.*'],{cwd:sources.skia})){
-    const file=path.join(sources.skia,relative);if(!fs.statSync(file).isFile())continue;
-    const destination=path.join(notices,'skia',relative);fs.mkdirSync(path.dirname(destination),{recursive:true});fs.copyFileSync(file,destination);
+    copyOptional(path.join(sources.skia,relative),path.join(notices,'skia',relative));
   }
-  for(const [name,header]of [['incfs','incfs/util/include/util/map_ptr.h'],['ziparchive','include/ziparchive/zip_archive.h']]){
-    const text=fs.readFileSync(path.join(sources[name],header),'utf8');
-    fs.writeFileSync(path.join(notices,name+'-headers-NOTICE'),text.slice(0,text.indexOf('*/')+2)+'\n');
-  }
-  fs.writeFileSync(path.join(notices,'sources.json'),JSON.stringify({framework:framework.declarationSource,dependencies:catalog},null,2)+'\n');
+
   const result={library,notices,bindings,exports};
   fs.writeFileSync(path.join(output,'build.json'),JSON.stringify(result,null,2)+'\n');return result;
 }

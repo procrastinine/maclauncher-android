@@ -1,7 +1,7 @@
+import {copyOptional,optionalFiles,writeChanged} from '../native/upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import {writeChanged,copyChanged} from '../native/upstream/source-files.mjs';
 import {supplier} from './source.mjs';
 import {buildArtHost} from './build-host.mjs';
 import {buildArtRunner} from './build-runner.mjs';
@@ -12,7 +12,7 @@ import {buildArtComposer} from './composer/build.mjs';
 import {buildArtGraphics} from './graphics/build.mjs';
 import {buildArtNativeBridge} from './build-arm32.mjs';
 import {components as arm32Components} from '../native/arm32/components.mjs';
-import {originalTreeFiles,isLicenseNoticeFile} from '../native/upstream/reuse.mjs';
+import {originalTreeFiles} from '../native/upstream/reuse.mjs';
 import {buildBootImage} from './boot-image.mjs';
 import {buildPlatformPackageCatalog} from '../native/platform-packages.mjs';
 
@@ -57,27 +57,26 @@ export function assembleArtSupplier({output,inputs,bootClasspath,sourceVersion,b
   if(!includeImage&&(originalImage?.archiveSha256!==supplier.android.imageSha256||!/^[a-f0-9]{64}$/.test(originalImage?.content?.sha256||'')||!Number.isSafeInteger(originalImage.content.records)||originalImage.content.records<1||!Number.isSafeInteger(originalImage.content.bytes)||originalImage.content.bytes<1))throw Error('Image-free ART assembly requires the verified original image identity.');
   for(const [name,relative]of Object.entries(delivered)){
    if(name==='image'&&!includeImage)continue;
+   if(relative.startsWith('licenses/')){copyOptional(inputs[name],path.join(temporary,relative));continue;}
    const source=path.resolve(inputs[name]||'');if(!inputs[name]||!fs.existsSync(source))throw Error('Missing ART producer output: '+name);
    const destination=path.join(temporary,relative);fs.mkdirSync(path.dirname(destination),{recursive:true});
-   fs.cpSync(source,destination,{recursive:true,mode:fs.constants.COPYFILE_FICLONE,dereference:false,verbatimSymlinks:true});
+   fs.cpSync(source,destination,{recursive:true,mode:fs.constants.COPYFILE_FICLONE,dereference:false,verbatimSymlinks:true,filter:(from,to)=>{
+    if(['notices','licenses'].includes(path.basename(from))){copyOptional(from,to);return false;}return true;
+   }});
   }
   const notices=[];
   for(const relative of Object.values(delivered)){
    const directory=path.join(temporary,relative.startsWith('licenses/')?relative:relative+'/notices');
-   if(!fs.statSync(directory,{throwIfNoEntry:false})?.isDirectory())continue;
-   for(const file of originalTreeFiles(directory).filter(isLicenseNoticeFile)){
+   if(!fs.existsSync(directory))continue;
+   for(const file of optionalFiles(directory)){
     const member=path.relative(temporary,file).split(path.sep).join('/');
     notices.push({name:'Android runtime — '+member.replace(/^licenses\//,'').replaceAll('/',' — '),license:'See included license',path:member});
    }
   }
-  for(const notice of previous?.notices||[])if(!notices.some(row=>row.path===notice.path)){
-   if(typeof notice.path!=='string'||path.isAbsolute(notice.path)||notice.path.split(/[\\/]/).some(part=>!part||part==='.'||part==='..'))throw Error('Original ART notice path is invalid.');
-   const root=fs.realpathSync(baseSupplier.root),source=fs.realpathSync(path.join(root,notice.path));
-   if(!source.startsWith(root+path.sep))throw Error('Original ART notice leaves its supplier.');
-   copyChanged(source,path.join(temporary,notice.path));notices.push({...notice});
-  }
+  if(baseSupplier)copyOptional(path.join(baseSupplier.root,'licenses'),path.join(temporary,'licenses'));
+  notices.push(...[].concat(previous?.notices||[]));
   const license=supplier.imageAcquisition.license;
-  copyChanged(path.join(import.meta.dirname,license.path),path.join(temporary,license.path));
+  copyOptional(path.join(import.meta.dirname,license.path),path.join(temporary,license.path));
   const android={...supplier.android,architectures:[...supplier.android.architectures,...(inputs.nativeBridge?['armeabi-v7a','armeabi']:[])]};
   const bootImage=inputs.bootImage?JSON.parse(fs.readFileSync(path.join(inputs.bootImage,'boot-image.json'),'utf8')):null;
   // An explicitly selected immutable supplier can lend its complete image
@@ -115,7 +114,7 @@ export async function buildArt({output,host,runner,java,guest,sensors,composer,g
  const boot=await buildBootImage({output:path.join(output,'boot-image-cache'),aim:host.aim,components:products,bootClasspath});
  const identity=crypto.createHash('sha256');
  identity.update(boot.identity);
- for(const input of [...originalTreeFiles(import.meta.dirname),native.hostLibrary,bootstrap.bootstrapDex,...Object.values(runnerProducts).filter(value=>typeof value==='string'),...Object.values(guestProducts),...Object.values(sensorProducts),...Object.values(composerProducts),...Object.values(graphicsProducts),...Object.values(bridgeProducts),...Object.values(hwuiProducts)])
+ for(const input of [...originalTreeFiles(import.meta.dirname).filter(file=>!file.startsWith(path.join(import.meta.dirname,'licenses')+path.sep)),native.hostLibrary,bootstrap.bootstrapDex,...Object.entries(runnerProducts).filter(([key,value])=>typeof value==='string'&&!artSupplierComponents(products)[key]?.startsWith('licenses/')).map(([,value])=>value),...Object.values(guestProducts),...Object.values(sensorProducts),...Object.values(composerProducts),...Object.values(graphicsProducts),...Object.entries({...bridgeProducts,...hwuiProducts}).filter(([key])=>!artSupplierComponents(products)[key]?.startsWith('licenses/')).map(([,value])=>value)])
   for(const file of fs.statSync(input).isDirectory()?originalTreeFiles(input):[input])identity.update(fs.readFileSync(file));
  return assembleArtSupplier({output:path.join(output,'runtime'),inputs:{...products,bootImage:boot.root},bootClasspath,baseSupplier,sourceVersion:'0.1.0-'+identity.digest('hex').slice(0,16)});
 }

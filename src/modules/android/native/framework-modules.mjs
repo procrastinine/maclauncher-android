@@ -1,3 +1,4 @@
+import {copyOptional} from './upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -39,19 +40,13 @@ export async function buildFrameworkModules({root,build,jdk,framework,apacheHttp
     const notice=path.join(directory,'notices'),license=path.join(root,'notices/aosp-framework/LICENSE');
     await cachedBuildStep({cache:path.join(directory,'reuse.json'),
       inputs:[fileURLToPath(import.meta.url),pinsFile,...javaToolInputs(jdk),framework.input.file,
-        ...declarations,...selected,license,...(supplier.name==='org.apache.http.legacy'?[path.join(source,'NOTICE')]:[])],
-      trees:[classes,notice],files:[archive],
+        ...declarations,...selected],
+      trees:[classes],files:[archive],
       key:{name:supplier.name,revision:supplier.pin,release:21,files:selected,environment:javaToolEnvironment()},build(){
         execFileSync(path.join(jdk,'bin/javac'),['--release','21','-cp',framework.input.file,'-d',classes,...selected],{stdio:'inherit'});
         execFileSync(path.join(jdk,'bin/jar'),['--create','--file',archive,'--date','1980-01-01T00:00:02Z','-C',classes,'.'],{stdio:'inherit'});
-        fs.copyFileSync(license,path.join(notice,'LICENSE'));
-        fs.writeFileSync(path.join(notice,'source.json'),JSON.stringify({project:supplier.project,
-          url:'https://android.googlesource.com/'+supplier.project,revision:supplier.pin,module:supplier.name,
-          license:'Apache-2.0',files:selected.map(file=>path.relative(source,file))},null,2)+'\n');
-        fs.copyFileSync(path.join(moduleDirectory,'Android.bp'),path.join(notice,'Android.bp'));
-        if(supplier.name==='org.apache.http.legacy')fs.copyFileSync(path.join(source,'NOTICE'),path.join(notice,'NOTICE'));
-        else fs.writeFileSync(path.join(notice,'NOTICE'),selected.map(file=>path.relative(source,file)+'\n'+
-          fs.readFileSync(file,'utf8').split('package ')[0].trim()).join('\n\n')+'\n');
+        copyOptional(license,path.join(notice,'LICENSE'));
+        if(supplier.name==='org.apache.http.legacy')copyOptional(path.join(source,'NOTICE'),path.join(notice,'NOTICE'));
       }});
     archives.push(archive);notices.push({name:supplier.name,path:notice});
   }

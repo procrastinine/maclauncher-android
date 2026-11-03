@@ -1,9 +1,9 @@
+import {copyOptional,prepareSourceTree,copyChanged} from '../upstream/source-files.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {exportSources} from '../binder-rpc/build.mjs';
-import {prepareSourceTree,copyChanged} from '../upstream/source-files.mjs';
 import {compileHostLibrary} from '../host-compile.mjs';
 const root=import.meta.dirname;
 const pins=JSON.parse(fs.readFileSync(path.join(root,'../source-pins.json')));
@@ -45,6 +45,6 @@ export function buildLibcore({libcoreSource,artSource,binder,output,ninja=proces
   execFileSync('codesign',['--force','--sign','-',publication],{stdio:'inherit'});
   copyChanged(publication,library);
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  for(const project of ['libcore','art'])copyChanged(path.join(source,project,'NOTICE'),path.join(notices,project+'.txt'));
+  for(const project of ['libcore','art'])copyOptional(path.join(source,project,'NOTICE'),path.join(notices,project+'.txt'));
   return {library,source};
 }

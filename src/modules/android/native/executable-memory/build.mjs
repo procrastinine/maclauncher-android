@@ -1,9 +1,9 @@
+import {copyOptional,prepareSourceTree} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {execFileSync} from 'node:child_process';
 import {exportSources} from '../binder-rpc/build.mjs';
-import {prepareSourceTree} from '../upstream/source-files.mjs';
 import {nativeRustPathEnvironment} from '../upstream/native-paths.mjs';
 import {prepareExecutableMemoryApi} from './source.mjs';
 
@@ -29,9 +29,6 @@ export function buildExecutableMemory({source,revision,output,rustToolchain,env=
  const archive=path.join(target,'release/libaim_linux_abi.a');
  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
  for(const name of ['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md'])
-  if(fs.existsSync(path.join(project,name)))fs.copyFileSync(path.join(project,name),path.join(notices,name));
- fs.writeFileSync(path.join(notices,'source.json'),JSON.stringify({project:'AIM native execution primitives',url:'https://github.com/hahnlee/aim',revision,
-  implementations:['crates/aim-linux-abi/src/a64.rs','crates/aim-linux-abi/src/sys/jit.rs','crates/aim-linux-abi/src/sys/sigframe.rs','crates/aim-linux-abi/src/sys/signal.rs'],
-  adaptation:'native memory, thread-pointer and signal ABI with kernel VM ownership tag'},null,2)+'\n');
+  if(fs.existsSync(path.join(project,name)))copyOptional(path.join(project,name),path.join(notices,name));
  return {archive,linkFlags:['-framework','IOKit','-lsandbox'],notices};
 }

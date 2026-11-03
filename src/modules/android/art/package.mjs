@@ -1,3 +1,4 @@
+import {copyOptional,isNoticePath} from '../native/upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -26,12 +27,10 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
   const supplier=JSON.parse(fs.readFileSync(path.join(supplierRoot,'runtime.json'),'utf8'));
   const common=JSON.parse(fs.readFileSync(path.join(commonRoot,'runtime.json'),'utf8'));
   if(commonDeclaration){
-    metadata.validateDeclaration(commonDeclaration);
     if(commonDeclaration.manifestRelative!=='runtime.json'||commonDeclaration.manifestSha256!==sha(path.join(commonRoot,'runtime.json')))
-      throw Error('Android ART common notice metadata differs from its producer manifest.');
+      throw Error('Android ART common runtime differs from its producer manifest.');
   }
-  const notices=commonDeclaration?.notices||common.notices;
-  if(!Array.isArray(notices)||!notices.length)throw Error('Android ART packaging requires the common runtime notice declaration.');
+  const notices=[].concat(commonDeclaration?.notices||common.notices||[]);
   if(supplier.schemaVersion!==1||supplier.execution!=='art'||supplier.components?.image!=='image'||supplier.imageAcquisition?.delivery!=='explicit-download'||
     common.profile?.javaMajor!==21)throw Error('Android ART producer profiles are incompatible.');
   // The consumer extracts onto a case-sensitive volume. A development tree
@@ -47,6 +46,7 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
   const stage=fs.mkdtempSync(path.join(path.dirname(output),'.android-art-'));
   const activeDirectories=new Set();
   const copy=(from,to,owner)=>{
+    if(isNoticePath(path.relative(owner,from))){copyOptional(from,to);return;}
     const actual=fs.realpathSync(from),relative=path.relative(fs.realpathSync(owner),actual);
     if(relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw Error('Android ART producer member escapes its source.');
     const stat=fs.statSync(actual);
@@ -78,10 +78,11 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
     copy(path.join(commonRoot,'native/SDL3.framework'),path.join(stage,'native/SDL3.framework'),commonRoot);
     copy(path.join(commonRoot,'notices'),path.join(stage,'notices'),commonRoot);
     supplier.components={...supplier.components,imageExtractor:'host/android-image-extract'};
-    metadata.validatePublicMetadata(supplier);
+    const {notices:supplierNotices,...supplierMetadata}=supplier;
+    metadata.validatePublicMetadata(supplierMetadata);
     fs.writeFileSync(path.join(stage,'art/runtime.json'),JSON.stringify(supplier,null,2)+'\n');
     const dependencies=[];let minimumMacOS='0.0';
-    const files=metadata.fileInventory(stage).map(relative=>{
+    const files=metadata.fileInventory(stage).filter(relative=>!isNoticePath(relative)).map(relative=>{
       const file=path.join(stage,relative),stat=fs.statSync(file),record={path:relative,size:stat.size,mode:stat.mode&0o777,sha256:sha(file)};
       let commands;
       try{commands=metadata.readMachOLoadCommands(file);}catch{}
@@ -109,8 +110,7 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
       notices:[]};
     // Each notice belongs to its exact common or ART supplier. Supplier paths
     // are relative to the separately packaged ART component tree.
-    if(supplier.notices!==undefined&&!Array.isArray(supplier.notices))throw Error('Android ART supplier notice records are invalid.');
-    declaration.notices=[...notices,...(supplier.notices||[]).map(notice=>({...notice,path:'art/'+notice.path}))];
+    declaration.notices=[...notices,...[].concat(supplier.notices||[]).map(notice=>({...notice,path:'art/'+notice?.path}))];
     metadata.validateDeclaration(declaration);metadata.verifyPayload(stage,declaration);
     fs.renameSync(stage,output);return {root:output,declaration};
   }finally{fs.rmSync(stage,{recursive:true,force:true});}

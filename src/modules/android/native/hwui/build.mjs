@@ -19,9 +19,6 @@ import {validateHwui} from './validateHwui.mjs';
 /** Build the complete pinned API36 ARM64 libhwui against its original image ABI. */
 export async function buildHwui(options) {
  const prepared=options.preparedNotices;
- if(prepared&&(typeof prepared!=='string'||!path.isAbsolute(prepared)||!fs.statSync(prepared).isDirectory()))throw Error('Complete HWUI notices must be an explicit directory');
- const ni=options.noticeInputs;
- if(!prepared&&(!ni?.rust?.root||!ni.rust.version||!ni?.ndk?.root||!ni.ndk.version||!ni.ndk.files?.length))throw Error('Explicit original Rust and Android NDK notice inputs are required before HWUI compilation');
  const ctx=await prepareHwuiInputs(options);
  for(const name of ['clangxx','ninja','blueprintParser','aidl','aconfig','protoc','python','syspropCpp','statsLogApiGen','hidlGen','rustc','cargo','cargoHome','libclang'])if(!ctx.tools[name])throw Error('An explicit HWUI build tool is required: '+name);
  const sysroot=ctx.tools.sysroot||path.join(path.dirname(path.dirname(ctx.tools.clangxx)),'sysroot');
@@ -38,6 +35,6 @@ export async function buildHwui(options) {
  await Promise.all([buildCore(ctx),buildStatics(ctx),buildAvif(ctx),buildGenerated(ctx),buildPerfetto(ctx)]);
  await prepareLinkInputs(ctx);
  const product=validateHwui(ctx,await linkHwui(ctx));
- const notices=prepared?{root:prepared}:await (await import('./notices.mjs')).collectHwuiNotices(ctx,options.noticeInputs||{});
- return {...product,notices:notices.root};
+ const notices=prepared?{root:prepared,sourceRecords:options.preparedSourceRecords}:await (await import('./notices.mjs')).collectHwuiNotices(ctx,options.noticeInputs||{});
+ return {...product,notices:notices.root,sourceRecords:notices.sourceRecords};
 }

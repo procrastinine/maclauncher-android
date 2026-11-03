@@ -1,3 +1,4 @@
+import {copyOptional} from '../upstream/source-files.mjs';
 import fs from 'node:fs';import path from 'node:path';import {execFileSync} from 'node:child_process';
 import {exportSources} from './build.mjs';import {prepareSourceTree,copyChanged,writeChanged} from '../upstream/source-files.mjs';import {nativeRustPathEnvironment} from '../upstream/native-paths.mjs';
 const revision=JSON.parse(fs.readFileSync(new URL('../source-pins.json',import.meta.url))).aim;
@@ -17,7 +18,6 @@ export function buildAshmemCodec({source,output,env=process.env,cargo='cargo',ru
  const target=path.join(output,'cargo');
  execFileSync(cargo,['build','--offline','--release','--manifest-path',path.join(project,'Cargo.toml'),'--target-dir',target],{env:environment,stdio:'inherit'});
  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
- for(const name of ['LICENSE','NOTICE'])copyChanged(path.join(project,'original',name),path.join(notices,name));
- writeChanged(path.join(notices,'source.json'),JSON.stringify({project:'AIM ashmem representation',url:'https://github.com/hahnlee/aim',revision,implementation:'crates/aim-ashmem/src/lib.rs',adaptation:'Native C ABI over the original State codec and MARK flags, with exact-file anonymous memory capabilities'},null,2)+'\n');
+ for(const name of ['LICENSE','NOTICE'])copyOptional(path.join(project,'original',name),path.join(notices,name));
  return path.join(target,'release/libmaclauncher_ashmem_codec.a');
 }

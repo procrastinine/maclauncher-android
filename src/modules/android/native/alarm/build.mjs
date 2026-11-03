@@ -1,9 +1,9 @@
+import {copyOptional,prepareSourceTree,copyChanged,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {exportSources} from '../binder-rpc/build.mjs';
 import {readModuleList} from '../upstream/blueprint.mjs';
-import {prepareSourceTree,copyChanged,writeChanged} from '../upstream/source-files.mjs';
 import {compileHostLibrary} from '../host-compile.mjs';
 
 const root=import.meta.dirname;
@@ -46,7 +46,6 @@ export function buildAlarm({frameworkSource,binder,pollable,processLibrary,outpu
   execFileSync('codesign',['--force','--sign','-',publication],{stdio:'inherit'});
   copyChanged(publication,library);
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  copyChanged(path.join(source,'NOTICE'),path.join(notices,'framework.txt'));
-  writeChanged(path.join(notices,'source.json'),JSON.stringify({project:'AOSP AlarmManager',url:'https://android.googlesource.com/platform/frameworks/base',revision,module:'libalarm_jni',files:files.map(file=>path.relative(source,file)),adaptations:['alarm/build.mjs','alarm/Portability.h']},null,2)+'\n');
+  copyOptional(path.join(source,'NOTICE'),path.join(notices,'framework.txt'));
   return {library,source,notices};
 }

@@ -1,3 +1,4 @@
+import {copyOptional} from './upstream/source-files.mjs';
 import fs from 'node:fs';
 import {nativePathFlags} from './upstream/native-paths.mjs';
 import path from 'node:path';
@@ -26,9 +27,6 @@ export function prepareOpenSlIds({wilhelmSource,build,jni=[]}){
   execFileSync('clang++',[...nativePathFlags({source:wilhelmSource,build}),'-std=c++17','-arch','arm64','-mmacosx-version-min=13.0','-O2','-fPIC','-Wall','-Wextra','-Werror','-I'+path.join(source,'include'),...jni,'-c',unit,'-o',object],{stdio:'inherit'});
   fs.writeFileSync(path.join(build,'opensl-ids.h'),names.map(name=>'extern const struct SLInterfaceID_ *const '+name+';').join('\n')+'\nvoid *klj_opensl_iid_lookup(const char *name);\n');
   const notices=path.join(directory,'notices');fs.mkdirSync(notices,{recursive:true});
-  for(const name of ['OpenSLES_IID.cpp','sl_iid.cpp'])fs.copyFileSync(path.join(source,'src',name),path.join(notices,name+'.txt'));
-  for(const name of ['AudioPlayer_to_android.cpp','AudioRecorder_to_android.cpp','android_defs.h'])fs.copyFileSync(path.join(source,'src/android',name),path.join(notices,name+'.txt'));
-  fs.writeFileSync(path.join(notices,'source.json'),JSON.stringify({url:'https://android.googlesource.com/platform/frameworks/wilhelm',revision:pins.aospWilhelm,units,adaptation:'Original interface-ID data, all OpenSL pointer exports and original player/recorder scalar configuration algorithms; platform audio interfaces retain their existing owner.'},null,2)+'\n');
   return {object,notices,names};
 }
 

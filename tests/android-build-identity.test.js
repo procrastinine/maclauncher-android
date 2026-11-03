@@ -1,5 +1,14 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
+test('notice text is copied without entering source or product identities',async t=>{
+ const {sourceInventory,productInventory,snapshotSources}=await import('../src/modules/android/native/build-sources.mjs');
+ const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'android-notice-identity-'));t.after(()=>fs.rmSync(temporary,{recursive:true,force:true}));const root=path.join(temporary,'input');fs.mkdirSync(root);fs.writeFileSync(path.join(temporary,'profile.js'),'module.exports={};');
+ fs.mkdirSync(path.join(root,'notices'));fs.writeFileSync(path.join(root,'notices/LICENSE'),'First text');fs.writeFileSync(path.join(root,'unit.c'),'source');
+ const before=sourceInventory(root);assert.deepEqual(before.map(row=>row.path),['unit.c']);assert.deepEqual(productInventory(root).map(row=>row.path),['unit.c']);
+ const destination=path.join(temporary,'capture');snapshotSources(root,destination);assert.equal(fs.readFileSync(path.join(destination,'native/notices/LICENSE'),'utf8'),'First text');
+ fs.rmSync(destination,{recursive:true,force:true});fs.writeFileSync(path.join(root,'notices/LICENSE'),'Changed text');assert.deepEqual(sourceInventory(root),before);
+ fs.writeFileSync(path.join(root,'unit.c'),'changed source');assert.notDeepEqual(sourceInventory(root),before);
+});
 test('Android compilation uses one complete fixed source tree and identity detects added sources',async t=>{
   const {sourceInventory,sourceIdentity,snapshotSources}=await import('../src/modules/android/native/build-sources.mjs');
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-build-source-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
@@ -37,7 +46,6 @@ test('Normal Android builder snapshots helpers without evaluating the platform g
   write('src/modules/android/art/launch.mjs','launcher-only orchestration\n');
   write('src/modules/shared/runtime/helper.js','module.exports={};\n');
   write('src/modules/shared/runtime/nested/new-helper.js','module.exports={};\n');
-  write('src/modules/nitroplus/runtime/portable-media.json','{}\n');
   write('src/modules/android/native/build-options.mjs','export function completeBuildOptions() {}\n');
   write('src/modules/android/native/build-workspace.mjs',
     'import fs from "node:fs"; export function enterBuildWorkspace({directory,output}) { fs.mkdirSync(directory,{recursive:true});fs.mkdirSync(output,{recursive:true});return true; }');
@@ -60,7 +68,7 @@ test('Normal Android builder snapshots helpers without evaluating the platform g
     assert.equal(fs.existsSync(path.join(source,'art/launch.mjs')),false);
     assert.deepEqual(identity.buildToolsSources.map(row=>row.path),[
       'src/modules/android/apk.js','src/modules/android/binary-manifest.js',
-      'src/modules/nitroplus/runtime/portable-media.json','src/modules/shared/runtime/helper.js','src/modules/shared/runtime/nested/new-helper.js']);
+      'src/modules/shared/runtime/helper.js','src/modules/shared/runtime/nested/new-helper.js']);
     assert.equal(JSON.stringify(identity).includes(temporary),false);
     captures.push(identity);
   }

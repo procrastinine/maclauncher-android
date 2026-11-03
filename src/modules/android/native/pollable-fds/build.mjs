@@ -1,9 +1,9 @@
+import {copyOptional,prepareSourceTree,writeChanged} from '../upstream/source-files.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {exportSources} from '../binder-rpc/build.mjs';
-import {prepareSourceTree,copyChanged,writeChanged} from '../upstream/source-files.mjs';
 import {configureCmake} from '../upstream/native-configure.mjs';
 
 const root=import.meta.dirname;
@@ -70,7 +70,6 @@ export function buildPollableDescriptors({checkout,output,ninja=process.env.NINJ
   configureCmake({source,build,ninja,args:['-DBUILD_TESTING=OFF','-DBUILD_SHARED_LIBS=OFF','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_OSX_ARCHITECTURES=arm64','-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0']});
   execFileSync('cmake',['--build',build,'--target','maclauncher-descriptors','--parallel',String(jobs)],{stdio:'inherit'});
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  for(const file of paths.filter(file=>/(^|\/)(LICENSE[^/]*|COPYING[^/]*)$/i.test(file))){const target=path.join(notices,file);fs.mkdirSync(path.dirname(target),{recursive:true});copyChanged(path.join(source,file),target);}
-  writeChanged(path.join(notices,'source.json'),JSON.stringify({project:'epoll-shim',url:'https://github.com/jiixyj/epoll-shim',revision},null,2)+'\n');
+  for(const file of paths.filter(file=>/(^|\/)(LICENSE[^/]*|COPYING[^/]*)$/i.test(file))){copyOptional(path.join(source,file),path.join(notices,file));}
   return {object,archive:path.join(build,'src/libepoll-shim.a'),include:path.join(build,'install-include'),notices,source,build};
 }

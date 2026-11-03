@@ -1,10 +1,10 @@
+import {copyOptional,prepareSourceTree,copyChanged,synchronizeSourceTree} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {prepareExtractorBufferSource} from '../media-extractor-source.mjs';
 import {exportSources,publisherList} from '../binder-rpc/build.mjs';
 import {prepareVolumeShaper} from './volume-shaper-sources.mjs';
-import {prepareSourceTree,copyChanged,synchronizeSourceTree} from '../upstream/source-files.mjs';
 import {compileHostObject,compileHostLibrary} from '../host-compile.mjs';
 import {buildLibvpx} from './libvpx-build.mjs';
 const root=import.meta.dirname;
@@ -33,9 +33,8 @@ function prepareMediaFoundation({avSource,frameworkSource,aidl,klepton,binder,ou
     ...['jni','source/nativehelper/header_only_include','source/native/libs/binder/include','source/native/libs/binder/ndk/include_cpp','source/native/headers/media_plugin','source/native/libs/binder/liblog_stub/include','source/core/libutils/binder/include','source/core/libutils/include','source/core/libcutils/include','source/core/libsystem/include','source/libbase/include','source/nativehelper/include_jni'].map(file=>path.join(binder.output,file)),path.join(root,'../binder-rpc/include'),path.join(root,'..')];
   const flags=['-std=c++23','-arch','arm64','-mmacosx-version-min=13.0','-O2','-fPIC','-Wall','-Wextra','-Werror','-Wno-unused-parameter','-Wno-multichar','-Wno-deprecated-declarations','-Wno-nontrivial-memcall','-Wno-sign-compare','-Wno-deprecated-enum-enum-conversion',
     '-Doff64_t=off_t','-DBINDER_NO_LIBBASE','-DBINDER_WITH_KERNEL_IPC','-DANDROID_UTILS_CALLSTACK_ENABLED=0','-DEXPORT=__attribute__((visibility("default")))',...includes.map(file=>'-I'+file)];
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});fs.copyFileSync(path.join(source,'media/module/foundation/NOTICE'),path.join(notices,'NOTICE'));
-  fs.copyFileSync(path.join(source,'media/ndk/NOTICE'),path.join(notices,'NDK-NOTICE'));
-  fs.writeFileSync(path.join(notices,'source.json'),JSON.stringify({project:'Android media framework',url:'https://android.googlesource.com/platform/frameworks/av',revision:pins.aospAv,license:'Apache-2.0; original NDK header notices retained',modules,units,volumeShaper:{headers:['include/media/VolumeShaper.h','include/media/Interpolator.h'],serializers:shaper.units.map(file=>path.relative(output,file)),jni:{project:'platform/frameworks/base',revision:pins.aospFramework,path:'media/jni/android_media_VolumeShaper.h'}}},null,2)+'\n');
+  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(source,'media/module/foundation/NOTICE'),path.join(notices,'NOTICE'));
+  copyOptional(path.join(source,'media/ndk/NOTICE'),path.join(notices,'NDK-NOTICE'));
   return {source,flags,inputs:[...units.map(file=>path.join(source,file)),...shaper.units,...['MediaRuntime.cpp','MediaExtractorJni.cpp','MediaExtractorNdk.cpp','MediaExtractorMetadata.cpp','MediaCodecOwner.cpp','VideoDecoder.cpp','VpxVideoDecoder.cpp','MediaCodecCatalog.cpp','MediaCodecListJni.cpp','MediaCodecNdk.cpp','MediaCodecJni.cpp','MediaCodecStreams.cpp','AudioShaper.cpp'].map(file=>path.join(root,file))]};
 }
 

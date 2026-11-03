@@ -1,3 +1,4 @@
+import {copyOptional} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync,spawnSync} from 'node:child_process';
@@ -78,8 +79,7 @@ export function prepareNativeMath({bionicSource,klepton,build,python,shim}){
     return `extern ${entry.kind==='VarDecl'?'char':'void'} klj_math_binding_${entry.name}${entry.kind==='VarDecl'?'':'(void)'} __asm__("_${symbol}");`;
   }).join('\n')+'\nvoid *klj_math_lookup(const char *name){\n'+bound.map(entry=>` if(!strcmp(name,"${entry.name}"))return (void *)&klj_math_binding_${entry.name};`).join('\n')+'\n return NULL;\n}\n');
   const object=path.join(output,'lookup.o');run('clang',[...cflags,'-c',lookup,'-o',object]);objects.push(object);
-  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});fs.copyFileSync(path.join(libm,'NOTICE'),path.join(notices,'NOTICE'));
-  fs.writeFileSync(path.join(notices,'source.json'),JSON.stringify({url:'https://android.googlesource.com/platform/bionic',revision:pins.aospBionic,units:[...selected],namespace:'libm/libm.map.txt',adaptation:'Original ARM64 floating-point environment and missing host math implementations; ABI-compatible system functions retain their native owner.'},null,2)+'\n');
+  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});copyOptional(path.join(libm,'NOTICE'),path.join(notices,'NOTICE'));
   fs.writeFileSync(path.join(output,'exports.json'),JSON.stringify(entries,null,2)+'\n');
   if(shim)adaptNativeMathShim({shim,klepton,entries,output});
   return {objects,notices,entries,output};

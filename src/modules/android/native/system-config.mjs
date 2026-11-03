@@ -1,3 +1,4 @@
+import {copyOptional} from './upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -25,7 +26,6 @@ export function stageAndroidSystemConfig({source,output}){
       products.push({module:p.name,definition,source:original,path:destination,sha256:createHash('sha256').update(bytes).digest('hex')});
     }
   }
-  fs.copyFileSync(path.join(source,'NOTICE'),path.join(notices,'NOTICE'));
-  fs.writeFileSync(path.join(notices,'modules.json'),JSON.stringify(products,null,2)+'\n');
+  copyOptional(path.join(source,'NOTICE'),path.join(notices,'NOTICE'));
   return {root,notices,products};
 }

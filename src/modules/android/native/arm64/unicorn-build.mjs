@@ -1,10 +1,10 @@
+import {copyOptional,copyChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {prepareUnicorn} from './unicorn-source.mjs';
 import {nativePathFlags,nativeFlagsString,publishNativeBinary} from '../upstream/native-paths.mjs';
-import {copyChanged} from '../upstream/source-files.mjs';
 
 export function buildUnicorn({source,output,work=path.join(output,'work'),cmake='cmake',jobs=4}){
  source=path.resolve(source);output=path.resolve(output);work=path.resolve(work);
@@ -18,10 +18,9 @@ export function buildUnicorn({source,output,work=path.join(output,'work'),cmake=
  const library=path.join(output,'libunicorn.2.dylib');
  publishNativeBinary(path.join(build,'libunicorn.2.dylib'),library,{rpaths:[],installName:'@rpath/libunicorn.2.dylib'});
  const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
- for(const file of ['COPYING','COPYING.LGPL2','COPYING_GLIB','qemu/COPYING','qemu/COPYING.LIB','qemu/LICENSE'])copyChanged(path.join(source,file),path.join(notices,'unicorn-'+file.replaceAll('/','-')));
+ for(const file of ['COPYING','COPYING.LGPL2','COPYING_GLIB','qemu/COPYING','qemu/COPYING.LIB','qemu/LICENSE'])copyOptional(path.join(source,file),path.join(notices,'unicorn-'+file.replaceAll('/','-')));
  const identity={schemaVersion:1,...JSON.parse(fs.readFileSync(new URL('./unicorn-source.json',import.meta.url),'utf8')),parallelAtomics:true};
  fs.writeFileSync(path.join(output,'unicorn-build.json'),JSON.stringify(identity,null,2)+'\n');
- copyChanged(path.join(output,'unicorn-build.json'),path.join(notices,'unicorn-source.json'));
  return {library,notices,identity,source:projection,build};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){

@@ -1,3 +1,4 @@
+import {copyOptional,prepareSourceTree,copyChanged,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -7,7 +8,6 @@ import {prepareAimSource} from '../../art/source.mjs';
 import {prepareBionicThreads} from './thread-source.mjs';
 import {prepareBionicProcess} from './process-source.mjs';
 import {generate} from './jni-generate.mjs';
-import {prepareSourceTree,copyChanged,writeChanged} from '../upstream/source-files.mjs';
 import {nativePathFlags,nativeRustPathEnvironment,publishNativeBinary} from '../upstream/native-paths.mjs';
 import {compileHostLibrary} from '../host-compile.mjs';
 import {generateLibandroidFacade} from './facades/libandroid.so/generate.mjs';
@@ -35,12 +35,7 @@ export function readBionicInputs(file){
   if(!stat.isFile()||sha(source)!==entry.sha256)throw Error('Bionic '+name+' supplier differs from its declared bytes');
   artifacts[name]={...entry,file:source,destination};
  }
- const notices=(value.notices||[]).map(entry=>{
-  relative(entry.path);const source=path.resolve(directory,entry.file),stat=fs.lstatSync(source);
-  if(!stat.isFile()||!/^([a-f0-9]{64})$/.test(entry.sha256)||sha(source)!==entry.sha256)throw Error('Bionic supplier notice differs: '+entry.path);
-  return {...entry,file:source};
- });
- if(!notices.length)throw Error('Bionic supplier notices are required');
+ const notices=[].concat(value.notices||[]).map(entry=>({...entry,file:typeof entry?.file==='string'?path.resolve(directory,entry.file):undefined}));
  return {...value,artifacts,notices};
 }
 
@@ -113,9 +108,8 @@ export function buildBionicGuests({ndk,jdk,build,output,familiesOutput=root}){
 export function stageBionicSuppliers({suppliers,output,notices}){
  fs.mkdirSync(output,{recursive:true});fs.mkdirSync(notices,{recursive:true});
  for(const entry of Object.values(suppliers.artifacts))copyChanged(entry.file,path.join(output,entry.destination));
- for(const entry of suppliers.notices)copyChanged(entry.file,path.join(notices,entry.path));
+ for(const entry of suppliers.notices)copyOptional(entry.file,path.join(notices,entry.path));
  const identity={schemaVersion:1,systemImage:suppliers.systemImage,artifacts:Object.fromEntries(Object.entries(suppliers.artifacts).map(([key,{sha256,source}])=>[key,{sha256,source}]))};
- writeChanged(path.join(notices,'sources.json'),JSON.stringify(identity,null,2)+'\n');
  const profile={schemaVersion:1,nativeAbi:'arm64-v8a',aaudioVersion:1,choreographerVersion:1,libandroidFacadeVersion:1,inodeBootstrap:'native/bionic/android-inode-bootstrap',inodeBootstrapSha256:suppliers.artifacts.inodeBootstrap.sha256,
   systemImage:{...suppliers.systemImage,extractor:'native/bionic/android-image-extract'},linkerConfigRunner:'native/bionic/linkerconfig-runner',linkerConfigRunnerSha256:suppliers.artifacts.linkerConfigRunner.sha256};
  writeChanged(path.join(output,'profile.json'),JSON.stringify(profile,null,2)+'\n');
@@ -136,6 +130,6 @@ export function buildBionic({options,root:nativeRoot,build,output,flags,pathRoot
  const identity=stageBionicSuppliers({suppliers,output:directory,notices:path.join(output,'notices/bionic')});
  compileHostLibrary({name:'jsig-bridge.dylib',inputs:[path.join(root,'jsig-bridge.c')],flags,extra:[],directory:path.join(build,'host-objects'),output:path.join(directory,'jsig-bridge.dylib'),cwd:options.klepton,ninja:options.ninja,python:options.python,pathRoots});
  const notice=path.join(output,'notices/bionic/aim');fs.mkdirSync(notice,{recursive:true});
- for(const name of ['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md'])if(fs.existsSync(path.join(aim,name)))copyChanged(path.join(aim,name),path.join(notice,name));
+ for(const name of ['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md'])if(fs.existsSync(path.join(aim,name)))copyOptional(path.join(aim,name),path.join(notice,name));
  return {binding:bionicBindingInputs({build,familiesOutput}),identity:{...identity,abiSourceRevision:abi.sourceRevision,jni:JSON.parse(fs.readFileSync(path.join(guest.generated,'jni-carrier-manifest.json'))),families:['android-assets-configuration-image-decoder','android-bitmap-hardware-buffer-native-window','android-looper','egl-gles','aaudio','android-choreographer']}};
 }

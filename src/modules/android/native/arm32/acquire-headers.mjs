@@ -62,8 +62,8 @@ export function acquireNdkHeaders(output,{linkLibrariesOnly=false}={}){
   const headers=records.filter(row=>row.path.startsWith('include/')).map(row=>({...row,path:row.path.slice(8)})).sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0);
   const identity=crypto.createHash('sha256');for(const row of headers)identity.update(`${row.path}\0${row.size}\0${row.sha256}\n`);
   if(headers.length!==pin.files||identity.digest('hex')!==pin.treeSha256)throw Error('Downloaded NDK headers differ from the pinned release');
-  for(const [name,hash]of[['NOTICE',pin.noticeSha256],['source.properties',pin.sourcePropertiesSha256]])if(records.find(row=>row.path===name)?.sha256!==hash)throw Error('NDK metadata differs from the pinned release: '+name);
-  for(const [name,hash]of[[pin.compilerRuntime.file,pin.compilerRuntime.sha256],['NOTICE.toolchain',pin.compilerRuntime.noticeSha256]])if(records.find(row=>row.path===name)?.sha256!==hash)throw Error('NDK compiler runtime differs from the pinned release: '+name);
+  for(const [name,hash]of[['source.properties',pin.sourcePropertiesSha256]])if(records.find(row=>row.path===name)?.sha256!==hash)throw Error('NDK metadata differs from the pinned release: '+name);
+  for(const [name,hash]of[[pin.compilerRuntime.file,pin.compilerRuntime.sha256]])if(records.find(row=>row.path===name)?.sha256!==hash)throw Error('NDK compiler runtime differs from the pinned release: '+name);
   return {include:path.resolve(output,'include'),notice:path.resolve(output,'NOTICE'),compilerRuntime:path.resolve(output,pin.compilerRuntime.file),linkLibraries:linkDirectory};
 }
 

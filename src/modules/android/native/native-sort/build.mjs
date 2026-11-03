@@ -1,9 +1,9 @@
+import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {exportSources} from '../binder-rpc/build.mjs';
 import {compileHostObject} from '../host-compile.mjs';
-import {writeChanged} from '../upstream/source-files.mjs';
 
 const pins=JSON.parse(fs.readFileSync(new URL('../source-pins.json',import.meta.url)));
 
@@ -28,8 +28,6 @@ export function prepareNativeSort({bionicSource,build,ninja,python}){
   writeChanged(lookup,'#include <string.h>\n'+names.map(name=>'extern void klj_sort_'+name+'(void);').join('\n')+'\nvoid *klj_sort_lookup(const char *name){\n'+names.map(name=>'if(!strcmp(name,"'+name+'"))return (void *)&klj_sort_'+name+';').join('\n')+'\nreturn 0;\n}\n');
   objects.push(compile('bionic-sort-lookup.o',lookup));
   const notices=path.join(output,'notices');
-  writeChanged(path.join(notices,'NOTICE'),fs.readFileSync(path.join(source,'libc/NOTICE')));
-  for(const name of units)writeChanged(path.join(notices,name+'.txt'),fs.readFileSync(path.join(source,directory,name)));
-  writeChanged(path.join(notices,'source.json'),JSON.stringify({project:'Bionic sorting',url:'https://android.googlesource.com/platform/bionic',revision:pins.aospBionic,units:units.map(name=>directory+'/'+name),adaptation:'Original complete algorithms, namespaced shared native supplier preserving Android comparator and context argument order.'},null,2)+'\n');
+  copyOptional(path.join(source,'libc/NOTICE'),path.join(notices,'NOTICE'));
   return {output,objects,names,notices};
 }

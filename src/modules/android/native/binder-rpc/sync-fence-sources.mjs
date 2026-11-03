@@ -39,11 +39,5 @@ export function prepareSyncFence({pins,source,output,inputs,exportSources,source
     return file;
   });
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  writeChanged(path.join(notices,'sync-fence.json'),JSON.stringify({
-    framework:{revision:pins.aospFramework,unit:jni,methods:methods.map(([,name,descriptor])=>({name,descriptor}))},
-    native:{revision:pins.aospNative,units:['libs/ui/Fence.cpp','libs/ui/include/ui/Fence.h']},
-    core:{revision:pins.aospSystemCore,module:'libsync_defaults',units},
-    adaptations:['Ordinary JNI exports from the complete original registration table','Darwin allocator header and availability annotations','Shared Linux ioctl declaration namespace']
-  },null,2)+'\n');
   return cSources;
 }

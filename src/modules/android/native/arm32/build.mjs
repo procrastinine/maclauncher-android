@@ -1,3 +1,4 @@
+import {copyOptional} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -41,24 +42,23 @@ export async function buildArm32({source,output,jdk,ndkHeaders,python,bionicSour
     ...['C','CXX','ASM'].map(language=>'-DCMAKE_'+language+'_FLAGS='+[process.env[language==='CXX'?'CXXFLAGS':language==='ASM'?'ASMFLAGS':'CFLAGS'],remap].filter(Boolean).join(' '))]);
   run('cmake',['--build',output,'--parallel','4']);
   const notices=path.join(output,'notices');fs.mkdirSync(notices,{recursive:true});
-  fs.cpSync(path.join(formatDirectory,'notices'),notices,{recursive:true});
-  if(syscalls)fs.cpSync(syscalls.notices,notices,{recursive:true});
+  copyOptional(path.join(formatDirectory,'notices'),notices);
+  if(syscalls)copyOptional(syscalls.notices,notices);
   let builtins;
   if(importsDirectory){
     if(!elfLinker)throw Error('ARM32 compiler runtime requires an ELF linker');
     const include=ndkHeaders||JSON.parse(fs.readFileSync(path.join(importsDirectory,'guest-input.json'),'utf8')).include;
     const archive=compilerRuntime||path.resolve(include,'../libclang_rt.builtins-arm-android.a');
     builtins=buildCompilerRuntime({archive,notice:path.join(path.dirname(archive),'NOTICE.toolchain'),linker:elfLinker,aeabi:elf.aeabi,allocation:elf.allocation,portableFamilies:elf.portableFamilies,include,output:path.join(output,'compiler-runtime')});
-    fs.cpSync(builtins.notices,notices,{recursive:true});
+    copyOptional(builtins.notices,notices);
   }
   if(importsDirectory&&fs.existsSync(path.join(importsDirectory,'notices')))
-    fs.cpSync(path.join(importsDirectory,'notices'),notices,{recursive:true});
-  if(ndkHeaders)fs.copyFileSync(path.join(root,'ndk-headers.json'),path.join(notices,'ndk-headers.json'));
+    copyOptional(path.join(importsDirectory,'notices'),notices);
+
   for(const [file,name]of[['LICENSE.txt','dynarmic.txt'],['README.md','dynarmic-dependencies.md'],['externals/fmt/LICENSE.rst','fmt.txt'],['externals/mcl/LICENSE','mcl.txt'],['externals/oaknut/LICENSE','oaknut.txt'],['externals/robin-map/LICENSE','robin-map.txt']])
-    fs.copyFileSync(path.join(source,file),path.join(notices,name));
+    copyOptional(path.join(source,file),path.join(notices,name));
   const identity={schemaVersion:1,...pin,library:components.bindings.jvm,jniIntegration:!!jdk,nativeIntegration:!!importsDirectory};
   fs.writeFileSync(path.join(output,'arm32-build.json'),JSON.stringify(identity,null,2)+'\n');
-  fs.writeFileSync(path.join(notices,'source.json'),JSON.stringify(identity,null,2)+'\n');
   return {...arm32BuildProducts(output),builtins:builtins?.library,identity,importsDirectory};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {

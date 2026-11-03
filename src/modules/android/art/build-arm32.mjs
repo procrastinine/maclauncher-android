@@ -1,9 +1,9 @@
+import {copyOptional,prepareSourceTree,copyChanged} from '../native/upstream/source-files.mjs';
 import path from 'node:path';
 import fs from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {compileHostObject,compileHostExecutable} from '../native/host-compile.mjs';
 import {cachedBuildStep} from '../native/upstream/build-step.mjs';
-import {prepareSourceTree,copyChanged} from '../native/upstream/source-files.mjs';
 import {generateLoaderAbi,refreshDescriptors} from '../native/arm32/imports-generate.mjs';
 import {generateSignalAbi} from '../native/arm32/signal-abi.mjs';
 import {prepareFutexConstants} from '../native/arm32/syscall-sources.mjs';
@@ -67,10 +67,8 @@ export async function buildArtNativeBridge(options){
  const target=path.join(output,components.bindings.art),temporary=target+'.tmp';
  execFileSync(path.join(bin,'llvm-strip'),['--strip-debug','-o',temporary,library]);copyChanged(temporary,target);fs.rmSync(temporary);
  const notices=path.join(output,'notices');
- prepareSourceTree(notices,temporary=>{
-  fs.cpSync(original.notices,temporary,{recursive:true});
-  fs.copyFileSync(ffi.license,path.join(temporary,'libffi.txt'));
-  fs.cpSync(arm32.notices,path.join(temporary,'arm32'),{recursive:true});
- });
+ copyOptional(original.notices,notices);
+ copyOptional(ffi.license,path.join(notices,'libffi.txt'));
+ copyOptional(arm32.notices,path.join(notices,'arm32'));
  return {nativeBridge:target,nativeBridgeNotices:notices,...arm32.preloads};
 }

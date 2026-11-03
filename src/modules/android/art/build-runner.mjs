@@ -1,3 +1,4 @@
+import {copyOptional} from '../native/upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -8,28 +9,10 @@ import {nativePathFlags,nativeRustPathEnvironment,publishNativeBinary} from '../
 /** Keep the pinned supplier's license exceptions and verbatim third-party
  * notices with its native products, alongside the supplied CPU notices. */
 export function stageArtRunnerNotices({aim,cpuNotices,output}){
- aim=path.resolve(aim);cpuNotices=path.resolve(cpuNotices);output=path.resolve(output);
- const required=['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md','licensing/OPENJDK.md','licensing/rust-dependencies.txt','licensing/upstream-sources.json'];
- for(const name of required)if(!fs.statSync(path.join(aim,name),{throwIfNoEntry:false})?.isFile())throw Error('Missing AIM license input: '+name);
- if(!fs.statSync(path.join(aim,'licensing/third-party'),{throwIfNoEntry:false})?.isDirectory())throw Error('Missing AIM third-party license directory.');
- const catalog=JSON.parse(fs.readFileSync(path.join(aim,'licensing/upstream-sources.json'),'utf8'));
- if(!Array.isArray(catalog.files)||!catalog.files.length)throw Error('Missing AIM third-party license records.');
- for(const row of catalog.files){
-  if(typeof row.file!=='string'||!row.file.startsWith('licensing/third-party/')||row.file.split(/[\\/]/).some(part=>part==='..')||!/^[a-f0-9]{64}$/.test(row.sha256))throw Error('Invalid AIM third-party license record.');
-  const file=path.join(aim,row.file);if(!fs.statSync(file,{throwIfNoEntry:false})?.isFile())throw Error('Missing AIM license input: '+row.file);
-  if(crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')!==row.sha256)throw Error('AIM license differs from its source record: '+row.file);
- }
- if(!fs.statSync(cpuNotices,{throwIfNoEntry:false})?.isDirectory())throw Error('Missing ARM64 CPU notices.');
- if([aim,cpuNotices].some(input=>output===input||input.startsWith(output+path.sep)||output.startsWith(input+path.sep)))throw Error('ART notice output must be separate from its source inputs.');
- fs.mkdirSync(path.dirname(output),{recursive:true});
- const temporary=fs.mkdtempSync(path.join(path.dirname(output),'.runner-notices-'));
- try{
-  fs.cpSync(cpuNotices,temporary,{recursive:true});
-  const original=path.join(temporary,'aim');fs.mkdirSync(original,{recursive:true});
-  for(const name of ['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md','licensing'])fs.cpSync(path.join(aim,name),path.join(original,name),{recursive:true});
-  fs.rmSync(output,{recursive:true,force:true});fs.renameSync(temporary,output);
-  return output;
- }finally{fs.rmSync(temporary,{recursive:true,force:true});}
+ const original=path.join(output,'aim');
+ copyOptional(cpuNotices,output);
+ for(const name of ['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md','licensing/OPENJDK.md','licensing/rust-dependencies.txt','licensing/third-party'])copyOptional(path.join(aim,name),path.join(original,name));
+ return output;
 }
 
 /** Build a supplied, prepared AIM tree using its original Cargo workspace.
@@ -42,7 +25,7 @@ export function buildArtRunner({aim,output,unicorn,precise,work,target,cargo='ca
  aim=path.resolve(aim);output=path.resolve(output);work=path.resolve(work||path.join(output,'build'));
  target=path.resolve(target||path.join(work,'cargo'));
  const cpu=precise||buildPrecise({source:unicorn,output:path.join(work,'precise'),jobs});
- if(!Array.isArray(cpu.archives)||!cpu.archives.length||!cpu.notices)throw Error('Expected static ARM64 CPU archives and upstream notices.');
+ if(!Array.isArray(cpu.archives)||!cpu.archives.length)throw Error('Expected static ARM64 CPU archives.');
  const archives=cpu.archives.map(file=>path.resolve(file));
  for(const file of archives)if(!file.endsWith('.a')||!fs.statSync(file).isFile())throw Error('Expected an ARM64 CPU static archive.');
  const linked=[...archives];

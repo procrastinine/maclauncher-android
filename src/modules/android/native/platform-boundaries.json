@@ -631,7 +631,7 @@
     }
   ],
   "portability": {
-    "definition": "notices/robolectric-portability/source.json",
+    "definition": "sources/robolectric-portability/source.json",
     "normalizer": "framework/PortableCalls.java",
     "scope": "Exact JVM/libcore call signatures are normalized across all framework classes; native method bodies and unmapped calls retain AOSP behavior.",
     "pathNormalizer": "framework/FilesystemPortability.java"

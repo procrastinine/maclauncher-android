@@ -1,8 +1,8 @@
+import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {exportSources} from '../binder-rpc/build.mjs';
 import {compileHostObject} from '../host-compile.mjs';
-import {writeChanged} from '../upstream/source-files.mjs';
 
 const pins=JSON.parse(fs.readFileSync(new URL('../source-pins.json',import.meta.url)));
 const directory='libc/upstream-netbsd/lib/libc/regex/';
@@ -39,11 +39,7 @@ export function prepareNativeRegex({bionicSource,build,ninja,python}){
   writeChanged(lookup,'#include <regex.h>\n#include <string.h>\nvoid *klj_regex_lookup(const char *name){\n'+prepared.names.map(name=>' if(!strcmp(name,"'+name+'"))return (void *)&'+name+';').join('\n')+'\n return NULL;\n}\n');
   objects.push(compile('lookup.o',lookup));
   const notices=path.join(output,'notices');
-  writeChanged(path.join(notices,'NOTICE'),fs.readFileSync(path.join(prepared.source,'libc/NOTICE')));
-  for(const file of [...prepared.relativeUnits,...prepared.headers,'libc/include/regex.h','libc/include/malloc.h']){
-    const text=fs.readFileSync(path.join(prepared.source,file),'utf8');
-    writeChanged(path.join(notices,path.basename(file)+'.txt'),text.slice(0,text.search(/^\s*#(?:if|include|define|pragma)/m)));
-  }
-  writeChanged(path.join(notices,'source.json'),JSON.stringify({project:'Bionic POSIX regular expressions',url:'https://android.googlesource.com/platform/bionic',revision:pins.aospBionic,units:prepared.relativeUnits,header:'libc/include/regex.h',target:'libc_netbsd',flags:['POSIX_MISTAKE'],namespace:'klj_regex_',adaptation:'Original Android record and complete regex units; existing native character and locale owners, original Android reallocarray inline over physical realloc.'},null,2)+'\n');
+  copyOptional(path.join(prepared.source,'libc/NOTICE'),path.join(notices,'NOTICE'));
+
   return {...prepared,output,namespace,objects,notices};
 }

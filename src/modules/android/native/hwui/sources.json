@@ -65,9 +65,6 @@
       "noticeChecks": [
         {
           "path": "libs/hwui/NOTICE",
-          "type": "blob",
-          "object": "c5b1efa7aac764ae6d8da63476a2d5cec02a6a5d",
-          "mode": 33188,
           "output": "aosp-hwui/NOTICE"
         }
       ]
@@ -197,23 +194,14 @@
       "noticeChecks": [
         {
           "path": "LICENSE",
-          "type": "blob",
-          "object": "e32636d5668d51ca7a938ae6cef93c795c656d7c",
-          "mode": 33188,
           "output": "skia/LICENSE"
         },
         {
           "path": "NOTICE",
-          "type": "blob",
-          "object": "41570e88f9920aed39cfae8cc0f2bb6ed5b5683f",
-          "mode": 33188,
           "output": "skia/NOTICE"
         },
         {
           "path": "vma_android/LICENSE.txt",
-          "type": "blob",
-          "object": "fcf8b67de1f433634963108bee518f51ddee71f5",
-          "mode": 33188,
           "output": "skia-vma-android/LICENSE.txt"
         }
       ]
@@ -398,9 +386,6 @@
       "noticeChecks": [
         {
           "path": "LICENSE",
-          "type": "blob",
-          "object": "d645695673349e3947e8e5ae42332d0ac3164cd7",
-          "mode": 33188,
           "output": "sources/crabbyavif/LICENSE"
         }
       ]
@@ -622,9 +607,6 @@
       "noticeChecks": [
         {
           "path": "COPYING",
-          "type": "blob",
-          "object": "b9c0b50126076f30f0f9db7e940eac64e60febd6",
-          "mode": 33188,
           "output": "sources/giflib/COPYING"
         }
       ]
@@ -847,16 +829,10 @@
       "noticeChecks": [
         {
           "path": "LICENSE",
-          "type": "blob",
-          "object": "c911747a6b53f063503992c3903d932f54cf6c57",
-          "mode": 33188,
           "output": "sources/libyuv/LICENSE"
         },
         {
           "path": "PATENTS",
-          "type": "blob",
-          "object": "64aa5c90d8fd97484876870a6722163468e9c0e7",
-          "mode": 33188,
           "output": "sources/libyuv/PATENTS"
         }
       ]
@@ -1204,9 +1180,6 @@
       "noticeChecks": [
         {
           "path": "LICENSE",
-          "type": "blob",
-          "object": "bbcb67ccd64692c0e9df4aa87a7277d5b300f0f7",
-          "mode": 33188,
           "output": "perfetto/LICENSE"
         }
       ]
@@ -1355,9 +1328,6 @@
       "noticeChecks": [
         {
           "path": "LICENSE",
-          "type": "blob",
-          "object": "19b305b00060a774a9180fb916c14b49edb2008f",
-          "mode": 33188,
           "output": "protobuf/LICENSE"
         }
       ]
@@ -1521,16 +1491,10 @@
       "noticeChecks": [
         {
           "path": "COPYING",
-          "type": "blob",
-          "object": "7a6f99547d4d6b4c5e6d5321acfaeba313e08de3",
-          "mode": 33188,
           "output": "sources/webp/COPYING"
         },
         {
           "path": "PATENTS",
-          "type": "blob",
-          "object": "caedf607e95ae4c3dc84d057fddcc301cd0e4863",
-          "mode": 33188,
           "output": "sources/webp/PATENTS"
         }
       ]
@@ -1568,9 +1532,6 @@
       "noticeChecks": [
         {
           "path": "LICENSE",
-          "type": "blob",
-          "object": "d645695673349e3947e8e5ae42332d0ac3164cd7",
-          "mode": 33188,
           "output": "sources/wuffs/LICENSE"
         }
       ]
@@ -1616,9 +1577,6 @@
       "noticeChecks": [
         {
           "path": "NOTICE",
-          "type": "blob",
-          "object": "c5b1efa7aac764ae6d8da63476a2d5cec02a6a5d",
-          "mode": 33188,
           "output": "sources/aosp-libnativehelper/NOTICE"
         }
       ]
@@ -1728,9 +1686,6 @@
       "noticeChecks": [
         {
           "path": "incfs/NOTICE",
-          "type": "blob",
-          "object": "9f460527a821be59a0070aabec78436732fa1594",
-          "mode": 33188,
           "output": "sources/aosp-incremental-delivery/incfs/NOTICE"
         }
       ]
@@ -1774,16 +1729,10 @@
       "noticeChecks": [
         {
           "path": "LICENSE",
-          "type": "blob",
-          "object": "1cd1ef92696b65b2ecb0e560e622f0a0e869dcf3",
-          "mode": 33188,
           "output": "sources/aosp-fmt/LICENSE"
         },
         {
           "path": "NOTICE",
-          "type": "blob",
-          "object": "eb6be6503e93cc384f912841c7c7cbc65e5aa709",
-          "mode": 33188,
           "output": "sources/aosp-fmt/NOTICE"
         }
       ]
@@ -1808,9 +1757,6 @@
       "noticeChecks": [
         {
           "path": "NOTICE",
-          "type": "blob",
-          "object": "c5b1efa7aac764ae6d8da63476a2d5cec02a6a5d",
-          "mode": 33188,
           "output": "sources/aosp-libhardware/NOTICE"
         }
       ]
@@ -1835,16 +1781,10 @@
       "noticeChecks": [
         {
           "path": "src/LICENSE",
-          "type": "blob",
-          "object": "3aa5aa6911da87a6dd95105c27b0e0aed946970c",
-          "mode": 33188,
           "output": "sources/aosp-boringssl/LICENSE"
         },
         {
           "path": "NOTICE",
-          "type": "blob",
-          "object": "3aa5aa6911da87a6dd95105c27b0e0aed946970c",
-          "mode": 33188,
           "output": "sources/aosp-boringssl/NOTICE"
         }
       ]
@@ -1888,9 +1828,6 @@
       "noticeChecks": [
         {
           "path": "LICENSE",
-          "type": "blob",
-          "object": "1941a11f8ce94389160b458927a29ba217542818",
-          "mode": 33188,
           "output": "googletest/LICENSE"
         }
       ]

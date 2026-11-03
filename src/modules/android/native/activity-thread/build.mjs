@@ -1,8 +1,8 @@
+import {copyOptional,writeChanged} from '../upstream/source-files.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {exportSources} from '../binder-rpc/build.mjs';
-import {writeChanged} from '../upstream/source-files.mjs';
 
 const root=import.meta.dirname;
 const pins=JSON.parse(fs.readFileSync(path.join(root,'../source-pins.json')));
@@ -31,12 +31,6 @@ export function prepareActivityThread({frameworkSource,bionicSource,build}){
   fs.mkdirSync(directory,{recursive:true});
   writeChanged(unit,includeDependencies(original.replace(includes,''),`#define M_PURGE ${purge}\n#define M_INIT_ZYGOTE_CHILD_PROFILING ${profiling}\n#include ${JSON.stringify(path.join(root,'allocator.h'))}`)+'\n'+exports+'\n');
   const notices=path.join(directory,'notices');fs.mkdirSync(notices,{recursive:true});
-  fs.copyFileSync(path.join(source,'bionic/libc/NOTICE'),path.join(notices,'NOTICE'));
-  fs.writeFileSync(path.join(notices,'source.json'),JSON.stringify({
-    framework:{revision:pins.aospFramework,unit:'core/jni/android_app_ActivityThread.cpp'},
-    bionic:{revision:pins.aospBionic,headers:['libc/include/malloc.h','libc/platform/bionic/malloc.h']},
-    methods:methods.map(([,name,descriptor])=>({name,descriptor})),
-    adaptation:'Darwin allocator pressure relief; Android zygote heap profiling has no host allocator backend.'
-  },null,2)+'\n');
+  copyOptional(path.join(source,'bionic/libc/NOTICE'),path.join(notices,'NOTICE'));
   return {unit,notices};
 }

@@ -1,6 +1,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+export const isNoticePath=file=>file.split(/[\\/]/).some(part=>part==='notices'||part==='licenses');
+
+/** Optional accompanying files never prevent the producer from completing. */
+export function copyOptional(source,destination){
+  try{fs.mkdirSync(path.dirname(destination),{recursive:true});fs.cpSync(source,destination,{recursive:true,mode:fs.constants.COPYFILE_FICLONE,verbatimSymlinks:true});return true;}
+  catch(error){console.warn('Skipped optional file: '+error.message);return false;}
+}
+export function writeOptional(destination,bytes){
+  try{fs.mkdirSync(path.dirname(destination),{recursive:true});fs.writeFileSync(destination,bytes);return true;}
+  catch(error){console.warn('Skipped optional file: '+error.message);return false;}
+}
+export function optionalFiles(directory){
+  try{return fs.readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?optionalFiles(path.join(directory,entry.name)):[path.join(directory,entry.name)]);}
+  catch(error){console.warn('Skipped optional directory: '+error.message);return [];}
+}
+
 /** Preserve compiler inputs when their final bytes and executable mode agree. */
 export function writeChanged(file,bytes,mode){
   const data=Buffer.isBuffer(bytes)?bytes:Buffer.from(bytes),before=fs.lstatSync(file,{throwIfNoEntry:false});

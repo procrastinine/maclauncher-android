@@ -8,6 +8,20 @@ import {execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {assembleArtSupplier,artSupplierComponents} from '../src/modules/android/art/build.mjs';
 import {buildArtRunner,stageArtRunnerNotices} from '../src/modules/android/art/build-runner.mjs';
+import {nativeBridgeTrees} from '../src/modules/android/art/source-archive.mjs';
+import {arm32BuildProducts} from '../src/modules/android/native/arm32/components.mjs';
+
+test('native-bridge source export uses the ARM32 source output without a notices tree',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-bridge-source-records-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const products=arm32BuildProducts(root),revision='a'.repeat(40);fs.mkdirSync(products.sources);
+ const write=(name,value)=>fs.writeFileSync(path.join(products.sources,name),JSON.stringify(value));
+ write('bionic.json',{revision,files:['libc/source.c']});write('bionic-portable-families.json',{revision,jump:['libc/jump.c']});
+ assert.equal(fs.existsSync(products.notices),false);
+ assert(nativeBridgeTrees({arm32Sources:products.sources},revision).includes('libc/source.c'));
+ assert(nativeBridgeTrees({arm32Sources:products.sources},revision).includes('libc/jump.c'));
+ write('bionic.json',{revision:'b'.repeat(40),files:[]});assert.throws(()=>nativeBridgeTrees({arm32Sources:products.sources},revision),/source record revision differs/);
+ fs.unlinkSync(path.join(products.sources,'bionic.json'));assert.throws(()=>nativeBridgeTrees({arm32Sources:products.sources},revision),/ENOENT/);
+});
 
 test('ART supplier preserves runner upstream notices beside the delivered runner',t=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-runner-notices-'));
@@ -21,7 +35,9 @@ test('ART supplier preserves runner upstream notices beside the delivered runner
  inputs.runnerNotices=notices;
  const art=path.join(original,'art');fs.mkdirSync(path.join(art,'notices'),{recursive:true});inputs.art=art;
  fs.writeFileSync(path.join(art,'notices','component.txt'),license);
- for(const name of ['source.json','Cargo.lock','artifact.pom','Android.bp'])fs.writeFileSync(path.join(notices,name),'Build provenance');
+ fs.symlinkSync('component.txt',path.join(art,'notices','candidate-link'));
+ const sourceRecords=path.join(original,'source-records');fs.mkdirSync(sourceRecords);inputs.sourceRecords=sourceRecords;
+ for(const name of ['source.json','Cargo.lock','artifact.pom','Android.bp'])fs.writeFileSync(path.join(sourceRecords,name),'Build provenance');
  for(const [name,bytes]of [['lockHolder','fresh lock holder'],['ptyHolder','fresh pty holder']]){inputs[name]=path.join(original,name);fs.writeFileSync(inputs[name],bytes);}
  const output=path.join(root,'runtime');
  const manifest=assembleArtSupplier({output,inputs,bootClasspath:[],sourceVersion:'0.1.0-test'});
@@ -32,7 +48,8 @@ test('ART supplier preserves runner upstream notices beside the delivered runner
  assert.equal(fs.readFileSync(path.join(output,manifest.components.lockHolder),'utf8'),'fresh lock holder');assert.equal(fs.readFileSync(path.join(output,manifest.components.ptyHolder),'utf8'),'fresh pty holder');
  assert(manifest.notices.some(row=>row.path==='licenses/runner/COPYING'));
  assert(manifest.notices.some(row=>row.path==='art/notices/component.txt'),'ART notices are independent of the component key');
- for(const name of ['source.json','Cargo.lock','artifact.pom','Android.bp']){assert.equal(manifest.notices.some(row=>row.path==='licenses/runner/'+name),false);assert.equal(fs.readFileSync(path.join(output,'licenses/runner',name),'utf8'),'Build provenance');}
+ assert(fs.lstatSync(path.join(output,'art/notices/candidate-link')).isSymbolicLink(),'Candidates reach Builds without an Android file-type judge');
+ for(const name of ['source.json','Cargo.lock','artifact.pom','Android.bp']){assert.equal(manifest.notices.some(row=>row.path==='licenses/runner/'+name),false);assert.equal(fs.existsSync(path.join(output,'licenses/runner',name)),false);}
  assert.equal(fs.readFileSync(path.join(notices,'COPYING'),'utf8'),license);
  const extra='licenses/extra/NOTICE';fs.mkdirSync(path.join(output,'licenses/extra'));fs.writeFileSync(path.join(output,extra),'Retained original notice\n');manifest.notices.push({name:'Original component',license:'See included license',path:extra});
  const compact=path.join(root,'compact'),{image:unusedImage,...retainedInputs}=inputs;const compactManifest=assembleArtSupplier({output:compact,inputs:retainedInputs,bootClasspath:[],sourceVersion:'0.1.0-compact',baseSupplier:{root:output,manifest},includeImage:false,originalImage:{archiveSha256:manifest.android.imageSha256,content:manifest.platformSupplier.image}});
@@ -49,12 +66,11 @@ test('ART runner notices preserve supplier exceptions and supplied CPU notices',
  fs.mkdirSync(cpuNotices);fs.writeFileSync(path.join(cpuNotices,'unicorn-COPYING'),'Original CPU license\n');
  const original=files.map(name=>fs.readFileSync(path.join(aim,name))),cpu=fs.readFileSync(path.join(cpuNotices,'unicorn-COPYING'));
  assert.equal(stageArtRunnerNotices({aim,cpuNotices,output}),output);
- for(const [index,name]of files.entries()){assert.deepEqual(fs.readFileSync(path.join(output,'aim',name)),original[index]);assert.deepEqual(fs.readFileSync(path.join(aim,name)),original[index]);}
+ for(const [index,name]of files.entries()){if(name==='licensing/upstream-sources.json')assert.equal(fs.existsSync(path.join(output,'aim',name)),false);else assert.deepEqual(fs.readFileSync(path.join(output,'aim',name)),original[index]);assert.deepEqual(fs.readFileSync(path.join(aim,name)),original[index]);}
  assert.deepEqual(fs.readFileSync(path.join(output,'unicorn-COPYING')),cpu);assert.deepEqual(fs.readFileSync(path.join(cpuNotices,'unicorn-COPYING')),cpu);
- fs.writeFileSync(path.join(output,'obsolete-notice'),'retired');stageArtRunnerNotices({aim,cpuNotices,output});assert.equal(fs.existsSync(path.join(output,'obsolete-notice')),false);
- fs.writeFileSync(path.join(aim,'licensing/third-party/art-openjdkjvm-LICENSE'),'changed license');assert.throws(()=>stageArtRunnerNotices({aim,cpuNotices,output}),/AIM license differs from its source record/);fs.writeFileSync(path.join(aim,'licensing/third-party/art-openjdkjvm-LICENSE'),original.at(-1));
- fs.rmSync(path.join(aim,'licensing/OPENJDK.md'));assert.throws(()=>stageArtRunnerNotices({aim,cpuNotices,output}),/Missing AIM license input: licensing\/OPENJDK.md/);
- assert.deepEqual(fs.readFileSync(path.join(output,'aim/licensing/OPENJDK.md')),original[4],'A failed retry preserves the complete prior notice bundle');
+ fs.writeFileSync(path.join(output,'obsolete-notice'),'retired');stageArtRunnerNotices({aim,cpuNotices,output});assert.equal(fs.readFileSync(path.join(output,'unicorn-COPYING'),'utf8'),cpu.toString());
+ fs.writeFileSync(path.join(aim,'licensing/third-party/art-openjdkjvm-LICENSE'),'changed license');stageArtRunnerNotices({aim,cpuNotices,output});assert.equal(fs.readFileSync(path.join(output,'aim/licensing/third-party/art-openjdkjvm-LICENSE'),'utf8'),'changed license');
+ fs.rmSync(path.join(aim,'licensing/OPENJDK.md'));assert.doesNotThrow(()=>stageArtRunnerNotices({aim,cpuNotices,output}));
 });
 
 test('prepared ART runner builds offline with its native continuation and static CPU',{timeout:600000},t=>{
@@ -79,7 +95,7 @@ test('ordinary ART entry returns its fresh sources and preserves explicit archiv
  write('tools/build-art.mjs',fs.readFileSync(new URL('../tools/build-art.mjs',import.meta.url)));
  write('src/modules/android/art/build-elf.mjs',"export function buildArtElfs(){throw Error('Unexpected native build');}\n");
  write('src/modules/android/art/source.mjs',`import fs from 'node:fs';import path from 'node:path';export function prepareAimSource(options){fs.mkdirSync(options.output,{recursive:true});fs.writeFileSync(path.join(options.output,'prepared.json'),JSON.stringify(options));}`);
- write('src/modules/android/art/build.mjs',`import fs from 'node:fs';import path from 'node:path';export function buildArt(options){const prepared=JSON.parse(fs.readFileSync(path.join(options.host.aim,'prepared.json')));if(!prepared.mutableCode||options.runner.aim!==options.host.aim)throw Error('Wrong ART source');const runtime=path.join(options.output,'runtime'),cache=path.join(options.output,'build/compiler-cache');fs.mkdirSync(runtime,{recursive:true});fs.mkdirSync(path.dirname(cache),{recursive:true});if(!fs.existsSync(cache))fs.writeFileSync(cache,'reusable compiler cache');if(options.hwui){const registry=path.join(runtime,'licenses/hwui/SOURCES.json');fs.mkdirSync(path.dirname(registry),{recursive:true});fs.writeFileSync(registry,'{}');}return {execution:'art',prepared};}`);
+ write('src/modules/android/art/build.mjs',`import fs from 'node:fs';import path from 'node:path';export function buildArt(options){const prepared=JSON.parse(fs.readFileSync(path.join(options.host.aim,'prepared.json')));if(!prepared.mutableCode||options.runner.aim!==options.host.aim)throw Error('Wrong ART source');const runtime=path.join(options.output,'runtime'),cache=path.join(options.output,'build/compiler-cache');fs.mkdirSync(runtime,{recursive:true});fs.mkdirSync(path.dirname(cache),{recursive:true});if(!fs.existsSync(cache))fs.writeFileSync(cache,'reusable compiler cache');if(options.hwui){const registry=path.join(options.hwui.work||path.join(options.output,'build/hwui'),'module/sources/SOURCES.json');fs.mkdirSync(path.dirname(registry),{recursive:true});fs.writeFileSync(registry,'{}');}return {execution:'art',prepared};}`);
  write('src/modules/android/art/source-archive.mjs',`import fs from 'node:fs';import path from 'node:path';export function exportArtSourceArchive({output,sources}){if(!sources.aosp)throw Error('Missing original source');if(fs.existsSync(path.join(path.dirname(output),'fail-source-export')))throw Error('Deferred original source unavailable');fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,'complete-source');return output;}`);
  const inputs=write('inputs.json',JSON.stringify({output:path.join(root,'output'),host:{},java:{},bootClasspath:[],sources:{source:root,klepton:root,glesHeaders:root,aosp:root},inputs:{art:root}}));
  const {buildArtRuntime}=await import(pathToFileURL(path.join(root,'tools/build-art.mjs')));

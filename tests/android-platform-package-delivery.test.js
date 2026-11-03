@@ -20,7 +20,7 @@ test('Component delivery preserves original APK bytes, manifest declarations and
  assert.deepEqual(input.catalog.packages,[{source:'packages/Provider/Provider.apk',packageName:'owned.providers',sharedUserId:null,authorities:['same','same','first','same','second','same'],resolvedAuthorities:false,sha256:digest(f.bytes),size:f.bytes.length}]);
  assert.deepEqual(fs.readFileSync(path.join(result.platform,input.catalog.packages[0].source)),f.bytes);
  assert.deepEqual(JSON.parse(fs.readFileSync(result.catalog)),input.catalog);
- assert.deepEqual(JSON.parse(fs.readFileSync(path.join(result.notices,'provenance.json'))),f.definition);
+ assert.equal(fs.existsSync(path.join(result.notices,'provenance.json')),false);
  assert.equal(fs.readFileSync(path.join(result.notices,'NOTICE'),'utf8'),'Original component notice\n');
  assert.deepEqual(fs.readdirSync(f.output).sort(),['notices','platform']);
  assert.deepEqual(fs.readdirSync(path.join(f.output,'platform/packages')),['Provider']);
@@ -32,9 +32,15 @@ test('Component inputs reject a wrong manifest identity, changed bytes and escap
  f.definition.files[0].destination='packages/Provider/Provider.apk';f.write();fs.appendFileSync(f.apk,'changed');assert.throws(()=>platformPackageInputs(f.native,f.directory),/does not match its recorded release/);
  fs.writeFileSync(f.apk,f.bytes);const outside=path.join(f.root,'outside.apk');fs.renameSync(f.apk,outside);fs.symlinkSync(outside,f.apk);assert.throws(()=>platformPackageInputs(f.native,f.directory),/leaves its directory/);
 });
+test('Component notice text is optional and never compared with binary input pins',async t=>{
+ const f=fixture(t),{platformPackageInputs,stagePlatformPackages}=await import('../src/modules/android/native/platform-package-delivery.mjs');t.mock.method(console,'warn',()=>{});
+ const notice=path.join(f.native,'notices/platform-packages/NOTICE');fs.writeFileSync(notice,'Changed text');
+ const input=platformPackageInputs(f.native,f.directory);assert.doesNotThrow(()=>stagePlatformPackages({input,output:f.output}));assert.equal(fs.readFileSync(path.join(f.output,'notices/platform-packages/NOTICE'),'utf8'),'Changed text');
+ fs.unlinkSync(notice);const next=path.join(f.root,'without-notices');assert.doesNotThrow(()=>stagePlatformPackages({input:platformPackageInputs(f.native,f.directory),output:next}));assert.deepEqual(fs.readFileSync(path.join(next,'platform/packages/Provider/Provider.apk')),f.bytes);
+});
 test('The ordinary producer snapshot can inspect and stage APKs using only its fixed helper closure',async t=>{
  const f=fixture(t),native=path.resolve(__dirname,'../src/modules/android/native');
- for(const name of ['platform-package-delivery.mjs','platform-packages.mjs','binary-inputs.mjs'])fs.copyFileSync(path.join(native,name),path.join(f.native,name));
+ for(const name of ['platform-package-delivery.mjs','platform-packages.mjs','binary-inputs.mjs','upstream/source-files.mjs']){const target=path.join(f.native,name);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(path.join(native,name),target);}
  fs.writeFileSync(path.join(f.root,'profile.js'),'module.exports={};\n');
  const source=path.join(f.root,'snapshot');
  const {snapshotSources,snapshotBuildCompanions,sourceInventory}=await import('../src/modules/android/native/build-sources.mjs');
