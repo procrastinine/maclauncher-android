@@ -87,3 +87,6 @@ export function originalTreeFiles(root){
   return files;
 }
 
+/** Provenance and build declarations accompany products without being licence text. */
+export const isLicenseNoticeFile=file=>!/(?:\.(?:json|lock|pom)|(?:^|\/)Android\.bp)$/i.test(file);
+

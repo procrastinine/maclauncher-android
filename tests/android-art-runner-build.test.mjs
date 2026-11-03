@@ -19,6 +19,9 @@ test('ART supplier preserves runner upstream notices beside the delivered runner
  const component=path.join(original,'component');fs.writeFileSync(component,'component');
  const inputs=Object.fromEntries(Object.keys(artSupplierComponents()).map(key=>[key,['image','art','halRoot','halManifests'].includes(key)?image:component]));
  inputs.runnerNotices=notices;
+ const art=path.join(original,'art');fs.mkdirSync(path.join(art,'notices'),{recursive:true});inputs.art=art;
+ fs.writeFileSync(path.join(art,'notices','component.txt'),license);
+ for(const name of ['source.json','Cargo.lock','artifact.pom','Android.bp'])fs.writeFileSync(path.join(notices,name),'Build provenance');
  for(const [name,bytes]of [['lockHolder','fresh lock holder'],['ptyHolder','fresh pty holder']]){inputs[name]=path.join(original,name);fs.writeFileSync(inputs[name],bytes);}
  const output=path.join(root,'runtime');
  const manifest=assembleArtSupplier({output,inputs,bootClasspath:[],sourceVersion:'0.1.0-test'});
@@ -28,6 +31,8 @@ test('ART supplier preserves runner upstream notices beside the delivered runner
  assert.equal(manifest.components.lockHolder,'host/aim-lock-holder');assert.equal(manifest.components.ptyHolder,'host/aim-pty-holder');
  assert.equal(fs.readFileSync(path.join(output,manifest.components.lockHolder),'utf8'),'fresh lock holder');assert.equal(fs.readFileSync(path.join(output,manifest.components.ptyHolder),'utf8'),'fresh pty holder');
  assert(manifest.notices.some(row=>row.path==='licenses/runner/COPYING'));
+ assert(manifest.notices.some(row=>row.path==='art/notices/component.txt'),'ART notices are independent of the component key');
+ for(const name of ['source.json','Cargo.lock','artifact.pom','Android.bp']){assert.equal(manifest.notices.some(row=>row.path==='licenses/runner/'+name),false);assert.equal(fs.readFileSync(path.join(output,'licenses/runner',name),'utf8'),'Build provenance');}
  assert.equal(fs.readFileSync(path.join(notices,'COPYING'),'utf8'),license);
  const extra='licenses/extra/NOTICE';fs.mkdirSync(path.join(output,'licenses/extra'));fs.writeFileSync(path.join(output,extra),'Retained original notice\n');manifest.notices.push({name:'Original component',license:'See included license',path:extra});
  const compact=path.join(root,'compact'),{image:unusedImage,...retainedInputs}=inputs;const compactManifest=assembleArtSupplier({output:compact,inputs:retainedInputs,bootClasspath:[],sourceVersion:'0.1.0-compact',baseSupplier:{root:output,manifest},includeImage:false,originalImage:{archiveSha256:manifest.android.imageSha256,content:manifest.platformSupplier.image}});

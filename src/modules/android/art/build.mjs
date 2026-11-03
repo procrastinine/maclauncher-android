@@ -12,7 +12,7 @@ import {buildArtComposer} from './composer/build.mjs';
 import {buildArtGraphics} from './graphics/build.mjs';
 import {buildArtNativeBridge} from './build-arm32.mjs';
 import {components as arm32Components} from '../native/arm32/components.mjs';
-import {originalTreeFiles} from '../native/upstream/reuse.mjs';
+import {originalTreeFiles,isLicenseNoticeFile} from '../native/upstream/reuse.mjs';
 import {buildBootImage} from './boot-image.mjs';
 import {buildPlatformPackageCatalog} from '../native/platform-packages.mjs';
 
@@ -62,8 +62,10 @@ export function assembleArtSupplier({output,inputs,bootClasspath,sourceVersion,b
    fs.cpSync(source,destination,{recursive:true,mode:fs.constants.COPYFILE_FICLONE,dereference:false,verbatimSymlinks:true});
   }
   const notices=[];
-  for(const [name,relative]of Object.entries(delivered))if(name.endsWith('Notices')){
-   for(const file of originalTreeFiles(path.join(temporary,relative))){
+  for(const relative of Object.values(delivered)){
+   const directory=path.join(temporary,relative.startsWith('licenses/')?relative:relative+'/notices');
+   if(!fs.statSync(directory,{throwIfNoEntry:false})?.isDirectory())continue;
+   for(const file of originalTreeFiles(directory).filter(isLicenseNoticeFile)){
     const member=path.relative(temporary,file).split(path.sep).join('/');
     notices.push({name:'Android runtime — '+member.replace(/^licenses\//,'').replaceAll('/',' — '),license:'See included license',path:member});
    }
