@@ -33,72 +33,52 @@
     {
       "name": "ANGLE",
       "url": "https://chromium.googlesource.com/angle/angle/+/cbc4153da8d5796b0fbb3cf288e97bee19436191/LICENSE",
-      "file": "ANGLE.txt",
-      "size": 1643,
-      "sha256": "bf4da21bd20bcfb5b60b7ecc67fa864a79be049e21d6178076887f178dd6c71a"
+      "file": "ANGLE.txt"
     },
     {
       "name": "ASTC-Encoder",
       "url": "https://chromium.googlesource.com/external/github.com/ARM-software/astc-encoder/+/2319d9c4d4af53a7fc7c52985e264ce6e8a02a9b/LICENSE.txt",
-      "file": "ASTC-Encoder.txt",
-      "size": 10139,
-      "sha256": "494accc32e50eb523a0e384d0ae6d4b702db867a89d6971216760e92b240ee12"
+      "file": "ASTC-Encoder.txt"
     },
     {
       "name": "glslang",
       "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/glslang/+/38f6708b6b6f213010c51ffa8f577a7751e12ce7/LICENSE.txt",
-      "file": "glslang.txt",
-      "size": 54705,
-      "sha256": "adb783e734e906d1f46db5df29991dbde84bdb0ceab502ac2febb44fe3c2b5f4"
+      "file": "glslang.txt"
     },
     {
       "name": "SPIRV-Cross",
       "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/SPIRV-Cross/+/b8fcf307f1f347089e3c46eb4451d27f32ebc8d3/LICENSE",
-      "file": "SPIRV-Cross.txt",
-      "size": 11358,
-      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      "file": "SPIRV-Cross.txt"
     },
     {
       "name": "SPIRV-Headers",
       "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/SPIRV-Headers/+/97e96f9e9defeb4bba3cfbd034dec516671dd7a3/LICENSE",
-      "file": "SPIRV-Headers.txt",
-      "size": 23503,
-      "sha256": "ea43b1de38a6f90c488800d66dec1ed671e68cda530266bc96951fb5b6307613"
+      "file": "SPIRV-Headers.txt"
     },
     {
       "name": "SPIRV-Tools",
       "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/SPIRV-Tools/+/3aeaaa088d37b86cff036eee1a9bf452abad7d9d/LICENSE",
-      "file": "SPIRV-Tools.txt",
-      "size": 11358,
-      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      "file": "SPIRV-Tools.txt"
     },
     {
       "name": "Chromium-Abseil",
       "url": "https://chromium.googlesource.com/chromium/src/+/140.0.7339.81/third_party/abseil-cpp/LICENSE",
-      "file": "Chromium-Abseil.txt",
-      "size": 11361,
-      "sha256": "c79a7fea0e3cac04cd43f20e7b648e5a0ff8fa5344e644b0ee09ca1162b62747"
+      "file": "Chromium-Abseil.txt"
     },
     {
       "name": "Chromium-Zlib",
       "url": "https://chromium.googlesource.com/chromium/src/+/140.0.7339.81/third_party/zlib/LICENSE",
-      "file": "Chromium-Zlib.txt",
-      "size": 910,
-      "sha256": "e1cfcc55c325b3f78cf55df9664abaa066e2271dffe8213347d9fccdfbac8f2c"
+      "file": "Chromium-Zlib.txt"
     },
     {
       "name": "Khronos-Headers",
       "url": "https://chromium.googlesource.com/angle/angle/+/cbc4153da8d5796b0fbb3cf288e97bee19436191/include/KHR/khrplatform.h",
-      "file": "Khronos-Headers.txt",
-      "size": 1147,
-      "sha256": "438187dca092de4032c1a16524aa4c34c71a0f985a71251a675aad54e77ed561"
+      "file": "Khronos-Headers.txt"
     },
     {
       "name": "libcxx",
       "url": "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libcxx.git/+/adbb4a5210ae2a8a4e27fa6199221156c02a9b1a/LICENSE.TXT",
-      "file": "libcxx.txt",
-      "size": 16703,
-      "sha256": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b"
+      "file": "libcxx.txt"
     }
   ]
 }

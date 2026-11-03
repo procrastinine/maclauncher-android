@@ -79,7 +79,7 @@ prepareSourceTree(path.join(options.output,'notices'),temporary=>{
     for(const license of fs.readdirSync(path.join(source,'third_party/vulkan-headers/src/LICENSES')))
       suppliers.push(['Vulkan-Headers-'+license.replace(/\.[^.]+$/,''),'third_party/vulkan-headers/src/LICENSES/'+license,'https://github.com/KhronosGroup/Vulkan-Headers']);
   }
-  for(const [name,file,url] of suppliers){const data=fs.readFileSync(path.join(source,file)),notice={name,url,file:name+'.txt',size:data.length,sha256:digest(data)};notices.push(notice);writeChanged(path.join(temporary,notice.file),data);}
+  for(const [name,file,url] of suppliers){const data=fs.readFileSync(path.join(source,file)),notice={name,url,file:name+'.txt'};notices.push(notice);writeChanged(path.join(temporary,notice.file),data);}
 });
 const adaptations=['angle-source.mjs','angle-flip-source.mjs','angle-flip-source.json','angle-identity-source.mjs','angle-sync-source.mjs','angle-fence-completion.h','angle-current-source.mjs','angle-debug-source.mjs','angle-debug-callback.h','angle-blob-source.mjs','angle-blob-callback.h','angle-dither-source.mjs',...(backend==='metal-vulkan'?['angle-vulkan-source.mjs','angle-vulkan-image-source.mjs']:[])].map(file=>({file,sha256:digest(fs.readFileSync(path.join(root,file)))}));
 const internalShaders=fs.readFileSync(path.join(output,'obj/src/libANGLE/renderer/metal/angle_metal_backend.ninja'),'utf8').includes('-DANGLE_METAL_HAS_PREBUILT_INTERNAL_SHADERS')?'embedded-metallib':'runtime-source';
