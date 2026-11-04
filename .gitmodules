@@ -428,7 +428,7 @@
 [submodule "libvpx"]
 	path = src/external/libvpx
 	url = https://github.com/webmproject/libvpx
-	maclauncher-revision = 6df3ec34557879fff673706f4a1d9fbd0f3a6f0e
+	maclauncher-revision = 035e29b4fc38295670ed44722ea1be13485fb544
 	maclauncher-role = source
 
 [submodule "ninja"]
