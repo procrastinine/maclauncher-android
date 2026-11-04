@@ -55,7 +55,7 @@ export function prepareA64Execution(aim){
     let snapshot=crate::diag::Fault{sig,pc:cpu.pc,lr:cpu.x[30],fp:cpu.x[29],sp:cpu.sp,addr:address,esr:esr as u32,x,instruction:crate::diag::interrupted_instruction(sig,cpu.pc)};
     crate::diag::note_fault(snapshot);
     crate::diag::report_handled_fault(&snapshot,info.code,th.tid);
-    Ok(frame(th,cpu,&Taken{info,act},mask,esr,address))
+    frame(th,cpu,&Taken{info,act},mask,esr,address).ok_or(sig)
 }
 #[cfg(maclauncher_a64)]
 pub(crate) fn shadow_deliver(ctx:*mut GuestContext){linux_abi_deliver(ctx);}

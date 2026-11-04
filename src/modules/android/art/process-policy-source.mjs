@@ -80,7 +80,7 @@ pub(super) fn may_inspect_from(peer:i32,fs:bool)->bool{
   ['    let pid = match pidns::syscall_pid(pid) {\n        Ok(pid) => pid,\n        Err(error) => return error,\n    };\n    if let Err(e) = pidns::check(pid) {','    if let Err(e) = pidns::check(pid) {'],
  ]);
  edit('sys/ptrace/agent.rs',[
-  ['    match op {\n        CGROUP_POLICY => {',`    if matches!(op,SEIZE|PEEK|VM|MAPS|SMAPS|FDS|FD_LINK)
+  ['    match op {\n        CGROUP_POLICY => {',`    if matches!(op,SEIZE|PEEK|VM|MEM_OPEN|MEM_IO|MAPS|SMAPS|FDS|FD_LINK)
         && !super::super::cred::may_inspect_from(peer,matches!(op,MAPS|SMAPS|FDS|FD_LINK)){
         return err(EPERM);
     }
@@ -88,6 +88,7 @@ pub(super) fn may_inspect_from(peer:i32,fs:bool)->bool{
         CGROUP_POLICY => {`],
   ['            let (tid, options, privileged) = (r.i32(), r.u64(), r.bool());','            let (tid, options, _claimed_privilege) = (r.i32(), r.u64(), r.bool());'],
   ['            if g.traced.contains_key(&tid) || !(misc::dumpable() || privileged) {','            if g.traced.contains_key(&tid) {'],
+  ['            if !(misc::dumpable() || r.bool()) {\n                return err(crate::errno::EACCES);\n            }','            let _claimed_privilege=r.bool();'],
   ['use crate::sys::{fdtab, misc, procfs, smaps, thread};','use crate::sys::{fdtab, procfs, smaps, thread};'],
  ]);
  edit('sys/procfs.rs',[

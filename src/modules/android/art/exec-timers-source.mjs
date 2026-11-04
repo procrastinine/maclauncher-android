@@ -15,8 +15,14 @@ const sources=[
   },
   {
     "path": "crates/aim-linux-abi/src/sys/fork/state.rs",
-    "beforeSha256": "70c7b7d74351ec46f145ad181f31552fcd614366b76192ce5b91e0f24ac42195",
-    "sha256": "9c0406a0d16cf40f7171dc2be92920000210771623bd4e51c3f9cff07a7fc2cc"
+    "beforeSha256": [
+      "70c7b7d74351ec46f145ad181f31552fcd614366b76192ce5b91e0f24ac42195",
+      "c0029940b5d31f315d7162ee1393ad6fcc120fba1b0bac7951f34d03b8029787"
+    ],
+    "sha256": [
+      "9c0406a0d16cf40f7171dc2be92920000210771623bd4e51c3f9cff07a7fc2cc",
+      "836a96f51a399bc0c6c1db6d403778f5e37b38cb8b6a0ce5d0ee7a3853f373c0"
+    ]
   }
 ];
 const matches=(expected,actual)=>[expected].flat().includes(actual);

@@ -38,8 +38,14 @@ let common=originalExit.slice(0,cut).replace('pub fn exit(a: [u64; 6]) -> ! {\n 
 const physical=originalExit.slice(cut);const replacement=common+'    (ctx,stacks,main)\n}\npub fn exit(a:[u64;6])->!{\n    let(ctx,stacks,main)=finish_thread_exit(a[0]as i32&0xff,true);\n'+physical;
 thread=thread.slice(0,start)+replacement+thread.slice(end);
 const claimAnchor='    let traced = super::ptrace::clone_event(flags);';if(thread.split(claimAnchor).length!==2)throw Error('Original clone claim boundary absent');thread=thread.replace(claimAnchor,claimAnchor+'\n    let admission=match admission::claim_clone(){Ok(value)=>value,Err(error)=>return error};');
-const idAnchor='        let tid = alloc_tid(t).map_err(|error|(error,t.len()))?;';if(thread.split(idAnchor).length!==2)throw Error('Original clone ID boundary absent');thread=thread.replace(idAnchor,'        let tid=match admission::borrowed_tid(admission.as_ref(),t){Ok(Some(id))=>id,Ok(None)=>alloc_tid(t).map_err(|error|(error,t.len()))?,Err(error)=>return Err((error,t.len()))};');
-thread=thread.replace('        Err((error,registered_threads))=>{','        Err((error,registered_threads))=>{\n            admission::failed_clone(admission.as_ref());');
+const idAnchor=`        let reservation = alloc_tid(t)?;
+        let tid = reservation.tid;`;if(thread.split(idAnchor).length!==2)throw Error('Original clone ID boundary absent');thread=thread.replace(idAnchor,`        let (tid,reservation)=match admission::borrowed_tid(admission.as_ref(),t){
+            Ok(Some(id))=>(id,None),
+            Ok(None)=>{let reservation=alloc_tid(t)?;(reservation.tid,Some(reservation))},
+            Err(error)=>return Err((-error)as crate::errno::Errno),
+        };`);
+thread=thread.replace('            Some(reservation),','            reservation,');
+thread=thread.replace('        Err(error) => {\n            // SAFETY: never handed out.','        Err(error) => {\n            admission::failed_clone(admission.as_ref());\n            // SAFETY: never handed out.');
 const marker='    // The child may run, exit and be freed before pthread_create returns:';if(thread.split(marker).length!==2)throw Error('Original clone host choice absent');thread=thread.replace(marker,'    if let Some(result)=unsafe{admission::capture(boot,flags,admission)}{return result;}\n'+marker);
 thread+='\n#[path="thread-admission.rs"]\npub(crate) mod admission;\n';writeChanged(threadFile,thread);
 for(const [from,to]of [['thread-admission.rs','sys/thread-admission.rs'],['thread-admission.S','thread-admission.S']])copyChanged(path.join(work,from),path.join(output,'src',to));

@@ -7,7 +7,7 @@ fn initial_table_is_private_and_argument_record_remains_live(){
     let directory=std::env::temp_dir().join(format!("android-initial-stack-{}",std::process::id()));
     std::fs::DirBuilder::new().mode(0o700).create(&directory).unwrap();
     cred::init(cred::Identity::default(),Some(directory.clone()));
-    let program=Image{bias:0,entry:0x1234,phdr:0x5678,phnum:7,end:0,interp:None,source:String::new(),stats:Default::default()};
+    let program=Image{bias:0,entry:0x1234,phdr:0x5678,phnum:7,end:0,interp:None,source:String::new(),stats:Default::default(),loads:Vec::new()};
     for (argv,envp) in [
         (vec![b"stack-probe".to_vec(),b"argument".to_vec()],vec![b"STACK_TEST=value".to_vec()]),
         (vec![vec![b'a';PAGE as usize+17],b"tail".to_vec()],vec![vec![b'e';PAGE as usize+33]]),

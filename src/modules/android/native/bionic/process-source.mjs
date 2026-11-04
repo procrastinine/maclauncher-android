@@ -35,10 +35,10 @@ pub(crate) unsafe fn initial_enter(ctx:*mut GuestContext)->Result<u64,i64>{
 edit('sys/signal.rs',[
  ['// ---- host signal handler --------------------------------------------------------','#[path="embedded-signals.rs"]\npub(crate) mod embedded;\n\n// ---- host signal handler --------------------------------------------------------'],
  ['    // SAFETY: SA_SIGINFO handler arguments from the kernel.','    if unsafe{embedded::forward_host(sig,info,uc)}{return;}\n    // SAFETY: SA_SIGINFO handler arguments from the kernel.'],
- ['                && sig != SIGSTOP\n            {','                && sig != SIGSTOP\n                && !embedded::keep_host_handler(h)\n            {'],
+ ['            if h != 0 && sig != SIGKILL && sig != SIGSTOP {','            if h != 0 && sig != SIGKILL && sig != SIGSTOP && !embedded::keep_host_handler(h) {'],
  ['fn mirror_on_host(sig: i32, act: &KSigaction) {\n    let h = to_host(sig);','fn mirror_on_host(sig: i32, act: &KSigaction) {\n    let h = to_host(sig);\n    if embedded::keep_host_handler(h){return;}']
 ]);
 for(const[from,to]of [['process-entry.rs','process-entry.rs'],['embedded-signals.rs','sys/embedded-signals.rs'],['native-poll-lease.rs','sys/native-poll-lease.rs'],['native-read-lease.rs','sys/native-read-lease.rs']])copyChanged(path.join(work,from),path.join(src,to));
-edit('sys/fdtab.rs',[['pub struct Pinned{','#[path=\"native-poll-lease.rs\"] pub(crate) mod native_poll_lease;\n#[path=\"native-read-lease.rs\"] pub(crate) mod native_read_lease;\npub struct Pinned{']]);
+edit('sys/fdtab.rs',[['pub struct Pinned {','#[path=\"native-poll-lease.rs\"] pub(crate) mod native_poll_lease;\n#[path=\"native-read-lease.rs\"] pub(crate) mod native_read_lease;\npub struct Pinned {']]);
 }
 
