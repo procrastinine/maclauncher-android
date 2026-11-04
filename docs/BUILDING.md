@@ -18,6 +18,22 @@ The GitHub source workflow runs the same commands without initializing upstream
 checkouts. When a registered checkout is present, the source check also verifies
 its exact revision and tracked-file state.
 
+## Tests
+
+The full test suite runs with the pinned AIM checkout initialized:
+
+```sh
+git submodule update --init src/external/aim-custom
+npm test
+```
+
+The native fixtures use Clang, Rust/Cargo and a JDK. The memory-policy probe
+builds offline, so Cargo's dependency cache must already contain `libc`.
+Tests need local process creation and listening sockets. Sandboxes that suppress
+file permission bits cannot exercise the native-publication assertions.
+Optional integration tests state their required runtime inputs in their skip
+messages. The default suite does not launch the app or submit GPU work.
+
 ## Runtime producers
 
 The common/JVM producer accepts an explicit JSON input file:
