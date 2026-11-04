@@ -1158,7 +1158,7 @@
       "id": "robolectric",
       "repository": "https://github.com/robolectric/robolectric",
       "path": "src/external/robolectric",
-      "revision": "872a2e0d448af694b3a61e40ed0a62728ca4b784",
+      "revision": "3cfa3a4b8e2910ae06ce0d12e6f7bd927f8a5d2e",
       "usage": "JVM portability call adapters for the AOSP Java framework",
       "pinRefs": [
         {

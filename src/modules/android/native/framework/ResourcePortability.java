@@ -70,7 +70,7 @@ final class ResourcePortability implements Opcodes {
             }
         },0);return writer.toByteArray();
     }
-    // Linux ABI values from Robolectric ShadowOsConstants at 872a2e0d448af694b3a61e40ed0a62728ca4b784.
+    // Linux ABI values from ShadowOsConstants at the declared Robolectric portability revision.
     // MIT, Copyright (c) 2010 Xtreme Labs, Pivotal Labs and Google Inc.
     // API36 MADV values follow Linux v6.12 include/uapi/asm-generic/mman-common.h.
     // This imports constant data only, never its simulated file-mode or shadow runtime.

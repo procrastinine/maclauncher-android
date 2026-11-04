@@ -440,7 +440,7 @@
 [submodule "robolectric"]
 	path = src/external/robolectric
 	url = https://github.com/robolectric/robolectric
-	maclauncher-revision = 872a2e0d448af694b3a61e40ed0a62728ca4b784
+	maclauncher-revision = 3cfa3a4b8e2910ae06ce0d12e6f7bd927f8a5d2e
 	maclauncher-role = reference
 	maclauncher-init = false
 [submodule "unicorn"]

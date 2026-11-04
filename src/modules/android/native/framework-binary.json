@@ -1,8 +1,8 @@
 {
-  "version": "16-robolectric-13921718",
+  "version": "16-robolectric-13921718-2",
   "androidApi": 36,
-  "artifact": "org.robolectric:android-all:16-robolectric-13921718",
-  "url": "https://repo.maven.apache.org/maven2/org/robolectric/android-all/16-robolectric-13921718/android-all-16-robolectric-13921718.jar",
+  "artifact": "org.robolectric:android-all:16-robolectric-13921718-2",
+  "url": "https://repo.maven.apache.org/maven2/org/robolectric/android-all/16-robolectric-13921718-2/android-all-16-robolectric-13921718-2.jar",
   "implementation": "Uninstrumented AOSP Java framework; no Robolectric shadows or SDK stubs",
   "declarationSource": {
     "url": "https://android.googlesource.com/platform/frameworks/base",
@@ -12,9 +12,9 @@
   },
   "files": [
     {
-      "path": "android-all-16-robolectric-13921718.jar",
-      "size": 196985634,
-      "sha256": "8b74a0a137330658d2f33f0dc715d42734f74ba8b2d7014fc2e95aa40d3f682d"
+      "path": "android-all-16-robolectric-13921718-2.jar",
+      "size": 203450935,
+      "sha256": "ead18e465e8a4c2b93a59d7d7a68c1830f3cd8f1b6bcdfd96f45d658ba979ce3"
     }
   ],
   "nativeRuntime": {
