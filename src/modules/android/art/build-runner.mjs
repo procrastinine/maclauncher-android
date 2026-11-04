@@ -1,5 +1,4 @@
 import {addLicenses} from '../native/upstream/licenses.mjs';
-import {optionalFiles} from '../native/upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';

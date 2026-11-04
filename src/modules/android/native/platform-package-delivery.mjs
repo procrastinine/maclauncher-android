@@ -1,4 +1,3 @@
-import {optionalFiles} from './upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {verifyBinaryInputs} from './binary-inputs.mjs';

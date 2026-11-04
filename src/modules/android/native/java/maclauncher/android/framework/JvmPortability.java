@@ -1,6 +1,6 @@
 /* Stateless portability operations adapted from Robolectric AndroidInterceptors.
  * Copyright (c) 2010 Xtreme Labs, Pivotal Labs and Google Inc.
- * MIT License; see license-inputs/robolectric-portability/LICENSE.
+ * MIT License.
  */
 package maclauncher.android.framework;
 

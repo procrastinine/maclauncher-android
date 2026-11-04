@@ -6,7 +6,7 @@ Android runtime source for macOS on Apple Silicon. The runtime retains complete
 Android framework APIs with native graphics, audio, input and platform adapters.
 
 The source tree contains the JVM host, ART adaptations, native implementations,
-owned upstream patches, source pins and notices. Launcher UI, game import and
+owned upstream patches and source pins. Launcher UI, game import and
 launcher account/storage orchestration remain in MacLauncher.
 
 MacLauncher consumes this project as a pinned source submodule. Its existing

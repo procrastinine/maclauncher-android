@@ -1,5 +1,4 @@
 import {addLicenses} from './upstream/licenses.mjs';
-import {optionalFiles} from './upstream/source-files.mjs';
 import {buildGraphicsLibrary} from './graphics-build.mjs';
 import {buildAlarm} from './alarm/build.mjs';
 import {buildPollableDescriptors} from './pollable-fds/build.mjs';

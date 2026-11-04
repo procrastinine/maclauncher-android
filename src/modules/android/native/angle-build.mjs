@@ -1,5 +1,5 @@
 import {addLicenses} from './upstream/licenses.mjs';
-import {optionalFiles,prepareSourceTree,writeChanged} from './upstream/source-files.mjs';
+import {prepareSourceTree,writeChanged} from './upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';

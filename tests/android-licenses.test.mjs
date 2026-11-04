@@ -15,3 +15,18 @@ test('licence functions never throw for unavailable, unreadable and unwritable i
   assert.doesNotThrow(()=>addLicenses(value,'component',value));
  }
 });
+
+test('licence functions contain malformed arguments and failures while warning',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-warning-'));
+ t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const file=path.join(root,'LICENSE');fs.writeFileSync(file,'input');
+ const hostile={toString(){throw Error('argument conversion');}};
+ t.mock.method(console,'log',()=>{throw Error('warning output');});
+ for(const value of [Symbol('component'),hostile]){
+  assert.doesNotThrow(()=>addLicense(root,value,file));
+  assert.doesNotThrow(()=>includeLicenses(root,value));
+  assert.doesNotThrow(()=>addLicenses(root,'component',value));
+ }
+ assert.doesNotThrow(()=>addLicenses(root,'component',Buffer.from(root)));
+ assert.doesNotThrow(()=>addLicenses(root,'component',new URL('file://'+root)));
+});
