@@ -17,7 +17,6 @@ import {prepareAimGlesInterop} from './gpu-source.mjs';
 import {prepareWindowBuffers} from './window-source.mjs';
 import {prepareImportedStorage} from './storage-source.mjs';
 import {preparePackagePaths} from './package-paths-source.mjs';
-import {prepareSignalUserMemory} from './signal-memory-source.mjs';
 import {prepareTranslationAnalysis} from './translation-source.mjs';
 import {prepareInitialStackLayout} from './stack-layout-source.mjs';
 import {prepareProcAuxv} from './proc-auxv-source.mjs';
@@ -48,7 +47,7 @@ export function prepareAimSource({source,output,klepton,glesHeaders,mutableCode=
  prepareSourceTree(output,temporary=>{
   exportSources(source,supplier.sources.aim.commit,['.'],temporary);
   prepareArtCompilerPaths(temporary,{source});
-  for(const name of ['aim-hostcall.patch','aim-platform.patch','aim-opened-path.patch','aim-display-modes.patch','aim-identities.patch','aim-process-liveness.patch','aim-create-mode.patch'])
+  for(const name of ['aim-hostcall.patch','aim-platform.patch','aim-opened-path.patch','aim-display-modes.patch','aim-identities.patch'])
    execFileSync('git',['apply','--unsafe-paths',path.join(root,'adapters',name)],{cwd:temporary,stdio:'inherit',env:{...process.env,GIT_CEILING_DIRECTORIES:path.dirname(temporary)}});
   copyChanged(path.join(root,'native/opened-path.rs'),path.join(temporary,'crates/aim-linux-abi/src/sys/opened-path.rs'));
   prepareOpenedOrigins(temporary);
@@ -68,7 +67,6 @@ export function prepareAimSource({source,output,klepton,glesHeaders,mutableCode=
   prepareIslandPlacement(temporary);
   prepareRelro(temporary);
   prepareAimVideo(temporary);
-  prepareSignalUserMemory(temporary);
   prepareJitUserCopy(temporary);
   prepareUserOutput(temporary);
   prepareMulticastOptions(temporary);
@@ -87,7 +85,6 @@ export function prepareAimSource({source,output,klepton,glesHeaders,mutableCode=
   prepareExecQueueRetirement(temporary);
   prepareTimerExec(temporary);
   prepareBinderSenderIdentity(temporary);
-  execFileSync('git',['apply','--unsafe-paths',path.join(root,'adapters/aim-upstream-process.patch')],{cwd:temporary,stdio:'inherit',env:{...process.env,GIT_CEILING_DIRECTORIES:path.dirname(temporary)}});
  });
  return output;
 }

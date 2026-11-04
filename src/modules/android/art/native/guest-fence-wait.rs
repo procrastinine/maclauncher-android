@@ -14,7 +14,7 @@ const SYNC_IOC_FILE_INFO: libc::c_ulong = 0xc038_3e04;
 
 /// Readiness retires a fence, but only its original status establishes success.
 /// Inspect without consuming its record or changing the borrowed descriptor.
-fn poll(fd: i32, timeout: u64) -> Result<bool, EGLint> {
+pub(crate) fn poll(fd: i32, timeout: u64) -> Result<bool, EGLint> {
     let ms = if timeout == FOREVER { -1 } else {
         timeout.div_ceil(1_000_000).min(i32::MAX as u64) as i32
     };

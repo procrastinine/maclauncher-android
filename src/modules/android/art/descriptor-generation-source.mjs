@@ -21,8 +21,8 @@ export function prepareDescriptorGenerations(aim){
  edit('sys/net.rs',[
   ['    set_int(fd, libc::SOL_SOCKET, libc::SO_NOSIGPIPE, 1);\n    Ok(fd)',
    '    if let Err(error)=fdtab::begin_fresh(fd){unsafe{libc::close(fd);}return Err(-(error as i64));}\n    set_int(fd, libc::SOL_SOCKET, libc::SO_NOSIGPIPE, 1);\n    Ok(fd)'],
-  ['            set_int(fd, libc::SOL_SOCKET, libc::SO_NOSIGPIPE, 1);\n            let o = InetOpts::default();',
-   '            if let Err(error)=fdtab::begin_fresh(fd){unsafe{libc::close(fd);}return -(error as i64);}\n            set_int(fd, libc::SOL_SOCKET, libc::SO_NOSIGPIPE, 1);\n            let o = InetOpts::default();'],
+  ['            set_int(fd, libc::SOL_SOCKET, libc::SO_NOSIGPIPE, 1);\n            let groups = match super::bpf::socket_cgroup() {',
+   '            if let Err(error)=fdtab::begin_fresh(fd){unsafe{libc::close(fd);}return -(error as i64);}\n            set_int(fd, libc::SOL_SOCKET, libc::SO_NOSIGPIPE, 1);\n            let groups = match super::bpf::socket_cgroup() {'],
   ['            fdtab::insert(\n                fd,\n                Kind::Sock(Sock::of(SockType::Dgram, Family::Netlink(n))),',
    fresh+'            fdtab::insert(\n                fd,\n                Kind::Sock(Sock::of(SockType::Dgram, Family::Netlink(n))),'],
   ['            fdtab::insert(fd, Kind::Sock(Sock::of(SockType::Dgram, Family::Packet(p))));',

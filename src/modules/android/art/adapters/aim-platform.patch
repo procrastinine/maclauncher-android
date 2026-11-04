@@ -1,6 +1,46 @@
+--- a/crates/aim-binder-host/src/socket_scm.rs
++++ b/crates/aim-binder-host/src/socket_scm.rs
+@@ -3,6 +3,9 @@
+ use crate::proxy_file::{receive_flags, send};
+ use aim_storage::socket_inode::Receipt;
+ use std::os::unix::ffi::OsStrExt;
++#[path="../../aim-host-display/src/unixsock.rs"]
++#[allow(dead_code)]
++mod unixsock;
+ use std::{
+     collections::HashMap,
+     io,
+@@ -146,7 +149,6 @@
+             .try_into()
+             .map_err(|_| crate::wire::EPROTO)?;
+         if path.is_empty()
+-            || path.len() >= 104
+             || path[0] != b'/'
+             || path.contains(&0)
+             || pid <= 0
+@@ -192,7 +194,7 @@
+         ));
+         std::fs::create_dir(&directory)?;
+         std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))?;
+-        let listener = std::os::unix::net::UnixListener::bind(directory.join("s"))?;
++        let listener = unixsock::listen(&directory.join("s"),128)?;
+         listener.set_nonblocking(true)?;
+         use std::os::unix::ffi::OsStrExt;
+         let endpoint = Endpoint {
+@@ -333,9 +335,7 @@
+ impl Drop for Service {
+     fn drop(&mut self) {
+         self.stop.store(true, std::sync::atomic::Ordering::Release);
+-        let _ = UnixStream::connect(std::path::Path::new(std::ffi::OsStr::from_bytes(
+-            &self.endpoint.path,
+-        )));
++        let _ = unixsock::connect_at(&self.directory,"s");
+         if let Some(thread) = self.thread.take() {
+             if thread.join().is_err() {
+                 eprintln!("socket SCM listener unwound");
 --- a/crates/aim-host-gpu/src/lib.rs
 +++ b/crates/aim-host-gpu/src/lib.rs
-@@ -25,6 +25,7 @@
+@@ -26,6 +26,7 @@
  mod fence;
  mod metal;
  mod present;
@@ -8,16 +48,16 @@
  #[rustfmt::skip]
  mod table;
  
-@@ -36,7 +37,7 @@
+@@ -37,7 +38,7 @@
  
  use aim_hostcall::gpu::{
-     FN_FENCE, FN_IMPORT_BUFFER, FN_INIT, FN_PRESENT, FN_TABLE_BASE, Fence, ImportBuffer, Init,
--    Present, VERSION,
-+    Present, OpaqueSurface, FN_OPAQUE_SURFACE, VERSION,
+     FN_FENCE, FN_IMPORT_BUFFER, FN_INIT, FN_PRESENT, FN_TABLE_BASE, FN_WAIT, Fence, ImportBuffer,
+-    Init, Present, VERSION, Wait,
++    Init, Present, OpaqueSurface, FN_OPAQUE_SURFACE, VERSION, Wait,
  };
  use aim_hostcall::{HostModule, args_mut, errno, module};
  
-@@ -175,6 +176,20 @@
+@@ -176,6 +177,20 @@
                  regs[0] = display::host(handle) as u64;
              }
              let mut r = darwin_gpu_forward(f, regs.as_ptr(), stack, ns as u64);
@@ -38,7 +78,7 @@
              if e.name == c"eglGetCurrentDisplay" {
                  r = display::guest(r as usize) as u64;
              } else if e.name == c"eglInitialize" && r as u32 == 1 {
-@@ -315,6 +330,10 @@
+@@ -316,6 +331,10 @@
          },
          FN_IMPORT_BUFFER => match unsafe { args_mut::<ImportBuffer>(args, len) } {
              Ok(a) => metal::import_buffer(a),
@@ -49,6 +89,94 @@
              Err(e) => e,
          },
          FN_PRESENT => match unsafe { args_mut::<Present>(args, len) } {
+--- /dev/null
++++ b/crates/aim-host-gpu/src/opaque.rs
+@@ -0,0 +1,85 @@
++//! RGBX window backing over ANGLE's existing RGB IOSurface attachment.
++//! ANGLE initializes alpha to one and masks subsequent alpha writes, so the
++//! default framebuffer has real opaque RGB semantics, not just config labels.
++
++use std::ffi::c_void;
++use aim_hostcall::gpu::OpaqueSurface;
++use crate::{EINVAL, display, metal, resolved};
++
++type Ref = *const c_void;
++
++aim_hostcall::dylib! {
++    static CF = c"/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation" {
++        static kCFTypeDictionaryKeyCallBacks: c_void;
++        static kCFTypeDictionaryValueCallBacks: c_void;
++        fn CFDictionaryCreateMutable(allocator: Ref, capacity: isize, keys: Ref, values: Ref) -> Ref;
++        fn CFDictionarySetValue(dictionary: Ref, key: Ref, value: Ref);
++        fn CFNumberCreate(allocator: Ref, kind: isize, value: Ref) -> Ref;
++        fn CFRelease(value: Ref);
++    }
++}
++aim_hostcall::dylib! {
++    static IOSURFACE = c"/System/Library/Frameworks/IOSurface.framework/IOSurface" {
++        static kIOSurfaceWidth: Ref;
++        static kIOSurfaceHeight: Ref;
++        static kIOSurfaceBytesPerElement: Ref;
++        static kIOSurfaceBytesPerRow: Ref;
++        static kIOSurfacePixelFormat: Ref;
++        fn IOSurfaceAlignProperty(key: Ref, value: usize) -> usize;
++        fn IOSurfaceCreate(properties: Ref) -> Ref;
++    }
++}
++
++pub fn create(a: &mut OpaqueSurface) -> i64 {
++    let address = resolved(c"eglCreatePbufferFromClientBuffer");
++    let query = resolved(c"eglGetConfigAttrib");
++    if address == 0 || query == 0 || a.width == 0 || a.height == 0 {
++        return EINVAL;
++    }
++    let pool = metal::pool_push();
++    // SAFETY: CF and EGL signatures below match the platform declarations;
++    // the dictionary retains values, and ANGLE retains a successful IOSurface.
++    unsafe {
++        let dictionary = CFDictionaryCreateMutable(std::ptr::null(), 5,
++            kCFTypeDictionaryKeyCallBacks().cast(), kCFTypeDictionaryValueCallBacks().cast());
++        let row = IOSurfaceAlignProperty(*kIOSurfaceBytesPerRow(), a.width as usize * 4);
++        for (key, value) in [
++            (*kIOSurfaceWidth(), a.width as i64),
++            (*kIOSurfaceHeight(), a.height as i64),
++            (*kIOSurfaceBytesPerElement(), 4),
++            (*kIOSurfaceBytesPerRow(), row as i64),
++            (*kIOSurfacePixelFormat(), 0x52474241), // 'RGBA' physical backing.
++        ] {
++            let number = CFNumberCreate(std::ptr::null(), 4, (&raw const value).cast());
++            CFDictionarySetValue(dictionary, key, number);
++            CFRelease(number);
++        }
++        let storage = IOSurfaceCreate(dictionary);
++        CFRelease(dictionary);
++        if storage.is_null() {
++            metal::pool_pop(pool);
++            return EINVAL;
++        }
++        let dpy = display::host(a.display as usize);
++        let get: unsafe extern "C" fn(usize, usize, i32, *mut i32) -> u32 = std::mem::transmute(query);
++        let mut target = 0;
++        if get(dpy, a.config as usize, 0x348d, &mut target) == 0 {
++            CFRelease(storage);
++            metal::pool_pop(pool);
++            return EINVAL;
++        }
++        let mut attributes = vec![
++            0x3057, a.width as i32, 0x3056, a.height as i32, // WIDTH, HEIGHT.
++            0x345a, 0, // IOSURFACE_PLANE_ANGLE.
++            0x3081, target, 0x3080, 0x305e, // TEXTURE_TARGET, TEXTURE_RGBA.
++            0x345c, 0x1401, 0x345d, 0x1907, // UNSIGNED_BYTE, RGB attachment.
++        ];
++        if a.colorspace != 0 { attributes.extend([0x309d, a.colorspace]); }
++        attributes.push(0x3038);
++        let create: unsafe extern "C" fn(usize, u32, Ref, usize, *const i32) -> usize = std::mem::transmute(address);
++        a.surface = create(dpy, 0x3454, storage, a.config as usize, attributes.as_ptr()) as u64;
++        CFRelease(storage);
++    }
++    metal::pool_pop(pool);
++    0
++}
 --- a/crates/aim-host-gpu/src/present.rs
 +++ b/crates/aim-host-gpu/src/present.rs
 @@ -37,6 +37,7 @@
@@ -143,25 +271,25 @@
              let (w, h) = (sw.min(dw), sh.min(dh));
 --- a/crates/aim-hostcall/src/lib.rs
 +++ b/crates/aim-hostcall/src/lib.rs
-@@ -153,7 +153,7 @@
+@@ -166,7 +166,7 @@
  /// Module [`module::GPU`]: EGL and OpenGL ES over the host's ANGLE on
  /// Metal, for the guest GLES driver (`docs/gles-driver.md`).
  pub mod gpu {
--    pub const VERSION: u32 = 2;
-+    pub const VERSION: u32 = 3;
+-    pub const VERSION: u32 = 3;
++    pub const VERSION: u32 = 4;
  
      /// Load ANGLE and resolve the forwarded entry points ([`Init`]).
      /// Returns 0, `-ENODEV` when the host has no GPU libraries, or
-@@ -171,6 +171,8 @@
-     /// Returns the new sync_file's guest fd, or `-EINVAL` without a current
-     /// context.
-     pub const FN_FENCE: u32 = 4;
+@@ -187,6 +187,8 @@
+     /// Order the current context's subsequent commands after a sync_file
+     /// without blocking the CPU ([`Wait`]). Returns 0 or `-EINVAL`.
+     pub const FN_WAIT: u32 = 5;
 +    /// Create a real opaque RGBX window framebuffer over an IOSurface.
-+    pub const FN_OPAQUE_SURFACE: u32 = 5;
++    pub const FN_OPAQUE_SURFACE: u32 = 6;
      /// Forwarded entry point `i` of the generated table
      /// (`tools/gen-gpu-thunks.py`) is function `FN_TABLE_BASE + i`. Its
      /// argument block is the callee's register image, 8 bytes per value:
-@@ -224,6 +226,19 @@
+@@ -240,6 +242,19 @@
          /// Out: a sync_file fd that signals when the copy is done.
          pub fence: i32,
          pub _reserved: u32,
@@ -181,7 +309,7 @@
      }
  
      /// Argument block of [`FN_FENCE`].
-@@ -1388,6 +1403,11 @@
+@@ -1454,6 +1469,11 @@
          call_with(module::GPU, gpu::FN_PRESENT, args).map(drop)
      }
  
@@ -193,36 +321,74 @@
      /// A native fence for the current context's commands; returns its fd.
      pub fn gpu_fence(args: &mut gpu::Fence) -> Result<i32, Errno> {
          call_with(module::GPU, gpu::FN_FENCE, args).map(|fd| fd as i32)
+--- a/crates/aim-linux-abi/src/hostcall.rs
++++ b/crates/aim-linux-abi/src/hostcall.rs
+@@ -105,6 +105,15 @@
+         mark_used();
+         return unsafe { call(func, args, len, crate::context::call_guest) };
+     }
++    // The selected MacLauncher physical backend serves the unchanged original
++    // audio HAL protocol. There is exactly one audio backend in this process.
++    if module == module::AUDIO {
++        if let Some(call) = EXTENSION.get() {
++            if func == FN_VERSION { return aim_hostcall::audio::VERSION as i64; }
++            mark_used();
++            return unsafe { call(0x10000 + func, args, len, crate::context::call_guest) };
++        }
++    }
+     let Some(Some(m)) = MODULES.get(module as usize) else {
+         return -(errno::ENOSYS as i64);
+     };
 --- a/crates/aim-linux-abi/src/sys/net/socket_scm.rs
 +++ b/crates/aim-linux-abi/src/sys/net/socket_scm.rs
-@@ -74,16 +74,16 @@
- struct Reply { descriptor: Option<PrivateFd>, receipt: Option<aim_storage::socket_inode::Receipt>, class: u32 }
- fn initialize(state: &mut Channel) -> Result<(), Errno> {
-     if state.endpoint.is_none() {
--        let endpoint = binder::socket_scm_endpoint()?;
-+        let endpoint = binder::socket_scm_endpoint().map_err(|e| { crate::diag!("AIM carrier endpoint: errno {e}"); e })?;
-         let descriptor = PrivateFd::allocate(|| {
-             let descriptor = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0) };
-             if descriptor < 0 { return Err(std::io::Error::last_os_error()); }
-             let descriptor=unsafe { OwnedFd::from_raw_fd(descriptor) };
-             if unsafe { libc::fcntl(descriptor.as_raw_fd(),libc::F_SETFD,libc::FD_CLOEXEC) }<0{return Err(std::io::Error::last_os_error());}
-             Ok(descriptor)
--        }).map_err(io)?;
--        connect(descriptor.as_raw_fd(), &endpoint).map_err(|error| { eprintln!("socket carrier reconnect connect: errno {error}"); error })?;
--        aim_binder_host::socket_scm::authenticate(descriptor.as_raw_fd(), &endpoint).map_err(|error| { eprintln!("socket carrier reconnect authenticate: {error}"); io(error) })?;
-+        }).map_err(|e| { crate::diag!("AIM carrier private allocation: {e}"); io(e) })?;
-+        connect(descriptor.as_raw_fd(), &endpoint).map_err(|error| { crate::diag!("socket carrier reconnect connect: errno {error}"); error })?;
-+        aim_binder_host::socket_scm::authenticate(descriptor.as_raw_fd(), &endpoint).map_err(|error| { crate::diag!("socket carrier reconnect authenticate: {error}"); io(error) })?;
-         state.endpoint = Some(descriptor);
+@@ -51,32 +51,16 @@
+     if unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 {
+         return Err(errno::last());
      }
-     Ok(())
+-    let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+-    if endpoint.path.is_empty()
+-        || endpoint.path.len() >= address.sun_path.len()
+-        || endpoint.path.contains(&0)
+-    {
+-        return Err(errno::EINVAL);
+-    }
+-    address.sun_family = libc::AF_UNIX as _;
+-    address.sun_len = (2 + endpoint.path.len() + 1) as u8;
+-    for (target, source) in address.sun_path.iter_mut().zip(&endpoint.path) {
+-        *target = *source as _;
+-    }
+-    let result = unsafe {
+-        libc::connect(
+-            fd,
+-            (&address as *const libc::sockaddr_un).cast(),
+-            address.sun_len as _,
+-        )
+-    };
++    use std::os::unix::ffi::OsStrExt;
++    let path=std::path::Path::new(std::ffi::OsStr::from_bytes(&endpoint.path));
++    let directory=path.parent().ok_or(errno::EINVAL)?;
++    let name=path.file_name().ok_or(errno::EINVAL)?.as_bytes();
++    if name.is_empty()||name.len()>=104||name.contains(&0){return Err(errno::EINVAL);}
++    let target=super::Target::UnixAt{dir:directory.into(),name:name.into()};
++    let result=super::with_target(&target,|address,length|unsafe{libc::connect(fd,address,length)as i64});
+     if result < 0 {
+-        let error = std::io::Error::last_os_error()
+-            .raw_os_error()
+-            .unwrap_or(libc::EIO);
+-        if error != libc::EINPROGRESS && error != libc::EAGAIN {
+-            return Err(errno::from_darwin(error));
+-        }
++        let error=(-result)as Errno;
++        if error!=errno::from_darwin(libc::EINPROGRESS)&&error!=errno::EAGAIN{return Err(error);}
+         let start = std::time::Instant::now();
+         loop {
+             let remaining = 1000i32 - start.elapsed().as_millis().min(1000) as i32;
 --- a/crates/aim-linux-abi/src/sys/poll.rs
 +++ b/crates/aim-linux-abi/src/sys/poll.rs
-@@ -107,6 +107,41 @@
-     let err = errno::last();
+@@ -196,8 +196,43 @@
      restore_sigmask(old);
      if n < 0 { -(err as i64) } else { n as i64 }
-+}
+ }
 +// Darwin poll omits pipe EOF when its data direction was not requested.
 +// Linux always returns HUP/ERR. This per-wait queue observes only those
 +// terminal events on the same retained descriptors; it is no new fd owner.
@@ -257,31 +423,57 @@
 +  }
 +  Ok(())
 + }
- }
++}
  #[cfg(test)]
- thread_local!{pub(super) static BEFORE_WAIT:std::cell::RefCell<Option<Box<dyn FnOnce()>>>=const{std::cell::RefCell::new(None)};}
-@@ -146,6 +181,8 @@
+-thread_local! {pub(super) static BEFORE_WAIT:std::cell::RefCell<Option<Box<dyn FnOnce()>>>=const{std::cell::RefCell::new(None)};}
++thread_local!{pub(super) static BEFORE_WAIT:std::cell::RefCell<Option<Box<dyn FnOnce()>>>=const{std::cell::RefCell::new(None)};}
+ 
+ pub fn ppoll(a: [u64; 6]) -> i64 {
+     let (fds, nfds, ts, mask) = (a[0], a[1], a[2], a[3]);
+@@ -265,6 +300,8 @@
          pins.push(pin);
          ptys.push(pty);
      }
 +    let mut pipe_ends=match PipeEnds::watch(&host){Ok(watch)=>watch,Err(error)=>return error};
 +    if let Some(watch)=&pipe_ends{host.push(libc::pollfd{fd:watch.queue.as_raw_fd(),events:libc::POLLIN,revents:0});}
-     for watch in ptys.iter().flatten(){
-         let Some(notification)=watch.observation.notification()else{return -(crate::errno::EIO as i64);};
-         host.push(libc::pollfd{fd:notification.as_raw_fd(),events:libc::POLLIN,revents:0});
-@@ -166,6 +203,7 @@
+     for watch in ptys.iter().flatten() {
+         let Some(notification) = watch.observation.notification() else {
+             return -(crate::errno::EIO as i64);
+@@ -305,13 +342,10 @@
          if n < 0 {
              return n;
          }
 +        if let Some(watch)=&mut pipe_ends{if let Err(error)=watch.collect(&mut host){return error;}}
          let mut ready = 0;
-         for (((g, h), pin),pty) in guest.iter_mut().zip(&mut host).zip(&pins).zip(&ptys) {
-             if g.fd >= 0 && pin.is_none()&&pty.is_none() { g.revents = POLLNVAL; ready += 1; continue; }
-@@ -307,4 +345,21 @@
+-        for (((g, h), pin), pty) in guest.iter_mut().zip(&mut host).zip(&pins).zip(&ptys) {
+-            if g.fd >= 0 && pin.is_none() && pty.is_none() {
+-                g.revents = POLLNVAL;
+-                ready += 1;
+-                continue;
+-            }
++        for (((g, h), pin),pty) in guest.iter_mut().zip(&mut host).zip(&pins).zip(&ptys) {
++            if g.fd >= 0 && pin.is_none()&&pty.is_none() { g.revents = POLLNVAL; ready += 1; continue; }
+             signal_revents(pin.as_ref(), h);
+             if let Some(watch) = pty {
+                 h.revents = watch.events(h.revents);
+@@ -590,18 +624,25 @@
+         );
+         assert_eq!(selected[fd / 64], 1 << (fd % 64));
          super::super::fdtab::withdraw_guest(read.as_raw_fd()).unwrap();
-         assert_eq!(pselect6([(fd + 1) as u64, selected.as_mut_ptr() as u64, 0, 0, timeout.as_ptr() as u64, 0]), -(EBADF as i64));
-     }
--}
+-        assert_eq!(
+-            pselect6([
+-                (fd + 1) as u64,
+-                selected.as_mut_ptr() as u64,
+-                0,
+-                0,
+-                timeout.as_ptr() as u64,
+-                0
+-            ]),
+-            -(EBADF as i64)
+-        );
+-    }
++        assert_eq!(pselect6([(fd + 1) as u64, selected.as_mut_ptr() as u64, 0, 0, timeout.as_ptr() as u64, 0]), -(EBADF as i64));
++    }
 +    #[test]
 +    fn zero_interest_pipe_terminal_events_are_unconditional() {
 +        if super::super::fdtab::isolated_kernel_test("sys::poll::pin_tests::zero_interest_pipe_terminal_events_are_unconditional"){return;}
@@ -299,408 +491,9 @@
 +        }
 +    }
 +
-+}
---- a/hal/gles/src/egl.rs
-+++ b/hal/gles/src/egl.rs
-@@ -22,7 +22,10 @@
- use std::ffi::CString;
- use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
- 
--use aim_hostcall::gpu::{Init, Present};
-+use aim_hostcall::gpu::{Init, Present, OpaqueSurface};
-+
-+#[path = "configs.rs"]
-+mod configs;
- 
- use crate::buffers::{self, NativeBuffer};
- use crate::thunks::{PROCS, TABLE_HASH, TABLE_LEN, host};
-@@ -90,6 +93,7 @@
-         fence: c_int,
-     ) -> c_int;
-     fn ANativeWindow_setSwapInterval(w: *mut NativeWindow, interval: c_int) -> c_int;
-+    fn ANativeWindow_setBuffersGeometry(w: *mut NativeWindow, width: c_int, height: c_int, format: c_int) -> c_int;
-     fn ANativeWindow_setBuffersTimestamp(w: *mut NativeWindow, timestamp: i64) -> c_int;
  }
  
-@@ -241,24 +245,8 @@
-     size: EGLint,
-     count: *mut EGLint,
- ) -> EGLBoolean {
--    let mut list = Vec::new();
--    // SAFETY: a NONE-terminated list of pairs, or null.
--    unsafe {
--        let mut p = attribs;
--        while !p.is_null() && *p != EGL_NONE {
--            let (k, v) = (*p, *p.add(1));
--            if !matches!(
--                k,
--                EGL_RECORDABLE_ANDROID | EGL_FRAMEBUFFER_TARGET_ANDROID | EGL_NATIVE_VISUAL_ID
--            ) {
--                list.extend([k, v]);
--            }
--            p = p.add(2);
--        }
--    }
--    list.push(EGL_NONE);
--    // SAFETY: forwarded with the filtered list.
--    unsafe { host::eglChooseConfig(dpy, list.as_ptr(), configs, size, count) }
-+    // SAFETY: EGL caller supplies the attribute and output storage.
-+    unsafe { configs::choose(dpy, attribs, configs, size, count) }
- }
- 
- fn config_attrib(dpy: EGLDisplay, config: EGLConfig, attr: EGLint) -> Option<EGLint> {
-@@ -298,9 +286,9 @@
- ) -> EGLBoolean {
-     let v = match attr {
-         EGL_RECORDABLE_ANDROID | EGL_FRAMEBUFFER_TARGET_ANDROID => EGL_TRUE as EGLint,
--        EGL_NATIVE_VISUAL_ID => native_visual(dpy, config),
-+        EGL_NATIVE_VISUAL_ID => if configs::owner(config).is_some() { 2 } else { native_visual(dpy, config) },
-         // SAFETY: forwarded.
--        _ => return unsafe { host::eglGetConfigAttrib(dpy, config, attr, value) },
-+        _ => return unsafe { configs::query(dpy, config, attr, value) },
-     };
-     if value.is_null() {
-         return fail(EGL_BAD_PARAMETER, EGL_FALSE);
-@@ -308,6 +296,58 @@
-     // SAFETY: checked non-null.
-     unsafe { *value = v };
-     EGL_TRUE
-+}
-+
-+/// # Safety
-+/// EGL's contract.
-+#[unsafe(no_mangle)]
-+pub unsafe extern "C" fn eglGetConfigs(dpy: EGLDisplay, values: *mut EGLConfig, size: EGLint, count: *mut EGLint) -> EGLBoolean {
-+    unsafe { configs::get(dpy, values, size, count) }
-+}
-+
-+fn context_configs() -> &'static Mutex<HashMap<usize, EGLint>> {
-+    static CONFIGS: OnceLock<Mutex<HashMap<usize, EGLint>>> = OnceLock::new();
-+    CONFIGS.get_or_init(Default::default)
-+}
-+
-+/// # Safety
-+/// EGL's contract.
-+#[unsafe(no_mangle)]
-+pub unsafe extern "C" fn eglCreateContext(dpy: EGLDisplay, config: EGLConfig, share: EGLContext, attrs: *const EGLint) -> EGLContext {
-+    let context = unsafe { host::eglCreateContext(dpy, configs::raw(config), share, attrs) };
-+    if !context.is_null() {
-+        if let Some(owner) = configs::owner(config) { context_configs().lock().unwrap().insert(context as usize, owner.id); }
-+    }
-+    context
-+}
-+
-+/// # Safety
-+/// EGL's contract.
-+#[unsafe(no_mangle)]
-+pub unsafe extern "C" fn eglDestroyContext(dpy: EGLDisplay, context: EGLContext) -> EGLBoolean {
-+    let okay = unsafe { host::eglDestroyContext(dpy, context) };
-+    if okay == EGL_TRUE { context_configs().lock().unwrap().remove(&(context as usize)); }
-+    okay
-+}
-+
-+/// # Safety
-+/// EGL's contract.
-+#[unsafe(no_mangle)]
-+pub unsafe extern "C" fn eglQueryContext(dpy: EGLDisplay, context: EGLContext, attr: EGLint, value: *mut EGLint) -> EGLBoolean {
-+    let okay = unsafe { host::eglQueryContext(dpy, context, attr, value) };
-+    if okay == EGL_TRUE && attr == configs::CONFIG_ID {
-+        if let Some(id) = context_configs().lock().unwrap().get(&(context as usize)) { unsafe { *value = *id }; }
-+    }
-+    okay
-+}
-+
-+/// # Safety
-+/// EGL's contract.
-+#[unsafe(no_mangle)]
-+pub unsafe extern "C" fn eglCreatePbufferSurface(dpy: EGLDisplay, config: EGLConfig, attrs: *const EGLint) -> EGLSurface {
-+    // RGBX aliases are window-only: standalone pbuffer configs remain raw.
-+    if configs::owner(config).is_some() { return fail(configs::BAD_MATCH, std::ptr::null_mut()); }
-+    unsafe { host::eglCreatePbufferSurface(dpy, config, attrs) }
- }
- 
- // Window surfaces.
-@@ -352,6 +392,17 @@
- 
- impl Window {
-     fn create_pbuffer(&self, width: i32, height: i32) -> EGLSurface {
-+        if let Some(owner) = configs::owner(self.config) {
-+            let mut a = OpaqueSurface {
-+                display: self.display as u64, config: owner.raw as u64,
-+                width: width as u32, height: height as u32,
-+                colorspace: self.colorspace.unwrap_or(0), ..Default::default()
-+            };
-+            return match aim_hostcall::guest::gpu_opaque_surface(&mut a) {
-+                Ok(()) => a.surface as EGLSurface,
-+                Err(_) => fail(EGL_BAD_ALLOC, std::ptr::null_mut()),
-+            };
-+        }
-         let mut attribs = vec![EGL_WIDTH, width, EGL_HEIGHT, height];
-         if let Some(c) = self.colorspace {
-             attribs.extend([EGL_GL_COLORSPACE, c]);
-@@ -389,6 +440,13 @@
-     };
-     if width <= 0 || height <= 0 {
-         return fail(EGL_BAD_NATIVE_WINDOW, std::ptr::null_mut());
-+    }
-+    if configs::owner(config).is_some() {
-+        // The queued native buffers have the same opaque RGBX semantics as
-+        // the default framebuffer. Their existing import treats alpha as one.
-+        if unsafe { ANativeWindow_setBuffersGeometry(native, 0, 0, 2) } != 0 {
-+            return fail(EGL_BAD_NATIVE_WINDOW, std::ptr::null_mut());
-+        }
-     }
-     let mut w = Window {
-         display: dpy,
-@@ -697,8 +755,16 @@
-     attr: EGLint,
-     value: *mut EGLint,
- ) -> EGLBoolean {
--    // SAFETY: forwarded with the host surface.
--    unsafe { host::eglQuerySurface(dpy, host_surface(surface), attr, value) }
-+    // SAFETY: forwarded with the host surface and validated output storage.
-+    let okay = unsafe { host::eglQuerySurface(dpy, host_surface(surface), attr, value) };
-+    if okay == EGL_TRUE && attr == configs::CONFIG_ID {
-+        if let Some(w) = window(surface) {
-+            if let Some(owner) = configs::owner(w.lock().unwrap().config) {
-+                unsafe { *value = owner.id };
-+            }
-+        }
-+    }
-+    okay
- }
- 
- /// # Safety
---- a/hal/gles/src/thunks.rs
-+++ b/hal/gles/src/thunks.rs
-@@ -4713,10 +4713,6 @@
-     unsafe { host::eglCopyMetalSharedEventANGLE(dpy, sync) }
- }
- #[unsafe(no_mangle)]
--pub unsafe extern "C" fn eglCreateContext(dpy: EGLDisplay, config: EGLConfig, share_context: EGLContext, attrib_list: *const EGLint) -> EGLContext {
--    unsafe { host::eglCreateContext(dpy, config, share_context, attrib_list) }
--}
--#[unsafe(no_mangle)]
- pub unsafe extern "C" fn eglCreateDeviceANGLE(device_type: EGLint, native_device: *mut c_void, attrib_list: *const EGLAttrib) -> EGLDeviceEXT {
-     unsafe { host::eglCreateDeviceANGLE(device_type, native_device, attrib_list) }
- }
-@@ -4729,10 +4725,6 @@
-     unsafe { host::eglCreatePbufferFromClientBuffer(dpy, buftype, buffer, config, attrib_list) }
- }
- #[unsafe(no_mangle)]
--pub unsafe extern "C" fn eglCreatePbufferSurface(dpy: EGLDisplay, config: EGLConfig, attrib_list: *const EGLint) -> EGLSurface {
--    unsafe { host::eglCreatePbufferSurface(dpy, config, attrib_list) }
--}
--#[unsafe(no_mangle)]
- pub unsafe extern "C" fn eglCreatePixmapSurface(dpy: EGLDisplay, config: EGLConfig, pixmap: EGLNativePixmapType, attrib_list: *const EGLint) -> EGLSurface {
-     unsafe { host::eglCreatePixmapSurface(dpy, config, pixmap, attrib_list) }
- }
-@@ -4753,10 +4745,6 @@
-     unsafe { host::eglCreateStreamProducerD3DTextureANGLE(dpy, stream, attrib_list) }
- }
- #[unsafe(no_mangle)]
--pub unsafe extern "C" fn eglDestroyContext(dpy: EGLDisplay, ctx: EGLContext) -> EGLBoolean {
--    unsafe { host::eglDestroyContext(dpy, ctx) }
--}
--#[unsafe(no_mangle)]
- pub unsafe extern "C" fn eglDestroyStreamKHR(dpy: EGLDisplay, stream: EGLStreamKHR) -> EGLBoolean {
-     unsafe { host::eglDestroyStreamKHR(dpy, stream) }
- }
-@@ -4777,10 +4765,6 @@
-     unsafe { host::eglGetCompositorTimingSupportedANDROID(dpy, surface, name) }
- }
- #[unsafe(no_mangle)]
--pub unsafe extern "C" fn eglGetConfigs(dpy: EGLDisplay, configs: *mut EGLConfig, config_size: EGLint, num_config: *mut EGLint) -> EGLBoolean {
--    unsafe { host::eglGetConfigs(dpy, configs, config_size, num_config) }
--}
--#[unsafe(no_mangle)]
- pub unsafe extern "C" fn eglGetCurrentContext() -> EGLContext {
-     unsafe { host::eglGetCurrentContext() }
- }
-@@ -4859,10 +4843,6 @@
- #[unsafe(no_mangle)]
- pub unsafe extern "C" fn eglQueryAPI() -> EGLenum {
-     unsafe { host::eglQueryAPI() }
--}
--#[unsafe(no_mangle)]
--pub unsafe extern "C" fn eglQueryContext(dpy: EGLDisplay, ctx: EGLContext, attribute: EGLint, value: *mut EGLint) -> EGLBoolean {
--    unsafe { host::eglQueryContext(dpy, ctx, attribute, value) }
- }
- #[unsafe(no_mangle)]
- pub unsafe extern "C" fn eglQueryDebugKHR(attribute: EGLint, value: *mut EGLAttrib) -> EGLBoolean {
-@@ -8239,13 +8219,13 @@
-     Proc { name: "eglClientWaitSyncKHR", addr: crate::sync::eglClientWaitSyncKHR as *const c_void, id: -1 },
-     Proc { name: "eglCopyBuffers", addr: eglCopyBuffers as *const c_void, id: 6 },
-     Proc { name: "eglCopyMetalSharedEventANGLE", addr: eglCopyMetalSharedEventANGLE as *const c_void, id: 7 },
--    Proc { name: "eglCreateContext", addr: eglCreateContext as *const c_void, id: 8 },
-+    Proc { name: "eglCreateContext", addr: crate::egl::eglCreateContext as *const c_void, id: -1 },
-     Proc { name: "eglCreateDeviceANGLE", addr: eglCreateDeviceANGLE as *const c_void, id: 9 },
-     Proc { name: "eglCreateImage", addr: crate::egl::eglCreateImage as *const c_void, id: -1 },
-     Proc { name: "eglCreateImageKHR", addr: crate::egl::eglCreateImageKHR as *const c_void, id: -1 },
-     Proc { name: "eglCreateNativeClientBufferANDROID", addr: eglCreateNativeClientBufferANDROID as *const c_void, id: 12 },
-     Proc { name: "eglCreatePbufferFromClientBuffer", addr: eglCreatePbufferFromClientBuffer as *const c_void, id: 13 },
--    Proc { name: "eglCreatePbufferSurface", addr: eglCreatePbufferSurface as *const c_void, id: 14 },
-+    Proc { name: "eglCreatePbufferSurface", addr: crate::egl::eglCreatePbufferSurface as *const c_void, id: -1 },
-     Proc { name: "eglCreatePixmapSurface", addr: eglCreatePixmapSurface as *const c_void, id: 15 },
-     Proc { name: "eglCreatePlatformPixmapSurface", addr: eglCreatePlatformPixmapSurface as *const c_void, id: 16 },
-     Proc { name: "eglCreatePlatformPixmapSurfaceEXT", addr: eglCreatePlatformPixmapSurfaceEXT as *const c_void, id: 17 },
-@@ -8257,7 +8237,7 @@
-     Proc { name: "eglCreateSyncKHR", addr: crate::sync::eglCreateSyncKHR as *const c_void, id: -1 },
-     Proc { name: "eglCreateWindowSurface", addr: crate::egl::eglCreateWindowSurface as *const c_void, id: -1 },
-     Proc { name: "eglDebugMessageControlKHR", addr: crate::egl::eglDebugMessageControlKHR as *const c_void, id: -1 },
--    Proc { name: "eglDestroyContext", addr: eglDestroyContext as *const c_void, id: 25 },
-+    Proc { name: "eglDestroyContext", addr: crate::egl::eglDestroyContext as *const c_void, id: -1 },
-     Proc { name: "eglDestroyImage", addr: crate::egl::eglDestroyImage as *const c_void, id: -1 },
-     Proc { name: "eglDestroyImageKHR", addr: crate::egl::eglDestroyImageKHR as *const c_void, id: -1 },
-     Proc { name: "eglDestroyStreamKHR", addr: eglDestroyStreamKHR as *const c_void, id: 28 },
-@@ -8270,7 +8250,7 @@
-     Proc { name: "eglGetCompositorTimingANDROID", addr: eglGetCompositorTimingANDROID as *const c_void, id: 35 },
-     Proc { name: "eglGetCompositorTimingSupportedANDROID", addr: eglGetCompositorTimingSupportedANDROID as *const c_void, id: 36 },
-     Proc { name: "eglGetConfigAttrib", addr: crate::egl::eglGetConfigAttrib as *const c_void, id: -1 },
--    Proc { name: "eglGetConfigs", addr: eglGetConfigs as *const c_void, id: 38 },
-+    Proc { name: "eglGetConfigs", addr: crate::egl::eglGetConfigs as *const c_void, id: -1 },
-     Proc { name: "eglGetCurrentContext", addr: eglGetCurrentContext as *const c_void, id: 39 },
-     Proc { name: "eglGetCurrentDisplay", addr: eglGetCurrentDisplay as *const c_void, id: 40 },
-     Proc { name: "eglGetCurrentSurface", addr: crate::egl::eglGetCurrentSurface as *const c_void, id: -1 },
-@@ -8301,7 +8281,7 @@
-     Proc { name: "eglProgramCacheQueryANGLE", addr: eglProgramCacheQueryANGLE as *const c_void, id: 65 },
-     Proc { name: "eglProgramCacheResizeANGLE", addr: eglProgramCacheResizeANGLE as *const c_void, id: 66 },
-     Proc { name: "eglQueryAPI", addr: eglQueryAPI as *const c_void, id: 67 },
--    Proc { name: "eglQueryContext", addr: eglQueryContext as *const c_void, id: 68 },
-+    Proc { name: "eglQueryContext", addr: crate::egl::eglQueryContext as *const c_void, id: -1 },
-     Proc { name: "eglQueryDebugKHR", addr: eglQueryDebugKHR as *const c_void, id: 69 },
-     Proc { name: "eglQueryDeviceAttribEXT", addr: eglQueryDeviceAttribEXT as *const c_void, id: 70 },
-     Proc { name: "eglQueryDeviceStringEXT", addr: eglQueryDeviceStringEXT as *const c_void, id: 71 },
---- a/crates/aim-guest-init/src/unixsock.rs
-+++ b/crates/aim-guest-init/src/unixsock.rs
-@@ -21,7 +21,7 @@
- }
- 
- /// Runs `f` with `dir` as this thread's working directory.
--fn in_directory<T>(dir: &Path, f: impl FnOnce() -> io::Result<T>) -> io::Result<T> {
-+pub(crate) fn in_directory<T>(dir: &Path, f: impl FnOnce() -> io::Result<T>) -> io::Result<T> {
-     let c_dir = CString::new(dir.as_os_str().as_bytes()).map_err(io::Error::other)?;
-     // SAFETY: open/close of a directory fd; pthread_fchdir_np only changes
-     // this thread's cwd and is undone before returning.
---- a/crates/aim-host-display/src/lib.rs
-+++ b/crates/aim-host-display/src/lib.rs
-@@ -95,15 +95,22 @@
-     r.unwrap_or_else(|e| e)
- }
- 
-+#[path="../../aim-guest-init/src/unixsock.rs"]
-+#[allow(dead_code)]
-+mod unixsock;
-+
- fn private_connect(path:&Path)->std::io::Result<PrivateFd>{
-     use std::os::unix::ffi::OsStrExt;
--    let bytes=path.as_os_str().as_bytes();let mut address:libc::sockaddr_un=unsafe{std::mem::zeroed()};
-+    let directory=path.parent().ok_or_else(||std::io::Error::from_raw_os_error(libc::EINVAL))?;
-+    let bytes=path.file_name().ok_or_else(||std::io::Error::from_raw_os_error(libc::EINVAL))?.as_bytes();let mut address:libc::sockaddr_un=unsafe{std::mem::zeroed()};
-     if bytes.contains(&0)||bytes.len()>=address.sun_path.len(){return Err(std::io::Error::from_raw_os_error(libc::ENAMETOOLONG));}
-     address.sun_family=libc::AF_UNIX as u8;address.sun_len=(2+bytes.len()+1)as u8;
-     for(out,byte)in address.sun_path.iter_mut().zip(bytes){*out=*byte as libc::c_char;}
-     let descriptor=PrivateFd::allocate(||{let fd=unsafe{libc::socket(libc::AF_UNIX,libc::SOCK_STREAM,0)};if fd<0{return Err(std::io::Error::last_os_error());}let fd=unsafe{OwnedFd::from_raw_fd(fd)};if unsafe{libc::fcntl(fd.as_raw_fd(),libc::F_SETFD,libc::FD_CLOEXEC)}<0{return Err(std::io::Error::last_os_error());}Ok(fd)})?;
-     // Only allocation/adoption holds the descriptor lifecycle admission.
--    if unsafe{libc::connect(descriptor.as_raw_fd(),(&address as *const libc::sockaddr_un).cast(),address.sun_len as libc::socklen_t)}<0{return Err(std::io::Error::last_os_error());}
-+    unixsock::in_directory(directory,||{
-+        if unsafe{libc::connect(descriptor.as_raw_fd(),(&address as *const libc::sockaddr_un).cast(),address.sun_len as libc::socklen_t)}<0{return Err(std::io::Error::last_os_error());}Ok(())
-+    })?;
-     Ok(descriptor)
- }
- 
-diff --git a/crates/aim-host-gpu/src/opaque.rs b/crates/aim-host-gpu/src/opaque.rs
-new file mode 100644
---- /dev/null
-+++ b/crates/aim-host-gpu/src/opaque.rs
-@@ -0,0 +1,85 @@
-+//! RGBX window backing over ANGLE's existing RGB IOSurface attachment.
-+//! ANGLE initializes alpha to one and masks subsequent alpha writes, so the
-+//! default framebuffer has real opaque RGB semantics, not just config labels.
-+
-+use std::ffi::c_void;
-+use aim_hostcall::gpu::OpaqueSurface;
-+use crate::{EINVAL, display, metal, resolved};
-+
-+type Ref = *const c_void;
-+
-+aim_hostcall::dylib! {
-+    static CF = c"/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation" {
-+        static kCFTypeDictionaryKeyCallBacks: c_void;
-+        static kCFTypeDictionaryValueCallBacks: c_void;
-+        fn CFDictionaryCreateMutable(allocator: Ref, capacity: isize, keys: Ref, values: Ref) -> Ref;
-+        fn CFDictionarySetValue(dictionary: Ref, key: Ref, value: Ref);
-+        fn CFNumberCreate(allocator: Ref, kind: isize, value: Ref) -> Ref;
-+        fn CFRelease(value: Ref);
-+    }
-+}
-+aim_hostcall::dylib! {
-+    static IOSURFACE = c"/System/Library/Frameworks/IOSurface.framework/IOSurface" {
-+        static kIOSurfaceWidth: Ref;
-+        static kIOSurfaceHeight: Ref;
-+        static kIOSurfaceBytesPerElement: Ref;
-+        static kIOSurfaceBytesPerRow: Ref;
-+        static kIOSurfacePixelFormat: Ref;
-+        fn IOSurfaceAlignProperty(key: Ref, value: usize) -> usize;
-+        fn IOSurfaceCreate(properties: Ref) -> Ref;
-+    }
-+}
-+
-+pub fn create(a: &mut OpaqueSurface) -> i64 {
-+    let address = resolved(c"eglCreatePbufferFromClientBuffer");
-+    let query = resolved(c"eglGetConfigAttrib");
-+    if address == 0 || query == 0 || a.width == 0 || a.height == 0 {
-+        return EINVAL;
-+    }
-+    let pool = metal::pool_push();
-+    // SAFETY: CF and EGL signatures below match the platform declarations;
-+    // the dictionary retains values, and ANGLE retains a successful IOSurface.
-+    unsafe {
-+        let dictionary = CFDictionaryCreateMutable(std::ptr::null(), 5,
-+            kCFTypeDictionaryKeyCallBacks().cast(), kCFTypeDictionaryValueCallBacks().cast());
-+        let row = IOSurfaceAlignProperty(*kIOSurfaceBytesPerRow(), a.width as usize * 4);
-+        for (key, value) in [
-+            (*kIOSurfaceWidth(), a.width as i64),
-+            (*kIOSurfaceHeight(), a.height as i64),
-+            (*kIOSurfaceBytesPerElement(), 4),
-+            (*kIOSurfaceBytesPerRow(), row as i64),
-+            (*kIOSurfacePixelFormat(), 0x52474241), // 'RGBA' physical backing.
-+        ] {
-+            let number = CFNumberCreate(std::ptr::null(), 4, (&raw const value).cast());
-+            CFDictionarySetValue(dictionary, key, number);
-+            CFRelease(number);
-+        }
-+        let storage = IOSurfaceCreate(dictionary);
-+        CFRelease(dictionary);
-+        if storage.is_null() {
-+            metal::pool_pop(pool);
-+            return EINVAL;
-+        }
-+        let dpy = display::host(a.display as usize);
-+        let get: unsafe extern "C" fn(usize, usize, i32, *mut i32) -> u32 = std::mem::transmute(query);
-+        let mut target = 0;
-+        if get(dpy, a.config as usize, 0x348d, &mut target) == 0 {
-+            CFRelease(storage);
-+            metal::pool_pop(pool);
-+            return EINVAL;
-+        }
-+        let mut attributes = vec![
-+            0x3057, a.width as i32, 0x3056, a.height as i32, // WIDTH, HEIGHT.
-+            0x345a, 0, // IOSURFACE_PLANE_ANGLE.
-+            0x3081, target, 0x3080, 0x305e, // TEXTURE_TARGET, TEXTURE_RGBA.
-+            0x345c, 0x1401, 0x345d, 0x1907, // UNSIGNED_BYTE, RGB attachment.
-+        ];
-+        if a.colorspace != 0 { attributes.extend([0x309d, a.colorspace]); }
-+        attributes.push(0x3038);
-+        let create: unsafe extern "C" fn(usize, u32, Ref, usize, *const i32) -> usize = std::mem::transmute(address);
-+        a.surface = create(dpy, 0x3454, storage, a.config as usize, attributes.as_ptr()) as u64;
-+        CFRelease(storage);
-+    }
-+    metal::pool_pop(pool);
-+    0
-+}
-diff --git a/hal/gles/src/configs.rs b/hal/gles/src/configs.rs
-new file mode 100644
+ #[cfg(test)]
 --- /dev/null
 +++ b/hal/gles/src/configs.rs
 @@ -0,0 +1,161 @@
@@ -865,416 +658,274 @@ new file mode 100644
 +        output(&result, out, size, count)
 +    }
 +}
---- a/crates/aim-linux-abi/src/hostcall.rs
-+++ b/crates/aim-linux-abi/src/hostcall.rs
-@@ -105,6 +105,15 @@
-         mark_used();
-         return unsafe { call(func, args, len, crate::context::call_guest) };
-     }
-+    // The selected MacLauncher physical backend serves the unchanged original
-+    // audio HAL protocol. There is exactly one audio backend in this process.
-+    if module == module::AUDIO {
-+        if let Some(call) = EXTENSION.get() {
-+            if func == FN_VERSION { return aim_hostcall::audio::VERSION as i64; }
-+            mark_used();
-+            return unsafe { call(0x10000 + func, args, len, crate::context::call_guest) };
-+        }
-+    }
-     let Some(Some(m)) = MODULES.get(module as usize) else {
-         return -(errno::ENOSYS as i64);
-     };
---- a/crates/aim-binder-host/src/socket_scm.rs
-+++ b/crates/aim-binder-host/src/socket_scm.rs
-@@ -5,6 +5,9 @@
- use std::os::unix::ffi::OsStrExt;
- use crate::proxy_file::{send,receive_flags};
- #[path="socket_scm_pipe_token.rs"] mod pipe_token;
-+#[path="../../aim-guest-init/src/unixsock.rs"]
-+#[allow(dead_code)]
-+mod unixsock;
- pub const CLASS:u32=5;
- struct Entry {reader:pipe_token::Reader,backing:OwnedFd,receipt:Receipt}
- static REGISTRY:LazyLock<Mutex<HashMap<(u64,u64),Entry>>>=LazyLock::new(Default::default);
-@@ -51,7 +54,7 @@
-  pub(crate) fn encode(&self)->Vec<u8>{let mut writer=crate::wire::Writer::default();writer.bytes(&self.path).i32(self.process.host_pid).u64(self.process.start_seconds).u64(self.process.start_microseconds).u32(self.uid).bytes(&self.nonce);writer.0}
-  pub(crate) fn decode(reader:&mut crate::wire::Reader<'_>)->Result<Self,i32>{
-   let path=reader.bytes()?.to_vec();let pid=reader.i32()?;let sec=reader.u64()?;let us=reader.u64()?;let uid=reader.u32()?;let nonce=reader.bytes()?.try_into().map_err(|_|crate::wire::EPROTO)?;
--  if path.is_empty()||path.len()>=104||path[0]!=b'/'||path.contains(&0)||pid<=0||us>=1_000_000{return Err(crate::wire::EPROTO);}
-+  if path.is_empty()||path[0]!=b'/'||path.contains(&0)||pid<=0||us>=1_000_000{return Err(crate::wire::EPROTO);}
-   Ok(Self{path,process:aim_storage::process_namespace::ProcessIdentity{host_pid:pid,start_seconds:sec,start_microseconds:us},uid,nonce})
-  }
- }
-@@ -61,7 +64,9 @@
-   use std::os::unix::fs::{PermissionsExt,MetadataExt};
-   let mut nonce=[0;16];unsafe{libc::arc4random_buf(nonce.as_mut_ptr().cast(),nonce.len());}
-   let directory=std::env::temp_dir().join(format!("aim-scm-{}-{}",std::process::id(),nonce.iter().map(|byte|format!("{byte:02x}")).collect::<String>()));std::fs::create_dir(&directory)?;std::fs::set_permissions(&directory,std::fs::Permissions::from_mode(0o700))?;
--  let listener=std::os::unix::net::UnixListener::bind(directory.join("s"))?;listener.set_nonblocking(true)?;
-+  let socket=unixsock::bind_at(&directory,"s",libc::SOCK_STREAM)?;
-+  if unsafe{libc::listen(socket.as_raw_fd(),128)}<0{return Err(io::Error::last_os_error());}
-+  let listener=std::os::unix::net::UnixListener::from(socket);listener.set_nonblocking(true)?;
-   use std::os::unix::ffi::OsStrExt;
-   let endpoint=Endpoint{path:directory.join("s").as_os_str().as_bytes().to_vec(),process:aim_storage::process_namespace::ProcessIdentity::running(std::process::id()as i32)?,uid:unsafe{libc::geteuid()},nonce};
-   let stat=std::fs::metadata(&directory)?;let identity=(stat.dev(),stat.ino());
-@@ -86,7 +91,7 @@
-  pub fn endpoint(&self)->&Endpoint{&self.endpoint}
- }
- impl Drop for Service{fn drop(&mut self){
-- self.stop.store(true,std::sync::atomic::Ordering::Release);let _=UnixStream::connect(std::path::Path::new(std::ffi::OsStr::from_bytes(&self.endpoint.path)));
-+ self.stop.store(true,std::sync::atomic::Ordering::Release);let _=unixsock::connect_at(&self.directory,"s");
-  if let Some(thread)=self.thread.take(){if thread.join().is_err(){eprintln!("socket SCM listener unwound");}}
-  for stream in self.streams.lock().unwrap().drain(..){let _=stream.shutdown(std::net::Shutdown::Both);}
-  for worker in self.workers.lock().unwrap().drain(..){if worker.join().is_err(){eprintln!("socket SCM worker unwound");}}
---- a/crates/aim-linux-abi/src/sys/net/socket_scm.rs
-+++ b/crates/aim-linux-abi/src/sys/net/socket_scm.rs
-@@ -34,15 +34,16 @@
-     let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
-     if flags < 0 { return Err(errno::last()); }
-     if unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 { return Err(errno::last()); }
--    let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
--    if endpoint.path.is_empty() || endpoint.path.len() >= address.sun_path.len() || endpoint.path.contains(&0) { return Err(errno::EINVAL); }
--    address.sun_family = libc::AF_UNIX as _;
--    address.sun_len = (2 + endpoint.path.len() + 1) as u8;
--    for (target, source) in address.sun_path.iter_mut().zip(&endpoint.path) { *target = *source as _; }
--    let result = unsafe { libc::connect(fd, (&address as *const libc::sockaddr_un).cast(), address.sun_len as _) };
-+    use std::os::unix::ffi::OsStrExt;
-+    let path=std::path::Path::new(std::ffi::OsStr::from_bytes(&endpoint.path));
-+    let directory=path.parent().ok_or(errno::EINVAL)?;
-+    let name=path.file_name().ok_or(errno::EINVAL)?.as_bytes();
-+    if name.is_empty()||name.len()>=104||name.contains(&0){return Err(errno::EINVAL);}
-+    let target=super::Target::UnixAt{dir:directory.into(),name:name.into()};
-+    let result=super::with_target(&target,|address,length|unsafe{libc::connect(fd,address,length)as i64});
-     if result < 0 {
--        let error = std::io::Error::last_os_error().raw_os_error().unwrap_or(libc::EIO);
--        if error != libc::EINPROGRESS && error != libc::EAGAIN { return Err(errno::from_darwin(error)); }
-+        let error=(-result)as Errno;
-+        if error!=errno::from_darwin(libc::EINPROGRESS)&&error!=errno::EAGAIN{return Err(error);}
-         let start = std::time::Instant::now();
-         loop {
-             let remaining = 1000i32 - start.elapsed().as_millis().min(1000) as i32;
-
-Upstream: https://github.com/hahnlee/aim/commit/fd6f55967490c29ee722a77d091f2af62dbf0393
-License: Apache-2.0
-
-diff --git a/crates/aim-binder-host/src/client.rs b/crates/aim-binder-host/src/client.rs
---- a/crates/aim-binder-host/src/client.rs
-+++ b/crates/aim-binder-host/src/client.rs
-@@ -66,9 +66,101 @@
-     reply: Port,
-     /// Thread port by file port.
-     threads: HashMap<Port, Port>,
--    reserved: Vec<i32>,
-+    reserved: Placeholders,
+--- a/hal/gles/src/egl.rs
++++ b/hal/gles/src/egl.rs
+@@ -22,7 +22,10 @@
+ use std::ffi::CString;
+ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+ 
+-use aim_hostcall::gpu::{Init, Present};
++use aim_hostcall::gpu::{Init, Present, OpaqueSurface};
++
++#[path = "configs.rs"]
++mod configs;
+ 
+ use crate::buffers::{self, NativeBuffer};
+ use crate::thunks::{PROCS, TABLE_HASH, TABLE_LEN, host};
+@@ -90,6 +93,7 @@
+         fence: c_int,
+     ) -> c_int;
+     fn ANativeWindow_setSwapInterval(w: *mut NativeWindow, interval: c_int) -> c_int;
++    fn ANativeWindow_setBuffersGeometry(w: *mut NativeWindow, width: c_int, height: c_int, format: c_int) -> c_int;
+     fn ANativeWindow_setBuffersTimestamp(w: *mut NativeWindow, timestamp: i64) -> c_int;
  }
  
-+/// A thread's state ends with it: its placeholders are numbers of the
-+/// guest's fd table, which nothing would close otherwise (a process that
-+/// calls binder from many short-lived threads would keep
-+/// `RESERVED_FDS` sockets per thread), and its ports.
-+impl Drop for ThreadState {
-+    fn drop(&mut self) {
-+        self.reserved.close();
-+        for (_, port) in self.threads.drain() {
-+            mach::release_send(port);
-+        }
-+        mach::destroy_receive(self.reply);
-+    }
-+}
-+
-+/// Placeholder fds for files a read may deliver: duplicates of one
-+/// unconnected socket, whose identity tells them from a file the guest put
-+/// at a number it closed behind the pool's back.
-+#[derive(Default)]
-+struct Placeholders {
-+    fds: Vec<i32>,
-+    socket: Option<(libc::dev_t, libc::ino_t)>,
-+}
-+
-+/// `fd`'s device and inode, if it is open.
-+fn identity(fd: i32) -> Option<(libc::dev_t, libc::ino_t)> {
-+    // SAFETY: fstat into a local buffer.
-+    let mut st: libc::stat = unsafe { std::mem::zeroed() };
-+    (unsafe { libc::fstat(fd, &mut st) } == 0).then_some((st.st_dev, st.st_ino))
-+}
-+
-+impl Placeholders {
-+    /// Whether `fd` still holds this pool's socket.
-+    fn holds(&self, fd: i32) -> bool {
-+        self.socket.is_some() && identity(fd) == self.socket
-+    }
-+
-+    /// Top the pool up to `count` placeholders. A placeholder only holds
-+    /// its number, so it is a socket that was never connected: installing
-+    /// a file over it (dup2) closes a socket, where closing a vnode such as
-+    /// /dev/null costs microseconds of host kernel time. New ones are
-+    /// duplicates of one already held.
-+    fn refill(&mut self, count: usize) {
-+        while self.fds.len() < count {
-+            // A number the guest closed, or reused for a file of its own,
-+            // holds nothing of ours.
-+            if let Some(&held) = self.fds.first()
-+                && !self.holds(held)
-+            {
-+                self.fds.remove(0);
-+                continue;
-+            }
-+            // SAFETY: duplicating a placeholder, or a new socket, upward.
-+            let fd = unsafe {
-+                match self.fds.first() {
-+                    Some(&held) => libc::fcntl(held, libc::F_DUPFD_CLOEXEC, RESERVED_FD_BASE),
-+                    None => {
-+                        let s = libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0);
-+                        if s < 0 {
-+                            return;
-+                        }
-+                        let fd = libc::fcntl(s, libc::F_DUPFD_CLOEXEC, RESERVED_FD_BASE);
-+                        libc::close(s);
-+                        fd
-+                    }
-+                }
-+            };
-+            if fd < 0 {
-+                return;
-+            }
-+            if self.fds.is_empty() {
-+                self.socket = identity(fd);
-+            }
-+            self.fds.push(fd);
-+        }
-+    }
-+
-+    /// `fd` became a delivered file.
-+    fn take(&mut self, fd: i32) {
-+        self.fds.retain(|reserved| *reserved != fd);
-+    }
-+
-+    /// Close the placeholders that still hold the pool's socket.
-+    fn close(&mut self) {
-+        for fd in self.fds.drain(..) {
-+            if identity(fd) == self.socket {
-+                // SAFETY: our placeholder, checked by its identity.
-+                unsafe { libc::close(fd) };
-+            }
-+        }
-+    }
-+}
-+
- thread_local! {
-     static THREAD: RefCell<Option<ThreadState>> = const { RefCell::new(None) };
- }
-@@ -82,7 +174,7 @@
-                 buf: Buffer::default(),
-                 reply,
-                 threads: HashMap::new(),
--                reserved: Vec::new(),
-+                reserved: Placeholders::default(),
-             });
-         }
-         Ok(f(t.as_mut().unwrap()))
-@@ -95,7 +187,8 @@
- pub fn forget_thread() {
-     THREAD.with(|t| {
-         if let Some(t) = t.borrow_mut().as_mut() {
--            t.reserved.clear();
-+            // Close-on-exec closed them with the old image.
-+            t.reserved = Placeholders::default();
-             for (_, port) in t.threads.drain() {
-                 mach::release_send(port);
-             }
-@@ -500,10 +593,10 @@
-         if let Err(error) = io.validate() { for (port, _) in ports { mach::release_send(port); } return Err(error); }
-         let (reply, writers) = with_thread(|t| -> Result<(IoctlReply, Vec<Option<crate::regular_file::WriterPort>>), Errno> {
-             if reads {
--                refill_reserved(&mut t.reserved, reserve);
--                io.grow = t.reserved.len() >= reserve;
-+                t.reserved.refill(reserve);
-+                io.grow = t.reserved.fds.len() >= reserve;
-             }
--            io.reserved = t.reserved.iter().map(|fd| *fd as u32).collect();
-+            io.reserved = t.reserved.fds.iter().map(|fd| *fd as u32).collect();
-             let port = self.thread_port(t, tid)?;
-             let msg = Msg {
-                 id: wire::IOCTL,
-@@ -531,7 +624,7 @@
-                     for port in ports { mach::release_send(port); }
-                     for fd in reply.installs.iter().chain(&reply.closes) {
-                         if let Err(secondary) = mem.close_file(*fd as i32) { eprintln!("Binder import rollback close fd={fd}: errno {secondary}"); }
--                        t.reserved.retain(|reserved| *reserved != *fd as i32);
-+                        t.reserved.take(*fd as i32);
-                     }
-                     reject_deliveries(t, port, &reply)?;
-                     return Err(error);
-@@ -539,7 +632,7 @@
-                 writers.push(if reply.regular[index].as_ref().is_some_and(|metadata| metadata.writer) {
-                     Some(crate::regular_file::WriterPort::new(ports.next().unwrap()))
-                 } else { None });
--                t.reserved.retain(|reserved| *reserved != *fd as i32);
-+                t.reserved.take(*fd as i32);
-             }
-             if cmd == BINDER_THREAD_EXIT
-                 && reply.status == 0
-@@ -615,41 +708,6 @@
-         }
-     }
-     Ok(())
--}
--
--/// Top the pool up to `count` placeholders. A placeholder only holds its
--/// number, so it is a socket that was never connected: installing a file
--/// over it (dup2) closes a socket, where closing a vnode such as /dev/null
--/// costs microseconds of host kernel time. New ones are duplicates of one
--/// already held.
--fn refill_reserved(pool: &mut Vec<i32>, count: usize) {
--    while pool.len() < count {
--        // SAFETY: duplicating a placeholder, or a new socket, upward.
--        let fd = unsafe {
--            match pool.first() {
--                Some(&held) => libc::fcntl(held, libc::F_DUPFD_CLOEXEC, RESERVED_FD_BASE),
--                None => {
--                    let s = libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0);
--                    if s < 0 {
--                        return;
--                    }
--                    let fd = libc::fcntl(s, libc::F_DUPFD_CLOEXEC, RESERVED_FD_BASE);
--                    libc::close(s);
--                    fd
--                }
+@@ -248,24 +252,8 @@
+     size: EGLint,
+     count: *mut EGLint,
+ ) -> EGLBoolean {
+-    let mut list = Vec::new();
+-    // SAFETY: a NONE-terminated list of pairs, or null.
+-    unsafe {
+-        let mut p = attribs;
+-        while !p.is_null() && *p != EGL_NONE {
+-            let (k, v) = (*p, *p.add(1));
+-            if !matches!(
+-                k,
+-                EGL_RECORDABLE_ANDROID | EGL_FRAMEBUFFER_TARGET_ANDROID | EGL_NATIVE_VISUAL_ID
+-            ) {
+-                list.extend([k, v]);
 -            }
--        };
--        if fd >= 0 {
--            pool.push(fd);
--        } else if !pool.is_empty()
--            && std::io::Error::last_os_error().raw_os_error() == Some(libc::EBADF)
--        {
--            // The guest closed that number: it holds nothing of ours.
--            pool.remove(0);
--        } else {
--            return;
+-            p = p.add(2);
 -        }
 -    }
+-    list.push(EGL_NONE);
+-    // SAFETY: forwarded with the filtered list.
+-    unsafe { host::eglChooseConfig(dpy, list.as_ptr(), configs, size, count) }
++    // SAFETY: EGL caller supplies the attribute and output storage.
++    unsafe { configs::choose(dpy, attribs, configs, size, count) }
  }
  
- /// Put a received file at the reserved number `fd` (close-on-exec, as the
-@@ -771,29 +829,111 @@
-     /// number the process closed behind the pool's back is replaced.
-     #[test]
-     fn placeholders_are_sockets_and_survive_a_closed_one() {
--        let mut pool = Vec::new();
--        refill_reserved(&mut pool, RESERVED_FDS);
--        assert_eq!(pool.len(), RESERVED_FDS);
--        let mut sorted = pool.clone();
-+        let mut pool = Placeholders::default();
-+        pool.refill(RESERVED_FDS);
-+        assert_eq!(pool.fds.len(), RESERVED_FDS);
-+        let mut sorted = pool.fds.clone();
-         sorted.sort();
-         sorted.dedup();
-         assert_eq!(sorted.len(), RESERVED_FDS);
--        for &fd in &pool {
-+        for &fd in &pool.fds {
-             assert!(fd >= RESERVED_FD_BASE && is_socket(fd));
-             // SAFETY: plain fcntl on our fd.
-             assert_eq!(unsafe { libc::fcntl(fd, libc::F_GETFD) }, libc::FD_CLOEXEC);
-         }
--        let gone = pool[0];
-+        let gone = pool.fds[0];
-         // SAFETY: closing our own placeholder, as a guest might.
-         unsafe { libc::close(gone) };
--        refill_reserved(&mut pool, RESERVED_FDS + 1);
--        assert_eq!(pool.len(), RESERVED_FDS + 1);
--        assert!(pool.iter().all(|&fd| is_socket(fd)));
--        for fd in pool {
--            // SAFETY: our placeholders.
--            unsafe { libc::close(fd) };
-+        pool.refill(RESERVED_FDS + 1);
-+        assert_eq!(pool.fds.len(), RESERVED_FDS + 1);
-+        assert!(pool.fds.iter().all(|&fd| pool.holds(fd)));
-+        pool.close();
-+    }
+ fn config_attrib(dpy: EGLDisplay, config: EGLConfig, attr: EGLint) -> Option<EGLint> {
+@@ -305,9 +293,9 @@
+ ) -> EGLBoolean {
+     let v = match attr {
+         EGL_RECORDABLE_ANDROID | EGL_FRAMEBUFFER_TARGET_ANDROID => EGL_TRUE as EGLint,
+-        EGL_NATIVE_VISUAL_ID => native_visual(dpy, config),
++        EGL_NATIVE_VISUAL_ID => if configs::owner(config).is_some() { 2 } else { native_visual(dpy, config) },
+         // SAFETY: forwarded.
+-        _ => return unsafe { host::eglGetConfigAttrib(dpy, config, attr, value) },
++        _ => return unsafe { configs::query(dpy, config, attr, value) },
+     };
+     if value.is_null() {
+         return fail(EGL_BAD_PARAMETER, EGL_FALSE);
+@@ -315,6 +303,58 @@
+     // SAFETY: checked non-null.
+     unsafe { *value = v };
+     EGL_TRUE
++}
 +
-+    /// Closing a pool leaves a number the process reused for a file of its
-+    /// own open.
-+    #[test]
-+    fn closing_placeholders_spares_a_reused_number() {
-+        use std::os::fd::AsRawFd;
-+        let mut pool = Placeholders::default();
-+        pool.refill(2);
-+        let reused = pool.fds[1];
-+        let file = std::fs::File::open("/dev/null").unwrap();
-+        // SAFETY: the process puts a file of its own over a placeholder.
-+        assert_eq!(unsafe { libc::dup2(file.as_raw_fd(), reused) }, reused);
-+        pool.close();
-+        assert_eq!(identity(reused), identity(file.as_raw_fd()));
-+        // SAFETY: the duplicate the test made.
-+        unsafe { libc::close(reused) };
-+    }
++/// # Safety
++/// EGL's contract.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn eglGetConfigs(dpy: EGLDisplay, values: *mut EGLConfig, size: EGLint, count: *mut EGLint) -> EGLBoolean {
++    unsafe { configs::get(dpy, values, size, count) }
++}
 +
-+    /// A thread's placeholders close when it ends, as a guest thread's do
-+    /// at its exit.
-+    #[test]
-+    fn placeholders_close_when_their_thread_ends() {
-+        let (fds, socket) = std::thread::spawn(|| {
-+            with_thread(|t| {
-+                t.reserved.refill(RESERVED_FDS);
-+                (t.reserved.fds.clone(), t.reserved.socket)
-+            })
-+            .unwrap()
-+        })
-+        .join()
-+        .unwrap();
-+        assert_eq!(fds.len(), RESERVED_FDS);
-+        // A test running alongside may take a number again, but not with
-+        // this socket.
-+        assert!(fds.iter().all(|&fd| identity(fd) != socket));
++fn context_configs() -> &'static Mutex<HashMap<usize, EGLint>> {
++    static CONFIGS: OnceLock<Mutex<HashMap<usize, EGLint>>> = OnceLock::new();
++    CONFIGS.get_or_init(Default::default)
++}
++
++/// # Safety
++/// EGL's contract.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn eglCreateContext(dpy: EGLDisplay, config: EGLConfig, share: EGLContext, attrs: *const EGLint) -> EGLContext {
++    let context = unsafe { host::eglCreateContext(dpy, configs::raw(config), share, attrs) };
++    if !context.is_null() {
++        if let Some(owner) = configs::owner(config) { context_configs().lock().unwrap().insert(context as usize, owner.id); }
 +    }
-+    /// Retired binder threads release every placeholder and Mach right while
-+    /// preserving delivered files and descriptors the guest reused.
-+    #[test]
-+    fn retired_threads_release_their_fds_and_mach_rights() {
-+        use std::os::fd::AsRawFd;
-+        unsafe extern "C" {
-+            static mach_task_self_: u32;
-+            fn mach_port_get_refs(task: u32, name: u32, right: u32, refs: *mut u32) -> i32;
-+            fn mach_port_type(task: u32, name: u32, kind: *mut u32) -> i32;
-         }
-+        for _ in 0..128 {
-+            let (fds, socket, delivered, reused, file, reply, thread_port) = std::thread::spawn(|| {
-+                with_thread(|t| {
-+                    t.reserved.refill(RESERVED_FDS);
-+                    let fds = t.reserved.fds.clone();
-+                    let (delivered, reused) = (fds[0], fds[1]);
-+                    let file = std::fs::File::open("/dev/null").unwrap();
-+                    // SAFETY: the test installs a delivered file and separately
-+                    // reuses another pool number, as the guest can do.
-+                    assert_eq!(unsafe { libc::dup2(file.as_raw_fd(), delivered) }, delivered);
-+                    t.reserved.take(delivered);
-+                    assert_eq!(unsafe { libc::dup2(file.as_raw_fd(), reused) }, reused);
-+                    let thread_port = mach::new_port(true).unwrap();
-+                    t.threads.insert(1, thread_port);
-+                    let mut refs = 0;
-+                    // SAFETY: a send right of this task, checked before teardown.
-+                    assert_eq!(unsafe { mach_port_get_refs(mach_task_self_, thread_port, 0, &mut refs) }, 0);
-+                    assert_eq!(refs, 1);
-+                    (fds, t.reserved.socket, delivered, reused, identity(file.as_raw_fd()), t.reply, thread_port)
-+                }).unwrap()
-+            }).join().unwrap();
-+            assert_eq!(fds.len(), RESERVED_FDS);
-+            assert!(fds.iter().all(|&fd| identity(fd) != socket));
-+            assert!(file.is_some());
-+            assert_eq!(identity(delivered), file, "delivered descriptor survives thread retirement");
-+            assert_eq!(identity(reused), file, "a reused descriptor survives thread retirement");
-+            let mut refs = 0;
-+            // SAFETY: the receive right remains ours; its thread-owned send
-+            // right and the reply port should have ended with the thread.
-+            let kr = unsafe { mach_port_get_refs(mach_task_self_, thread_port, 0, &mut refs) };
-+            assert!(kr != 0 || refs == 0, "thread send right remains: {kr}, refs={refs}");
-+            let mut kind = 0;
-+            assert_ne!(unsafe { mach_port_type(mach_task_self_, reply, &mut kind) }, 0, "reply port remains: {kind}");
-+            mach::destroy_receive(thread_port);
-+            // SAFETY: the two surviving file duplicates made by the test.
-+            unsafe { libc::close(delivered); libc::close(reused); }
++    context
++}
++
++/// # Safety
++/// EGL's contract.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn eglDestroyContext(dpy: EGLDisplay, context: EGLContext) -> EGLBoolean {
++    let okay = unsafe { host::eglDestroyContext(dpy, context) };
++    if okay == EGL_TRUE { context_configs().lock().unwrap().remove(&(context as usize)); }
++    okay
++}
++
++/// # Safety
++/// EGL's contract.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn eglQueryContext(dpy: EGLDisplay, context: EGLContext, attr: EGLint, value: *mut EGLint) -> EGLBoolean {
++    let okay = unsafe { host::eglQueryContext(dpy, context, attr, value) };
++    if okay == EGL_TRUE && attr == configs::CONFIG_ID {
++        if let Some(id) = context_configs().lock().unwrap().get(&(context as usize)) { unsafe { *value = *id }; }
++    }
++    okay
++}
++
++/// # Safety
++/// EGL's contract.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn eglCreatePbufferSurface(dpy: EGLDisplay, config: EGLConfig, attrs: *const EGLint) -> EGLSurface {
++    // RGBX aliases are window-only: standalone pbuffer configs remain raw.
++    if configs::owner(config).is_some() { return fail(configs::BAD_MATCH, std::ptr::null_mut()); }
++    unsafe { host::eglCreatePbufferSurface(dpy, config, attrs) }
+ }
+ 
+ // Window surfaces.
+@@ -359,6 +399,17 @@
+ 
+ impl Window {
+     fn create_pbuffer(&self, width: i32, height: i32) -> EGLSurface {
++        if let Some(owner) = configs::owner(self.config) {
++            let mut a = OpaqueSurface {
++                display: self.display as u64, config: owner.raw as u64,
++                width: width as u32, height: height as u32,
++                colorspace: self.colorspace.unwrap_or(0), ..Default::default()
++            };
++            return match aim_hostcall::guest::gpu_opaque_surface(&mut a) {
++                Ok(()) => a.surface as EGLSurface,
++                Err(_) => fail(EGL_BAD_ALLOC, std::ptr::null_mut()),
++            };
++        }
+         let mut attribs = vec![EGL_WIDTH, width, EGL_HEIGHT, height];
+         if let Some(c) = self.colorspace {
+             attribs.extend([EGL_GL_COLORSPACE, c]);
+@@ -396,6 +447,13 @@
+     };
+     if width <= 0 || height <= 0 {
+         return fail(EGL_BAD_NATIVE_WINDOW, std::ptr::null_mut());
++    }
++    if configs::owner(config).is_some() {
++        // The queued native buffers have the same opaque RGBX semantics as
++        // the default framebuffer. Their existing import treats alpha as one.
++        if unsafe { ANativeWindow_setBuffersGeometry(native, 0, 0, 2) } != 0 {
++            return fail(EGL_BAD_NATIVE_WINDOW, std::ptr::null_mut());
 +        }
      }
-+
-     #[test]
-     fn failed_host_descriptor_install_cannot_succeed_with_a_placeholder() {
-         use std::os::fd::AsRawFd;
+     let mut w = Window {
+         display: dpy,
+@@ -696,8 +754,16 @@
+     attr: EGLint,
+     value: *mut EGLint,
+ ) -> EGLBoolean {
+-    // SAFETY: forwarded with the host surface.
+-    unsafe { host::eglQuerySurface(dpy, host_surface(surface), attr, value) }
++    // SAFETY: forwarded with the host surface and validated output storage.
++    let okay = unsafe { host::eglQuerySurface(dpy, host_surface(surface), attr, value) };
++    if okay == EGL_TRUE && attr == configs::CONFIG_ID {
++        if let Some(w) = window(surface) {
++            if let Some(owner) = configs::owner(w.lock().unwrap().config) {
++                unsafe { *value = owner.id };
++            }
++        }
++    }
++    okay
+ }
+ 
+ /// # Safety
+--- a/hal/gles/src/thunks.rs
++++ b/hal/gles/src/thunks.rs
+@@ -4713,10 +4713,6 @@
+     unsafe { host::eglCopyMetalSharedEventANGLE(dpy, sync) }
+ }
+ #[unsafe(no_mangle)]
+-pub unsafe extern "C" fn eglCreateContext(dpy: EGLDisplay, config: EGLConfig, share_context: EGLContext, attrib_list: *const EGLint) -> EGLContext {
+-    unsafe { host::eglCreateContext(dpy, config, share_context, attrib_list) }
+-}
+-#[unsafe(no_mangle)]
+ pub unsafe extern "C" fn eglCreateDeviceANGLE(device_type: EGLint, native_device: *mut c_void, attrib_list: *const EGLAttrib) -> EGLDeviceEXT {
+     unsafe { host::eglCreateDeviceANGLE(device_type, native_device, attrib_list) }
+ }
+@@ -4729,10 +4725,6 @@
+     unsafe { host::eglCreatePbufferFromClientBuffer(dpy, buftype, buffer, config, attrib_list) }
+ }
+ #[unsafe(no_mangle)]
+-pub unsafe extern "C" fn eglCreatePbufferSurface(dpy: EGLDisplay, config: EGLConfig, attrib_list: *const EGLint) -> EGLSurface {
+-    unsafe { host::eglCreatePbufferSurface(dpy, config, attrib_list) }
+-}
+-#[unsafe(no_mangle)]
+ pub unsafe extern "C" fn eglCreatePixmapSurface(dpy: EGLDisplay, config: EGLConfig, pixmap: EGLNativePixmapType, attrib_list: *const EGLint) -> EGLSurface {
+     unsafe { host::eglCreatePixmapSurface(dpy, config, pixmap, attrib_list) }
+ }
+@@ -4753,10 +4745,6 @@
+     unsafe { host::eglCreateStreamProducerD3DTextureANGLE(dpy, stream, attrib_list) }
+ }
+ #[unsafe(no_mangle)]
+-pub unsafe extern "C" fn eglDestroyContext(dpy: EGLDisplay, ctx: EGLContext) -> EGLBoolean {
+-    unsafe { host::eglDestroyContext(dpy, ctx) }
+-}
+-#[unsafe(no_mangle)]
+ pub unsafe extern "C" fn eglDestroyStreamKHR(dpy: EGLDisplay, stream: EGLStreamKHR) -> EGLBoolean {
+     unsafe { host::eglDestroyStreamKHR(dpy, stream) }
+ }
+@@ -4777,10 +4765,6 @@
+     unsafe { host::eglGetCompositorTimingSupportedANDROID(dpy, surface, name) }
+ }
+ #[unsafe(no_mangle)]
+-pub unsafe extern "C" fn eglGetConfigs(dpy: EGLDisplay, configs: *mut EGLConfig, config_size: EGLint, num_config: *mut EGLint) -> EGLBoolean {
+-    unsafe { host::eglGetConfigs(dpy, configs, config_size, num_config) }
+-}
+-#[unsafe(no_mangle)]
+ pub unsafe extern "C" fn eglGetCurrentContext() -> EGLContext {
+     unsafe { host::eglGetCurrentContext() }
+ }
+@@ -4859,10 +4843,6 @@
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn eglQueryAPI() -> EGLenum {
+     unsafe { host::eglQueryAPI() }
+-}
+-#[unsafe(no_mangle)]
+-pub unsafe extern "C" fn eglQueryContext(dpy: EGLDisplay, ctx: EGLContext, attribute: EGLint, value: *mut EGLint) -> EGLBoolean {
+-    unsafe { host::eglQueryContext(dpy, ctx, attribute, value) }
+ }
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn eglQueryDebugKHR(attribute: EGLint, value: *mut EGLAttrib) -> EGLBoolean {
+@@ -8239,13 +8219,13 @@
+     Proc { name: "eglClientWaitSyncKHR", addr: crate::sync::eglClientWaitSyncKHR as *const c_void, id: -1 },
+     Proc { name: "eglCopyBuffers", addr: eglCopyBuffers as *const c_void, id: 6 },
+     Proc { name: "eglCopyMetalSharedEventANGLE", addr: eglCopyMetalSharedEventANGLE as *const c_void, id: 7 },
+-    Proc { name: "eglCreateContext", addr: eglCreateContext as *const c_void, id: 8 },
++    Proc { name: "eglCreateContext", addr: crate::egl::eglCreateContext as *const c_void, id: -1 },
+     Proc { name: "eglCreateDeviceANGLE", addr: eglCreateDeviceANGLE as *const c_void, id: 9 },
+     Proc { name: "eglCreateImage", addr: crate::egl::eglCreateImage as *const c_void, id: -1 },
+     Proc { name: "eglCreateImageKHR", addr: crate::egl::eglCreateImageKHR as *const c_void, id: -1 },
+     Proc { name: "eglCreateNativeClientBufferANDROID", addr: eglCreateNativeClientBufferANDROID as *const c_void, id: 12 },
+     Proc { name: "eglCreatePbufferFromClientBuffer", addr: eglCreatePbufferFromClientBuffer as *const c_void, id: 13 },
+-    Proc { name: "eglCreatePbufferSurface", addr: eglCreatePbufferSurface as *const c_void, id: 14 },
++    Proc { name: "eglCreatePbufferSurface", addr: crate::egl::eglCreatePbufferSurface as *const c_void, id: -1 },
+     Proc { name: "eglCreatePixmapSurface", addr: eglCreatePixmapSurface as *const c_void, id: 15 },
+     Proc { name: "eglCreatePlatformPixmapSurface", addr: eglCreatePlatformPixmapSurface as *const c_void, id: 16 },
+     Proc { name: "eglCreatePlatformPixmapSurfaceEXT", addr: eglCreatePlatformPixmapSurfaceEXT as *const c_void, id: 17 },
+@@ -8257,7 +8237,7 @@
+     Proc { name: "eglCreateSyncKHR", addr: crate::sync::eglCreateSyncKHR as *const c_void, id: -1 },
+     Proc { name: "eglCreateWindowSurface", addr: crate::egl::eglCreateWindowSurface as *const c_void, id: -1 },
+     Proc { name: "eglDebugMessageControlKHR", addr: crate::egl::eglDebugMessageControlKHR as *const c_void, id: -1 },
+-    Proc { name: "eglDestroyContext", addr: eglDestroyContext as *const c_void, id: 25 },
++    Proc { name: "eglDestroyContext", addr: crate::egl::eglDestroyContext as *const c_void, id: -1 },
+     Proc { name: "eglDestroyImage", addr: crate::egl::eglDestroyImage as *const c_void, id: -1 },
+     Proc { name: "eglDestroyImageKHR", addr: crate::egl::eglDestroyImageKHR as *const c_void, id: -1 },
+     Proc { name: "eglDestroyStreamKHR", addr: eglDestroyStreamKHR as *const c_void, id: 28 },
+@@ -8270,7 +8250,7 @@
+     Proc { name: "eglGetCompositorTimingANDROID", addr: eglGetCompositorTimingANDROID as *const c_void, id: 35 },
+     Proc { name: "eglGetCompositorTimingSupportedANDROID", addr: eglGetCompositorTimingSupportedANDROID as *const c_void, id: 36 },
+     Proc { name: "eglGetConfigAttrib", addr: crate::egl::eglGetConfigAttrib as *const c_void, id: -1 },
+-    Proc { name: "eglGetConfigs", addr: eglGetConfigs as *const c_void, id: 38 },
++    Proc { name: "eglGetConfigs", addr: crate::egl::eglGetConfigs as *const c_void, id: -1 },
+     Proc { name: "eglGetCurrentContext", addr: eglGetCurrentContext as *const c_void, id: 39 },
+     Proc { name: "eglGetCurrentDisplay", addr: eglGetCurrentDisplay as *const c_void, id: 40 },
+     Proc { name: "eglGetCurrentSurface", addr: crate::egl::eglGetCurrentSurface as *const c_void, id: -1 },
+@@ -8301,7 +8281,7 @@
+     Proc { name: "eglProgramCacheQueryANGLE", addr: eglProgramCacheQueryANGLE as *const c_void, id: 65 },
+     Proc { name: "eglProgramCacheResizeANGLE", addr: eglProgramCacheResizeANGLE as *const c_void, id: 66 },
+     Proc { name: "eglQueryAPI", addr: eglQueryAPI as *const c_void, id: 67 },
+-    Proc { name: "eglQueryContext", addr: eglQueryContext as *const c_void, id: 68 },
++    Proc { name: "eglQueryContext", addr: crate::egl::eglQueryContext as *const c_void, id: -1 },
+     Proc { name: "eglQueryDebugKHR", addr: eglQueryDebugKHR as *const c_void, id: 69 },
+     Proc { name: "eglQueryDeviceAttribEXT", addr: eglQueryDeviceAttribEXT as *const c_void, id: 70 },
+     Proc { name: "eglQueryDeviceStringEXT", addr: eglQueryDeviceStringEXT as *const c_void, id: 71 },

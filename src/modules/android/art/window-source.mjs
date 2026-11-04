@@ -5,7 +5,7 @@ import {copyChanged,writeChanged} from '../native/upstream/source-files.mjs';
 /** Match EGL's framebuffer to the original native queue's producer buffer. */
 export function prepareWindowBuffers(aim) {
  const file=path.join(aim,'hal/gles/src/egl.rs');let text=fs.readFileSync(file,'utf8');
- const replace=(before,after)=>{if(text.split(before).length!==2)throw Error('ART EGL window boundary changed');text=text.replace(before,after);};
+ const replace=(before,after)=>{if(text.split(before).length!==2)throw Error('ART EGL window boundary changed: '+before.slice(0,100));text=text.replace(before,after);};
  replace('    fn ANativeWindow_getWidth(w: *mut NativeWindow) -> i32;\n    fn ANativeWindow_getHeight(w: *mut NativeWindow) -> i32;\n','');
  replace('fn ANativeWindow_setBuffersGeometry(w: *mut NativeWindow, width: c_int, height: c_int, format: c_int) -> c_int;',
          'fn ANativeWindow_setBuffersFormat(w: *mut NativeWindow, format: c_int) -> c_int;');
@@ -34,7 +34,18 @@ export function prepareWindowBuffers(aim) {
     if unsafe { ANativeWindow_dequeueBuffer(w.window, &mut buffer, &mut fence) } != 0 {
         return fail(EGL_BAD_NATIVE_WINDOW, EGL_FALSE);
     }
-    wait(fence);`, `    if !w.acquire_buffer(Some(surface)) {
+    if fence >= 0 {
+        let waited = crate::sync::server_wait(w.display, fence);
+        // SAFETY: the host wait has retained the dependency on success;
+        // on failure the untouched buffer goes back with its fence.
+        unsafe {
+            if waited == EGL_FALSE {
+                ANativeWindow_cancelBuffer(w.window, buffer, fence);
+                return EGL_FALSE;
+            }
+            libc::close(fence);
+        }
+    }`, `    if !w.acquire_buffer(Some(surface)) {
         return EGL_FALSE;
     }
     let buffer = std::mem::replace(&mut w.buffer, std::ptr::null_mut());`);

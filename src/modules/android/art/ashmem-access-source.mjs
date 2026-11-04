@@ -51,7 +51,7 @@ export function prepareAshmemAccess(aim){
   ['    let mut changed=ExecWriterFlags(Vec::new(),Vec::new());',`    let mut changed=ExecWriterFlags(Vec::new(),Vec::new(),Vec::new());
     let accesses=TABLE.read().unwrap().iter().filter(|(fd,_)|visible(**fd)&&unsafe{libc::fcntl(**fd,libc::F_GETFD)}&libc::FD_CLOEXEC==0).filter_map(|(_,entry)|entry.access.clone()).collect::<Vec<_>>();
     for access in accesses{if changed.2.iter().any(|(old,_,_)|Arc::ptr_eq(old,&access)){continue;}let(fd,flags)=ashmem_access::proof_flags(&access)?;changed.2.push((access,fd,flags));}`],
-  ['    let mut inherited=Vec::new();\n    for line in text.lines(){','    let mut inherited=Vec::new();let mut accesses=Vec::new();\n    for line in text.lines(){'],
+  ['    let mut inherited = Vec::new();','    let mut inherited = Vec::new();let mut accesses=Vec::new();'],
   ["        if fields.first()==Some(&\"origin\"){",`        if fields.first()==Some(&"ashmem-access"){
             if fields.len()!=4{return Err(crate::errno::EINVAL);}
             let fd=fields[1].parse().map_err(|_|crate::errno::EINVAL)?;
@@ -63,6 +63,6 @@ export function prepareAshmemAccess(aim){
         if fields.first()==Some(&"origin"){`],
  ]);
  const state=path.join(root,'sys/fork/state.rs'),text=fs.readFileSync(state,'utf8');
- if(text.split('0x46444e04').length!==4)throw Error('AIM descriptor fork state boundary changed');
- writeChanged(state,text.replaceAll('0x46444e04','0x46444e05'));
+ if(text.split('0x46444e11').length!==4)throw Error('AIM descriptor fork state boundary changed');
+ writeChanged(state,text.replaceAll('0x46444e11','0x46444e12'));
 }

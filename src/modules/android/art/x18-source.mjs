@@ -10,7 +10,8 @@ export function prepareAimRegisters({aim,klepton}) {
  const crate=path.join(aim,'crates/aim-linux-abi'),native=path.join(import.meta.dirname,'native');
  prepareX18Core(klepton,path.join(crate,'src/x18-core'));
  copyChanged(path.join(native,'x18.rs'),path.join(crate,'src/x18.rs'));
- copyChanged(path.join(native,'x18-build.rs'),path.join(crate,'build.rs'));
+ const build=path.join(crate,'build.rs'),original=fs.readFileSync(build,'utf8');
+ writeChanged(build,original.replace('fn main() {','fn main() {\n    build_x18();')+'\n'+fs.readFileSync(path.join(native,'x18-build.rs'),'utf8'));
  const edit=(file,changes)=>{
   const target=path.join(crate,file);let source=fs.readFileSync(target,'utf8');
   for(const[from,to]of changes){if(source.split(from).length!==2)throw Error('AIM register translation boundary changed: '+file+' '+from.slice(0,60));source=source.replace(from,to);}
@@ -74,7 +75,7 @@ export function prepareAimRegisters({aim,klepton}) {
   ['        self.ctr += o.ctr;','        self.ctr += o.ctr;\n        self.x18 += o.x18;'],
   ['self.svc + self.mrs_tp + self.msr_tp + self.scs + self.ctr','self.svc + self.mrs_tp + self.msr_tp + self.scs + self.ctr + self.x18'],
   ['            Kind::MrsCtr => self.ctr += 1,','            Kind::MrsCtr => self.ctr += 1,\n            Kind::X18 => self.x18 += 1,'],
-  ['    if word==a64::brk_fallback(kind,rt){return true;}','    if (kind!=Kind::X18 || a64::x18_terminal(rt).is_some()) && word==a64::brk_fallback(kind,rt){return true;}'],
+  ['if word == a64::brk_fallback(kind, rt) {\n        return true;\n    }','    if (kind!=Kind::X18 || a64::x18_terminal(rt).is_some()) && word==a64::brk_fallback(kind,rt){return true;}'],
   ['            Kind::MrsTp => set(ss, rt, slot(a64::slot::TP).read()),',`            Kind::X18 => {
                 let target=slot(a64::slot::SCS).read();
                 if rt & 15 == 1 {
@@ -94,15 +95,15 @@ export function prepareAimRegisters({aim,klepton}) {
  // never publish an untranslated instruction or a fabricated trap result.
  edit('src/patch.rs',[
   ['use std::sync::Mutex;', 'use std::{sync::Mutex, io};'],
-  ['use_islands:bool)->PatchStats {', 'use_islands:bool)->io::Result<PatchStats> {'],
-  ['let(words,stats)=prepare_rewrite_sites(sites,lo,hi,use_islands);\n    write_words(&words);stats',
+  ['    use_islands: bool,\n) -> PatchStats {', '    use_islands: bool,\n) -> io::Result<PatchStats> {'],
+  ['let (words, stats) = prepare_rewrite_sites(sites, lo, hi, use_islands);\n    write_words(&words);\n    stats',
    'let(words,stats)=prepare_rewrite_sites(sites,lo,hi,use_islands)?;\n    write_words(&words);Ok(stats)'],
-  [') -> (Vec<(u64,u32)>,PatchStats) {', ') -> io::Result<(Vec<(u64,u32)>,PatchStats)> {'],
+  [') -> (Vec<(u64, u32)>, PatchStats) {', ') -> io::Result<(Vec<(u64,u32)>,PatchStats)> {'],
   ['        let word = word.unwrap_or_else(|| {', `        if word.is_none() && kind==Kind::X18 && a64::x18_terminal(rt).is_none() {
             return Err(io::Error::from_raw_os_error(if placed.is_none(){libc::ENOMEM}else{libc::ENOEXEC}));
         }
         let word = word.unwrap_or_else(|| {`],
-  ['    (site_words,stats)\n}', '    Ok((site_words,stats))\n}'],
+  ['    (site_words, stats)\n}', '    Ok((site_words,stats))\n}'],
   ['pub fn rewrite_region(addr: u64, len: u64) -> PatchStats {', 'pub fn rewrite_region(addr: u64, len: u64) -> io::Result<PatchStats> {'],
   ['pub fn rewrite_region_with(addr: u64, len: u64, use_islands: bool) -> PatchStats {', 'pub fn rewrite_region_with(addr: u64, len: u64, use_islands: bool) -> io::Result<PatchStats> {'],
  ]);
@@ -130,7 +131,7 @@ export function prepareAimRegisters({aim,klepton}) {
   ['stats.add(&patch::rewrite_region(bias + p.p_vaddr, p.p_filesz));', 'stats.add(&patch::rewrite_region(bias + p.p_vaddr, p.p_filesz).map_err(|error|format!("{name}: executable register translation: {error}"))?);'],
  ]);
  edit('src/sys/verity_pager.rs',[
-  ['crate::patch::prepare_rewrite_sites(&targets,lo,hi,true);','crate::patch::prepare_rewrite_sites(&targets,lo,hi,true)?;'],
+  ['crate::patch::prepare_rewrite_sites(&targets, lo, hi, true);','crate::patch::prepare_rewrite_sites(&targets,lo,hi,true)?;'],
  ]);
  edit('src/sys/mem.rs',[
   ['patch::rewrite_sites(&abs, b, b + len, true);', 'patch::rewrite_sites(&abs, b, b + len, true).map_err(|error|-(errno::from_darwin(error.raw_os_error().unwrap_or(libc::EIO))as i64))?;'],

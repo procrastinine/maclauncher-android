@@ -129,9 +129,9 @@ pub(crate) fn replace(start:u64,length:u64,epoch:u64){
 pub(crate) fn overlaps(start:u64,length:u64)->bool{!ranges(start,length).is_empty()}
 /// Proc metadata is virtual. All actual VM/fork owners continue to use Darwin
 /// regions directly, preserving the RO+NX public-view contract.
-pub(crate) fn proc_regions()->Vec<super::vmmap::Region>{
+pub(crate) fn proc_regions(lo:u64,hi:u64)->Vec<super::vmmap::Region>{
     let mut result=Vec::new();
-    for region in super::vmmap::regions(0,u64::MAX){
+    for region in super::vmmap::regions(lo,hi){
         let owned=ranges(region.start,region.end-region.start);let mut cuts=vec![region.start,region.end];
         for(start,end,_)in owned{cuts.push(start);cuts.push(end);}cuts.sort_unstable();cuts.dedup();
         for piece in cuts.windows(2){let(start,end)=(piece[0],piece[1]);result.push(super::vmmap::Region{start,end,prot:protection(start,region.prot as i32)as u32,shared:region.shared,offset:region.offset+start-region.start,file:region.file.clone(),usage:region.usage});}

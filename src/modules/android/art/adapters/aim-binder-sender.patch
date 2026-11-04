@@ -1,8 +1,6 @@
-diff --git a/crates/aim-binder-driver/src/state.rs b/crates/aim-binder-driver/src/state.rs
-index ddc7fe1..d887599 100644
 --- a/crates/aim-binder-driver/src/state.rs
 +++ b/crates/aim-binder-driver/src/state.rs
-@@ -150,6 +150,8 @@ pub type Notifier = Arc<dyn Fn(Option<Tid>) + Send + Sync>;
+@@ -150,6 +150,8 @@
  pub(crate) struct Proc {
      pub context: usize,
      pub creds: Credentials,
@@ -11,7 +9,7 @@ index ddc7fe1..d887599 100644
      pub threads: IdMap<Tid, Thread>,
      /// Nodes this process owns, by user pointer.
      pub nodes: BTreeMap<u64, NodeId>,
-@@ -336,6 +338,7 @@ impl State {
+@@ -336,6 +338,7 @@
              id,
              Proc {
                  context,
@@ -19,29 +17,25 @@ index ddc7fe1..d887599 100644
                  creds,
                  threads: IdMap::default(),
                  nodes: BTreeMap::new(),
-diff --git a/crates/aim-binder-driver/src/driver.rs b/crates/aim-binder-driver/src/driver.rs
-index 4b6651f..4ec1ce3 100644
 --- a/crates/aim-binder-driver/src/driver.rs
 +++ b/crates/aim-binder-driver/src/driver.rs
-@@ -75,6 +75,13 @@ impl Driver {
+@@ -73,6 +73,13 @@
+         let pending = guard.take_wakes();
+         drop(guard);
          pending.deliver();
-     }
- 
++    }
++
 +    /// Authenticated native credential owner; no guest ioctl exposes this setter.
 +    pub fn set_sender_euid(&self, handle: ProcHandle, euid: Option<u32>) {
 +        let mut st=self.lock();
 +        if let Some(proc)=st.procs.get_mut(&handle.0){proc.sender_euid=euid;}
 +        self.unlock(st);
-+    }
-+
+     }
+ 
      /// Lookup a receipt owned by this exact receiving process/thread/buffer.
-     pub fn delivery_id(&self, handle: ProcHandle, tid: Tid, buffer: u64) -> Result<u64, Errno> {
-         let st = self.lock();
-diff --git a/crates/aim-binder-driver/src/transaction.rs b/crates/aim-binder-driver/src/transaction.rs
-index 7d8d71c..b7b0126 100644
 --- a/crates/aim-binder-driver/src/transaction.rs
 +++ b/crates/aim-binder-driver/src/transaction.rs
-@@ -122,13 +122,16 @@ impl State {
+@@ -122,13 +122,16 @@
              && self
                  .thread(proc, tid)
                  .is_some_and(|thread| thread.forwarded_sender.is_some());
@@ -59,8 +53,6 @@ index 7d8d71c..b7b0126 100644
          let mut target_thread: Option<Tid> = None;
          let mut target_node: Option<NodeId> = None;
          let target_proc: ProcId;
-diff --git a/crates/aim-binder-host/src/wire.rs b/crates/aim-binder-host/src/wire.rs
-index 33eb429..98ba843 100644
 --- a/crates/aim-binder-host/src/wire.rs
 +++ b/crates/aim-binder-host/src/wire.rs
 @@ -14,6 +14,10 @@
@@ -74,14 +66,14 @@ index 33eb429..98ba843 100644
  pub const OPEN: i32 = 0x6264_0001;
  pub const FLUSH: i32 = 0x6264_0012;
  pub const THREAD: i32 = 0x6264_0002;
-diff --git a/crates/aim-binder-host/src/client.rs b/crates/aim-binder-host/src/client.rs
-index d3d6443..28decbd 100644
 --- a/crates/aim-binder-host/src/client.rs
 +++ b/crates/aim-binder-host/src/client.rs
-@@ -360,6 +360,27 @@ impl Client {
+@@ -492,6 +492,27 @@
+                 return Ok(out);
+             }
          }
-     }
- 
++    }
++
 +    /// Cold native credential transitions contain no caller-selected UID.
 +    pub fn credential_begin(&self)->Result<u64,Errno>{
 +        let reply=with_thread(|t|call(t,self.service,&Msg{id:wire::CREDENTIAL_BEGIN,ports:vec![],data:vec![]}))??;
@@ -101,13 +93,9 @@ index d3d6443..28decbd 100644
 +    pub fn credential_invalidate(&self,ticket:u64)->Result<(),Errno>{
 +        let reply=with_thread(|t|call(t,self.service,&Msg{id:wire::CREDENTIAL_INVALIDATE,ports:vec![],data:ticket.to_le_bytes().to_vec()}))??;
 +        if status(&reply)?.remaining()!=0||!reply.ports.is_empty(){return Err(wire::EPROTO);}Ok(())
-+    }
-+
+     }
+ 
      /// `open("/dev/binder")`. Returns the file and the guest fd.
-     pub fn open(
-         &self,
-diff --git a/crates/aim-binder-host/src/server.rs b/crates/aim-binder-host/src/server.rs
-index 8f9a4d7..f8be326 100644
 --- a/crates/aim-binder-host/src/server.rs
 +++ b/crates/aim-binder-host/src/server.rs
 @@ -12,6 +12,26 @@
@@ -137,7 +125,7 @@ index 8f9a4d7..f8be326 100644
  static PID_RESOLVER:std::sync::OnceLock<unsafe extern "C" fn(i32)->i32>=std::sync::OnceLock::new();
  pub fn set_pid_resolver(resolver:unsafe extern "C" fn(i32)->i32)->Result<(),String>{
   PID_RESOLVER.set(resolver).map_err(|_|"Binder identity resolver is already installed".into())
-@@ -314,6 +334,8 @@ pub struct Server {
+@@ -505,6 +525,8 @@
      files: Mutex<HashMap<Port, Arc<OpenFile>>>,
      kq: i32,
      shared: Mutex<Vec<SharedFile>>,
@@ -146,7 +134,7 @@ index 8f9a4d7..f8be326 100644
      pool: Arc<Pool>,
  }
  
-@@ -361,6 +383,8 @@ impl Server {
+@@ -553,6 +575,8 @@
              files: Mutex::new(HashMap::new()),
              kq,
              shared: Mutex::new(Vec::new()),
@@ -155,18 +143,18 @@ index 8f9a4d7..f8be326 100644
              pool: pool.clone(),
          });
          for _ in 0..std::thread::available_parallelism().map_or(4, |n| n.get()) {
-@@ -392,7 +416,9 @@ impl Server {
-             if req.local==self.service&&matches!(req.id,wire::CREATE_REGULAR_SCM|wire::RESOLVE_REGULAR_SCM|wire::DRAIN_REGULAR_SCM){
-                 serve_regular_control(&req,&mut buf);continue;
+@@ -590,7 +614,9 @@
+                 serve_regular_control(&req, &mut buf);
+                 continue;
              }
--            let result = if req.local==self.service&&req.id==wire::SOCKET_SCM_CHANNEL {
+-            let result = if req.local == self.service && req.id == wire::SOCKET_SCM_CHANNEL {
 +            let result = if req.local==self.service&&matches!(req.id,wire::CREDENTIAL_BEGIN|wire::CREDENTIAL_END|wire::CREDENTIAL_INVALIDATE|wire::CREDENTIAL_COMMIT){
 +                self.credential_change(&req)
 +            } else if req.local==self.service&&req.id==wire::SOCKET_SCM_CHANNEL {
-                 if !req.ports.is_empty()||!req.data.is_empty(){Err(wire::EPROTO)}else{Ok((Vec::new(),self.socket_service.endpoint().encode()))}
-             } else if req.local == self.service && req.id == wire::CREATE_PATH {
-                 if req.ports.len() != 1 || req.data.len() != 4 {
-@@ -480,6 +506,47 @@ impl Server {
+                 if !req.ports.is_empty() || !req.data.is_empty() {
+                     Err(wire::EPROTO)
+                 } else {
+@@ -683,6 +709,47 @@
          Ok((ports, w.0))
      }
  
@@ -214,16 +202,16 @@ index 8f9a4d7..f8be326 100644
      fn open(&self, req: &Received) -> Result<ControlReply, Errno> {
          let parse = || -> Result<(Device, bool, u32, Option<String>), Errno> {
              let mut r = Reader::new(&req.data);
-@@ -496,6 +563,8 @@ impl Server {
-             Ok((device, nonblocking, euid, ctx))
+@@ -700,6 +767,8 @@
          };
          let (device, nonblocking, euid, security_context) = parse()?;
+         let guest_pid = android_pid(req.pid)?;
 +        let mut states=self.senders.lock().unwrap();
 +        let actor=if CREDENTIAL_TABLE.get().is_some(){let(actor,current)=credential_actor(req.pid)?;if current!=euid{return Err(errno::EPERM);}Some((actor,current))}else{None};
          let socket = req
              .ports
              .first()
-@@ -512,6 +581,16 @@ impl Server {
+@@ -716,6 +785,16 @@
              security_context,
          };
          let handle = self.driver.open(device, creds);
@@ -240,17 +228,15 @@ index 8f9a4d7..f8be326 100644
          self.driver.set_nonblocking(handle, nonblocking);
          let file = Arc::new(OpenFile {
              handle,
-@@ -1365,7 +1365,7 @@
-     fn actual_client_flush_wakes_parked_read_while_real_private_pin_prevents_eof() {
-         let service=mach::new_port(true).unwrap();let set=mach::new_port_set().unwrap();mach::move_member(service,set).unwrap();
-         let driver=Driver::new();let pool=Arc::new(Pool{driver:driver.clone(),set:mach::new_port_set().unwrap(),threads:RwLock::new(HashMap::new())});
--        let server=Arc::new(Server{socket_service:crate::socket_scm::Service::start().unwrap(),driver:driver.clone(),service,set,files:Mutex::new(HashMap::new()),kq:unsafe{libc::kqueue()},shared:Mutex::new(Vec::new()),pool});
-+        let server=Arc::new(Server{socket_service:crate::socket_scm::Service::start().unwrap(),driver:driver.clone(),service,set,files:Mutex::new(HashMap::new()),kq:unsafe{libc::kqueue()},shared:Mutex::new(Vec::new()),senders:Mutex::new(HashMap::new()),next_sender:std::sync::atomic::AtomicU64::new(1),pool});
-         assert!(server.kq>=0);
-         let worker_server=server.clone();
-         let worker=std::thread::spawn(move||{
-diff --git a/crates/aim-binder-host/src/bin/aim-binderd.rs b/crates/aim-binder-host/src/bin/aim-binderd.rs
-index e0d6570..a864c62 100644
+@@ -2013,6 +2092,8 @@
+             files: Mutex::new(HashMap::new()),
+             kq: unsafe { libc::kqueue() },
+             shared: Mutex::new(Vec::new()),
++            senders:Mutex::new(HashMap::new()),
++            next_sender:std::sync::atomic::AtomicU64::new(1),
+             pool,
+         });
+         assert!(server.kq >= 0);
 --- a/crates/aim-binder-host/src/bin/aim-binderd.rs
 +++ b/crates/aim-binder-host/src/bin/aim-binderd.rs
 @@ -5,10 +5,10 @@
@@ -266,7 +252,7 @@ index e0d6570..a864c62 100644
              _=>usage(),
          };
          if target.is_some(){usage();}
-@@ -16,6 +16,7 @@ fn main() {
+@@ -16,6 +16,7 @@
      }
      let name=name.unwrap_or_else(||usage());
      if let Some(path)=host_module{if let Err(error)=install_identity(&path){eprintln!("aim-binderd: {error}");std::process::exit(1);}}
@@ -274,20 +260,20 @@ index e0d6570..a864c62 100644
      if let Err(e) = aim_binder_host::server::Server::start(&name) {
          eprintln!("aim-binderd: {e}");
          std::process::exit(1);
-@@ -43,4 +44,4 @@ fn install_identity(path:&str)->Result<(),String>{
+@@ -43,4 +44,4 @@
   Ok(())
  }
  
 -fn usage()->!{eprintln!("usage: aim-binderd --service NAME [--host-module PATH]");std::process::exit(2)}
 +fn usage()->!{eprintln!("usage: aim-binderd --service NAME [--host-module PATH] [--process-table DIRECTORY]");std::process::exit(2)}
-diff --git a/crates/aim-linux-abi/src/sys/binder.rs b/crates/aim-linux-abi/src/sys/binder.rs
-index 853b999..fa7dc9d 100644
 --- a/crates/aim-linux-abi/src/sys/binder.rs
 +++ b/crates/aim-linux-abi/src/sys/binder.rs
-@@ -89,6 +89,18 @@ pub(super) fn drain_regular_scm(identity: &[u8; 36]) -> Result<(), i32> {
-     CLIENT.lock().unwrap().as_ref().ok_or(crate::errno::ENODEV)?.drain_regular_scm(identity)
- }
- 
+@@ -125,6 +125,18 @@
+         .as_ref()
+         .ok_or(crate::errno::ENODEV)?
+         .drain_regular_scm(identity)
++}
++
 +pub(super) fn credential_begin()->Result<Option<u64>,i32>{
 + let client=CLIENT.lock().unwrap();client.as_ref().map(|client|client.credential_begin()).transpose()
 +}
@@ -298,12 +284,10 @@ index 853b999..fa7dc9d 100644
 +}
 +pub(super) fn credential_invalidate(ticket:Option<u64>)->Result<(),i32>{
 + let Some(ticket)=ticket else{return Ok(());};let client=CLIENT.lock().unwrap();client.as_ref().ok_or(ENODEV)?.credential_invalidate(ticket)
-+}
-+
+ }
+ 
  fn lookup(fd: i32) -> Option<BinderFile> {
-     match super::fdtab::get(fd)? {
-         Kind::Binder(mut file) => { file.fd = fd; Some(file) },
-@@ -223,18 +235,11 @@ pub fn is_device(guest_path: &str) -> bool {
+@@ -289,18 +301,11 @@
  /// `openat` of a binder device node; None for any other path.
  pub fn open(guest_path: &str, flags: u64) -> Option<i64> {
      let device = device(guest_path)?;
@@ -327,7 +311,7 @@ index 853b999..fa7dc9d 100644
      Some(match file {
          Ok(f) => {
              super::fdtab::insert(f.fd, Kind::Binder(f));
-@@ -250,6 +255,7 @@ pub fn ioctl(fd: i32, cmd: u64, arg: u64) -> Option<i64> {
+@@ -316,6 +321,7 @@
          return None;
      }
      let file = lookup(fd)?;
@@ -335,11 +319,9 @@ index 853b999..fa7dc9d 100644
      let tid = super::process::gettid() as i32;
      // A guest signal for this thread interrupts a read parked in the
      // daemon, as `binder_wait_for_work` returns on a pending signal; the
-diff --git a/crates/aim-linux-abi/src/sys/cred.rs b/crates/aim-linux-abi/src/sys/cred.rs
-index 74900b1..021ea1f 100644
 --- a/crates/aim-linux-abi/src/sys/cred.rs
 +++ b/crates/aim-linux-abi/src/sys/cred.rs
-@@ -527,16 +527,42 @@ fn with<R>(f: impl FnOnce(&mut Identity) -> R) -> R {
+@@ -624,16 +624,42 @@
  
  /// Changes of effective/filesystem ids clear dumpability before publishing the
  /// new credentials. An authority failure rolls the credential change back.
@@ -363,6 +345,9 @@ index 74900b1..021ea1f 100644
 -        if [id.uid[1],id.uid[3],id.gid[1],id.gid[3]] != [before.uid[1],before.uid[3],before.gid[1],before.gid[3]]{
 -            let policy=super::misc::set_dumpable(0);
 -            if policy<0{*id=before;return policy;}
+-        }
+-        result
+-    })
 +    let mut state=STATE.lock().unwrap();let id=state.get_or_insert_with(Identity::default);let before=id.clone();let result=f(id);
 +    if result<0{*id=before;return result;}
 +    if [id.uid[1],id.uid[3],id.gid[1],id.gid[3]] != [before.uid[1],before.uid[3],before.gid[1],before.gid[3]]{
@@ -381,9 +366,7 @@ index 74900b1..021ea1f 100644
 +        *id=before;publish(id);
 +        if write_own_entry_checked(id).is_ok()&&super::binder::credential_end(ticket,id.uid[1]).is_err(){
 +            if super::binder::credential_invalidate(ticket).is_err(){credential_authority_lost();}
-         }
--        result
--    })
++        }
 +        return -(error as i64);
 +    }
 +    result

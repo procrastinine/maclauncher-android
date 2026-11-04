@@ -30,8 +30,7 @@ export function prepareAimVideo(aim){
         ..Default::default()
     };`]]);
  edit('crates/aim-hostcall/src/lib.rs',[
-  ['pub const VERSION: u32 = 3;\n\n    /// Load ANGLE','pub const VERSION: u32 = 4;\n\n    /// Load ANGLE'],
-  ['    pub const FN_OPAQUE_SURFACE: u32 = 5;','    pub const FN_OPAQUE_SURFACE: u32 = 5;\n    pub const FN_VIDEO_IMAGE: u32 = 6;'],
+  ['    pub const FN_OPAQUE_SURFACE: u32 = 6;','    pub const FN_OPAQUE_SURFACE: u32 = 6;\n    pub const FN_VIDEO_IMAGE: u32 = 7;'],
   ['core::mem::size_of::<ImportBuffer>() == 48','core::mem::size_of::<ImportBuffer>() == 160'],
   ['        pub image: u64,\n    }\n\n    /// Argument block of [`FN_PRESENT`].',`        pub image: u64,
         pub fourcc: u32,

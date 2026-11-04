@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf, process::Command};
 
-fn main() {
+fn build_x18() {
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     let source = PathBuf::from("src/x18-core");
     let object = out.join("x18-core.o");

@@ -65,34 +65,34 @@ pub fn note_original_words(words:&[(u64,u32,u32)])`],
  ]);
  edit('sys/user_memory.rs',[
   ['        if start > at || stop <= at || protection & required == 0 {','        let protection=super::mutable_memory::protection(at,protection);\n        if start > at || stop <= at || protection & required == 0 {'],
-  ['        // SAFETY: source is our live slice; Mach validates the user destination.',`        if super::mutable_memory::covers(at,1){
+  ['        // Prepared copyout holds the original mapping owner.',`        if super::mutable_memory::covers(at,1){
             let _transaction=super::mutable_memory::transaction();
             let lease=super::mutable_memory::mapping(at,1,libc::PROT_WRITE).ok_or(errno::EFAULT)?;
             let count=count.min((lease.start+lease.length-at)as usize);
             super::mutable_memory::write(at,&bytes[done..done+count])?;done+=count;continue;
         }
-        // SAFETY: source is our live slice; Mach validates the user destination.`],
+        // Prepared copyout holds the original mapping owner.`],
  ]);
  edit('sys/procfs.rs',[
-  ['    let mut regions = vmmap::regions(0, u64::MAX).peekable();','    let mut regions = super::mutable_memory::proc_regions().into_iter().peekable();'],
+  ['    let mut regions = vmmap::regions(lo, hi).peekable();','    let mut regions = super::mutable_memory::proc_regions(lo,hi).into_iter().peekable();'],
  ]);
  edit('sys/user-output.rs',[
   ['  if protection&7==7&&super::arena::contains(lo,hi-lo){return true;}','  if super::mutable_memory::overlaps(lo,hi-lo)||protection&7==7&&super::arena::contains(lo,hi-lo){return true;}'],
  ]);
  edit('sys/mem.rs',[
   ['            // Translated (or nothing to rewrite): the file itself, shared.','            // Translated (or nothing to rewrite): the file itself, shared.\n            // The original guest request remains MAP_PRIVATE.\n            noted=true;'],
-  ['let _epoch=super::verity_pager::mutation();','let _epoch=super::mutable_code::mapping_mutation();',7],
-  ['        let _epoch=super::mutable_code::mapping_mutation();\n        let result=mmap_owned(a);','        let _epoch=super::mutable_code::mapping_mutation();let mutable_epoch=super::mutable_memory::epoch();\n        let result=mmap_owned(a);'],
-  ['    let _epoch=super::mutable_code::mapping_mutation();\n    if a[3]&MAP_FIXED!=0','    let _epoch=super::mutable_code::mapping_mutation();let mutable_epoch=super::mutable_memory::epoch();\n    if a[3]&MAP_FIXED!=0'],
+  ['let _epoch = super::verity_pager::mutation();','let _epoch=super::mutable_code::mapping_mutation();',7],
+  ['        let _epoch=super::mutable_code::mapping_mutation();\n        let _mapping = super::memfd::mapping_change();\n        let result=mmap_owned(a);','        let _epoch=super::mutable_code::mapping_mutation();\n        let _mapping = super::memfd::mapping_change();\n        let mutable_epoch=super::mutable_memory::epoch();\n        let result=mmap_owned(a);'],
+  ['    let _epoch=super::mutable_code::mapping_mutation();\n    if a[3] & MAP_FIXED != 0','    let _epoch=super::mutable_code::mapping_mutation();let mutable_epoch=super::mutable_memory::epoch();\n    if a[3] & MAP_FIXED != 0'],
   ['if result>=0{patch::replace_far(result as u64,page_up(a[1]),far_epoch);}','if result>=0{patch::replace_far(result as u64,page_up(a[1]),far_epoch);super::mutable_memory::replace(result as u64,page_up(a[1]),mutable_epoch);}',2],
   ['    DEFERRED_UNMAPS.with(|d| d.borrow_mut().clear());','    DEFERRED_UNMAPS.with(|d| d.borrow_mut().clear());super::mutable_memory::reset();'],
   ['        patch::forget_far(addr,len);','        patch::forget_far(addr,len);super::mutable_memory::forget(addr,len);'],
-  ['            unsafe { libc::munmap(addr as *mut _, len as usize) };','            if unsafe { libc::munmap(addr as *mut _, len as usize) }==0{super::mutable_memory::forget(addr,len);patch::forget_far(addr,len);}'],
+  ['                super::memfd::unmapped(addr, len);','                super::memfd::unmapped(addr, len);\n                super::mutable_memory::forget(addr,len);patch::forget_far(addr,len);'],
   ['pub fn mprotect(a: [u64; 6]) -> i64 {',`pub fn mprotect(a: [u64; 6]) -> i64 {
     if super::mutable_code::available()&&a[2]&PROT_WRITE!=0&&patch::has_original_words(a[0],page_up(a[1])) {
         if let Err(error)=super::verity_pager::prepare_user_range(a[0],page_up(a[1]),super::verity_pager::Access::Read){return -(error as i64);}
     }`],
-  ['fn mprotect_owned(a:[u64;6])->i64 {','fn mprotect_owned(a:[u64;6])->i64 {\n    if let Some(result)=mutable_protect(a){return result;}'],
+  ['fn mprotect_owned(a: [u64; 6]) -> i64 {','fn mprotect_owned(a:[u64;6])->i64 {\n    if let Some(result)=mutable_protect(a){return result;}'],
   ['fn discard_private(addr: u64, len: u64) -> i64 {',`fn discard_private(addr:u64,len:u64)->i64{
     let owned=super::mutable_memory::ranges(addr,len);if owned.is_empty(){return discard_private_kernel(addr,len);}
     let mut cursor=addr;

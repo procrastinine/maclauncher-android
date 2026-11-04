@@ -13,7 +13,21 @@ impl Window {
         if unsafe { ANativeWindow_dequeueBuffer(self.window, &mut buffer, &mut fence) } != 0 {
             return fail(EGL_BAD_NATIVE_WINDOW, false);
         }
-        wait(fence);
+        if fence >= 0 {
+            // A current surface can queue the original GPU-side dependency.
+            // Initial creation has no current context, so wait before exposing it.
+            let ready = if surface.is_some() {
+                crate::sync::server_wait(self.display,fence)==EGL_TRUE
+            } else {
+                match crate::sync::poll(fence,u64::MAX) {
+                    Ok(true)=>true,
+                    Ok(false)=>fail(EGL_BAD_ALLOC,false),
+                    Err(error)=>fail(error,false),
+                }
+            };
+            if !ready {unsafe{ANativeWindow_cancelBuffer(self.window,buffer,fence)};return false;}
+            unsafe{libc::close(fence)};
+        }
         if buffer.is_null() {
             return fail(EGL_BAD_NATIVE_WINDOW, false);
         }

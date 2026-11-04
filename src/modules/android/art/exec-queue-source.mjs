@@ -6,18 +6,18 @@ import {execFileSync} from 'node:child_process';
 const sources=[
   {
     "path": "crates/aim-linux-abi/src/sys/exec.rs",
-    "beforeSha256": "cfd5928e13a6a2f2d09da81803ff2c7310f613c8cd5397683ebd64081f1f28d0",
-    "sha256": "29ddd04d663d5559ce19cf400e4018bbc221a1258fee3c553ef764826dc3c991"
+    "beforeSha256": "8abe842bf046c5b27a0c8a0080d188a0104013cedbfce3657dfa2d9e5aecd024",
+    "sha256": "d7bffeeecf5dd2f54cdf22e5d3f1793ae7283e6368124417ef1d6a8397e607b9"
   },
   {
     "path": "crates/aim-linux-abi/src/sys/exec_fd_receipt.rs",
-    "beforeSha256": "5f494fab4bf9a76e659dbdd48887a352258b2500a390f354e3c6ea62d2a77961",
-    "sha256": "34eff27cc49f99c227f618067396e77becbbf7f0eb9cda51dd2f0d08c7423291"
+    "beforeSha256": "ddf6a6e6fc7285c9e21d2612f2269f2ffe58cf9438a2ac8a63b9d323f6a09398",
+    "sha256": "6ddadb4e27e01e08b785789fd0db2b28f6f09ff4c0f01e3ff658d18704bb1abf"
   },
   {
     "path": "crates/aim-linux-abi/src/sys/fdtab.rs",
-    "beforeSha256": "7be2efd235c8c6453cbe55673a7f20985d12f96beec758d343b946a68e6abebe",
-    "sha256": "86b9374b040821fd524b745eb3c8ae46654116b0edf61b56e741a1737fb5a53b"
+    "beforeSha256": "298066e7e501ba8d40da6b14b25828cb16962b654bed5651ca377e7cc77b50a9",
+    "sha256": "da18b387ddc3cbb70b54ac42755b88ee2e3bc0ae3c43b5b4bca7bf7fde7f3f9f"
   }
 ];
 const hash=file=>crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');

@@ -48,18 +48,6 @@ pub(super) fn saved_auxv() -> Vec<u8> {
         "auxv" => Node::File(super::procrec::auxv(p)?),
         "cmdline" => Node::File(cmdline(p)),`],
  ]);
- // Process-owned publication, including low native slots, is the authority for
- // procfs and the authenticated agent's descriptor views (AIM 3136fe473714).
- edit('sys/procfs.rs',[
-  ['pub(super) fn fd_link(fd: i32) -> Option<String> {\n    if !fdtab::is_hidden(fd) {if let Some(path)=fdtab::virtual_path(fd){return Some(path);}}\n    if fdtab::is_hidden(fd) {\n        return None;\n    }','pub(super) fn fd_link(fd: i32) -> Option<String> {\n    if !fdtab::visible(fd) { return None; }\n    if let Some(path)=fdtab::virtual_path(fd){return Some(path);}'],
-  ['            fdtab::open_fds()\n                .into_iter()\n                .filter(|&fd| !fdtab::is_hidden(fd))','            super::fd_visibility::visible()\n                .into_iter()'],
-  ['    if fd < 0 || fdtab::is_hidden(fd) { return Some(Err(ENOENT)); }','    if !fdtab::visible(fd) { return Some(Err(ENOENT)); }'],
-  ['        if fdtab::is_hidden(n) {','        if !fdtab::visible(n) {'],
- ]);
- edit('sys/ptrace/agent.rs',[[
-  '            let fds: Vec<i32> = fdtab::open_fds()\n                .into_iter()\n                .filter(|&fd| !fdtab::is_hidden(fd))\n                .collect();',
-  '            let fds = crate::sys::fd_visibility::visible();'
- ]]);
  edit('sys/procfs.rs',[[
   '    #[test]\n    fn guest_argv_skips_linux_run_options() {',
   `    #[test]
@@ -107,7 +95,7 @@ pub(super) fn saved_auxv() -> Vec<u8> {
     fn guest_argv_skips_linux_run_options() {`
  ]]);
  edit('sys/procrec.rs',[
-  ['    _pad: u64,','    auxv_len: AtomicU64,'],
+  ['    vm: [AtomicU64; 3],','    vm: [AtomicU64; 3],\n    auxv_len: AtomicU64,'],
   ['    let strings: &[u8] = if hi > lo {',`    // The table-to-string gap stores the immutable per-exec auxiliary vector.
     let auxv = super::procfs::saved_auxv();
     if auxv.len() as u64 > STRINGS - TABLE as u64 { return; }
@@ -119,7 +107,7 @@ pub(super) fn saved_auxv() -> Vec<u8> {
 pub fn auxv(pid: i32) -> Option<Vec<u8>> {
     let file = open(pid)?;
     let header = read_at(&file, 0, HEADER);
-    let len = u64_at(&header, 56);
+    let len = u64_at(&header, std::mem::offset_of!(Header, auxv_len));
     if len % 16 != 0 || len > STRINGS - TABLE as u64 { return None; }
     let bytes = read_at(&file, TABLE as u64, len as usize);
     (bytes.len() == len as usize).then_some(bytes)

@@ -15,8 +15,8 @@
 +    fn linux_abi_call_guest(ctx: *mut GuestContext, function: u64, argument: u64) -> u64;
  }
  
- /// The process id, answered by the lean syscall path without a Darwin call.
-@@ -71,6 +73,24 @@
+ /// The process id getpid(2) answers on the lean syscall path without a
+@@ -79,6 +81,24 @@
      /// x0 of a lean-path syscall, to restart it.
      pub orig_x0: u64,
      pub(crate) thread: *const crate::sys::Thread,
@@ -171,7 +171,7 @@
    --stdio-null           the guest's stdin, stdout and stderr are /dev/null
                           (as init gives services); the layer's own messages
                           still go to the original stderr
-@@ -133,6 +134,7 @@
+@@ -185,6 +186,7 @@
      // Unset: the default, looked up (and migrated) only when used.
      let mut cache = None;
      let mut trace = false;
@@ -179,15 +179,15 @@
      let mut binder = None;
      let mut gpu: Option<PathBuf> = None;
      let mut vulkan: Option<PathBuf> = None;
-@@ -163,6 +165,7 @@
+@@ -220,6 +222,7 @@
              // The audio host module's CoreAudio process (docs/audio.md).
              "--audio-io" => aim_host_audio::io::main(),
              "--root" => root = PathBuf::from(value()),
 +            "--host-module" => host_module = Some(PathBuf::from(value())),
              "--cache" => cache = Some(Some(PathBuf::from(value()))),
              "--no-cache" => cache = Some(None),
-             "--socket-receipts"=>socket_receipts=aim_linux_abi::sys::parse_socket_receipts(&value().to_string_lossy()).unwrap_or_else(|error|{eprintln!("linux-run: invalid socket receipt: errno {error}");std::process::exit(2)}),
-@@ -230,6 +233,12 @@
+             "--socket-receipts" => {
+@@ -310,6 +313,12 @@
      };
      let cache = cache.unwrap_or_else(aim_linux_abi::cache::Cache::default_dir);
      runtime_args.extend([cstring("--root"), cstring(root.as_os_str().as_bytes())]);
@@ -197,6 +197,6 @@
 +        });
 +        runtime_args.extend([cstring("--host-module"), cstring(path.as_os_str().as_bytes())]);
 +    }
-     if let Some(path)=&posix_control{runtime_args.extend([cstring("--posix-control"),cstring(path.as_os_str().as_bytes())]);}
-     match &cache {
-         Some(c) => runtime_args.extend([cstring("--cache"), cstring(c.as_os_str().as_bytes())]),
+     if let Some(path) = &posix_control {
+         runtime_args.extend([
+             cstring("--posix-control"),

@@ -40,7 +40,7 @@ pub(crate) fn write_attribute(path: &Path, b: &[u8], name: &[u8], flags: c_int) 
     let map = inodes.get_or_insert_with(HashMap::new);`],
  ]);
  edit('crates/aim-linux-abi/src/sys/fsops.rs',[
-  ['        (None, Some(old)) => {\n            errno::check', '        (None, Some(old)) => {\n            if let Err(error) = attrs::preserve_import(Host::Path(&old.host)) { return -(error as i64); }\n            errno::check'],
+  ['            errno::check(unsafe { libc::link(old.host.as_ptr(), new.host.as_ptr()) } as i64)', '            if let Err(error) = attrs::preserve_import(Host::Path(&old.host)) { return -(error as i64); }\n            errno::check(unsafe { libc::link(old.host.as_ptr(), new.host.as_ptr()) } as i64)'],
   ['    // SAFETY: host paths.\n    let r = unsafe { libc::renamex_np',`    if let Err(error) = attrs::preserve_import(Host::Path(&old.host)) { return -(error as i64); }
     if flags & RENAME_EXCHANGE != 0 {
         if let Err(error) = attrs::preserve_import(Host::Path(&new.host)) { return -(error as i64); }

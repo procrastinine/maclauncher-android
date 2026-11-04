@@ -35,11 +35,12 @@ pub(crate) fn elf_extent(fd:i32,off:u64)->Option<(u64,u64)>{
 /// How an executable private mapping of \`fd\` at file offset \`off\` is made.`],
  ]);
  edit('sys/fs.rs',[
-  ['        return Some(description.rw(pin.descriptor(),&one(buf,len),Some(pos),write));',`        let result=description.rw(pin.descriptor(),&one(buf,len),Some(pos),write);
-        if !write && result>0 {super::copies::note_elf_read(&pin,buf,result as u64,pos as u64);}
-        return Some(result);`],
-  ['    Some(special_pio_kernel(actual,buf,len,pos,write).unwrap_or_else(||{','    let result=special_pio_kernel(actual,buf,len,pos,write).unwrap_or_else(||{'],
-  ['libc::pread(actual,buf as *mut _,len,pos)}} as i64)\n    }))','libc::pread(actual,buf as *mut _,len,pos)}} as i64)\n    });\n    if !write && result>0 {super::copies::note_elf_read(&pin,buf,result as u64,pos as u64);}\n    Some(result)'],
+  ['        let result = description.rw(pin.descriptor(), &one(buf, len), Some(pos), write);',
+   '        let result = description.rw(pin.descriptor(), &one(buf, len), Some(pos), write);\n        if !write&&result>0 {super::copies::note_elf_read(&pin,buf,result as u64,pos as u64);}'],
+  ['    Some(\n        special_pio_kernel(actual, buf, len, pos, write).unwrap_or_else(|| {',
+   '    let result = special_pio_kernel(actual, buf, len, pos, write).unwrap_or_else(|| {'],
+  ['        }),\n    )\n}\n\nfn special_read_kernel',
+   '        });\n    if !write&&result>0 {super::copies::note_elf_read(&pin,buf,result as u64,pos as u64); }\n    Some(result)\n}\n\nfn special_read_kernel'],
  ]);
  edit('sys/mem.rs',[
   [`                let stats=match patch::rewrite_region(lo,hi-lo){Ok(stats)=>stats,Err(error)=>{
@@ -75,6 +76,6 @@ pub(crate) fn elf_extent(fd:i32,off:u64)->Option<(u64,u64)>{
  // Fork state is private to the same executable; its mapping records now carry
  // a retained source descriptor as well as the already preserved inode/path.
  const state=path.join(root,'sys/fork/state.rs'),text=fs.readFileSync(state,'utf8');
- if(text.split('0x46444e03').length!==4)throw Error('AIM fork state version boundary changed');
- writeChanged(state,text.replaceAll('0x46444e03','0x46444e04'));
+ if(text.split('0x46444e10').length!==4)throw Error('AIM fork state version boundary changed');
+ writeChanged(state,text.replaceAll('0x46444e10','0x46444e11'));
 }

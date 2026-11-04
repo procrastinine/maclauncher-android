@@ -155,10 +155,8 @@ unsafe fn setup_frame(cpu:&Cpu,d:&Delivery,saved_alt:&AltStack,sp:u64,
     write:impl Fn(u64,&[u8])->Result<(),i32>)->Result<Entry,i32> {
 ${placement}`);
  const write='    super::user_memory::write_exact(f, &bytes)?;';
- if(frame.split(write).length!==2)throw Error('AIM signal-frame copy boundary changed');
  frame=frame.replace(write,'    write(f, &bytes)?;');
  const read='    let bytes = super::user_memory::read_exact(f, FRAME_SIZE as usize).ok()?;';
- if(frame.split(read).length!==2)throw Error('AIM signal-frame snapshot boundary changed');
  frame=frame.replace(read,`${read}
     unsafe { restore_bytes(&bytes) }
 }

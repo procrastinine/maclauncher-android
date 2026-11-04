@@ -29,136 +29,97 @@
      // The selected MacLauncher physical backend serves the unchanged original
 --- a/crates/aim-linux-abi/src/context.rs
 +++ b/crates/aim-linux-abi/src/context.rs
-@@ -347,7 +347,7 @@
-         return existing;
+@@ -50,11 +50,15 @@
+ /// by [`set_thread_group`] for a thread running as a process of its own.
+ pub static mut LINUX_ABI_PID: u64 = 0;
+ 
+-/// This process is a thread of process `tgid`: getpid(2) answers it.
++/// This process is a thread of host process `tgid`: publish its guest ID
++/// for getpid(2), while the process record retains the host thread group.
+ pub fn set_thread_group(tgid: i32) {
++    let guest = crate::process_identity::from_host(tgid)
++        .unwrap_or(Ok(tgid))
++        .expect("thread group identity lease");
+     // SAFETY: written before the process's guest code runs (the fork
+     // child's resume).
+-    unsafe { LINUX_ABI_PID = tgid as u64 };
++    unsafe { LINUX_ABI_PID = guest as u64 };
+ }
+ 
+ /// Full guest register state saved at a syscall boundary. The fields up to
+@@ -358,7 +362,9 @@
+     // first thread (a later one keeps a thread group set since).
+     unsafe {
+         if LINUX_ABI_PID == 0 {
+-            LINUX_ABI_PID = libc::getpid() as u64;
++            LINUX_ABI_PID = crate::process_identity::process()
++                .unwrap_or_else(|| Ok(libc::getpid()))
++                .expect("process identity lease") as u64;
+         }
      }
-     // SAFETY: the process id is written before any guest code runs.
--    unsafe { LINUX_ABI_PID = libc::getpid() as u64 };
-+    unsafe { LINUX_ABI_PID = crate::process_identity::process().unwrap_or_else(||Ok(libc::getpid())).expect("process identity lease") as u64 };
      let stack = map_anon(HOST_STACK_SIZE, libc::PROT_READ | libc::PROT_WRITE);
-     let mut ctx = Box::new(GuestContext::zeroed());
-     ctx.host_sp = stack as u64 + HOST_STACK_SIZE as u64;
 --- a/crates/aim-linux-abi/src/sys/mod.rs
 +++ b/crates/aim-linux-abi/src/sys/mod.rs
-@@ -20,7 +20,7 @@
+@@ -50,7 +50,7 @@
+ mod event;
  mod exec;
  mod exec_fd_receipt;
- pub(crate) mod fdtab;
 -mod fd_visibility;
 +pub(crate) mod fd_visibility;
- pub(crate) mod regular_file;
- pub(crate) mod verified_source;
+ pub(crate) mod fdtab;
+ mod fileattr;
  mod fork;
-@@ -45,6 +45,7 @@
- mod mount;
+@@ -82,6 +82,7 @@
  pub mod names;
+ mod nat66;
  mod net;
 +pub(crate) use net::transport_peer;
  mod netif;
  mod netlink;
- mod packet;
-@@ -336,7 +337,7 @@
-         435 if fork::is_fork(fork::clone3_flags(a)) => fork::clone3(ctx, a),
+ mod netlink_audit;
+@@ -407,7 +408,7 @@
+         }
          435 => thread::clone3(ctx, a),
          163 | 164 | 261 => cred::prlimit(nr, a),
--        172 => process::getpid(),
-+        172 => pidns::guest_pid(process::getpid() as i32).map(|pid|pid as i64).unwrap_or_else(|error|error),
+-        172 => process::getpid_tgid(),
++        172 => process::guest_pid(),
          173 => process::getppid(),
          178 => thread::gettid(),
          // signals
 --- a/crates/aim-linux-abi/src/sys/thread.rs
 +++ b/crates/aim-linux-abi/src/sys/thread.rs
-@@ -223,7 +223,7 @@ pub fn unpark(tid: i32) {
+@@ -346,8 +346,9 @@
+ }
  
  fn pid() -> i32 {
-     // SAFETY: trivial.
+-    // SAFETY: trivial.
 -    unsafe { libc::getpid() }
-+    crate::process_identity::process().unwrap_or_else(||Ok(unsafe{libc::getpid()})).expect("process identity lease")
++    crate::process_identity::process()
++        .unwrap_or_else(|| Ok(unsafe { libc::getpid() }))
++        .expect("process identity lease")
  }
  
  pub fn main_tid() -> i32 {
-@@ -284,6 +284,7 @@ pub fn set_name_of(tid: i32, name: [u8; 16]) -> bool {
- 
- /// The process a tid belongs to (a pid is its own main thread's tid).
- pub fn owner(tid: i32) -> i32 {
-+    if let Some(result)=crate::process_identity::owner(tid){return result.map(|id|id.host).unwrap_or(0);}
-     if tid >= TID_BASE {
-         (tid - TID_BASE) >> TID_SHIFT
-     } else {
-@@ -301,15 +302,6 @@ pub fn name_program(filename: &[u8]) {
-     set_name_of(host_tid() as i32, name);
- }
- 
--/// The slot of this process's thread `tid` in its record (`procrec`).
--pub fn slot(tid: i32) -> usize {
--    if tid == pid() {
--        0
--    } else {
--        ((tid - TID_BASE) as u32 & TIDS_PER_PROCESS) as usize
--    }
--}
--
- /// Host thread id of a running pthread.
- fn host_id(p: usize) -> u64 {
-     let mut id = 0u64;
-@@ -365,18 +357,22 @@ pub fn poke_main_from_handler(sig: i32) {
-     }
- }
- 
--fn alloc_tid(t: &HashMap<i32, Arc<Thread>>) -> Option<i32> {
-+fn alloc_tid(t: &HashMap<i32, Arc<Thread>>) -> Result<i32,i64> {
-+    if t.len()>TIDS_PER_PROCESS as usize{return Err(-(EAGAIN as i64));}
-+    if let Some(result)=crate::process_identity::reserve(){return result;}
-     let base = TID_BASE + (pid() << TID_SHIFT);
-     (0..TIDS_PER_PROCESS)
-         .map(|_| base + (NEXT_TID.fetch_add(1, SeqCst) % TIDS_PER_PROCESS) as i32 + 1)
-         .find(|tid| !t.contains_key(tid))
-+        .ok_or(-(EAGAIN as i64))
- }
- 
+@@ -493,11 +494,14 @@
  /// Make the calling host thread a guest thread with context `ctx` (which
  /// has no thread yet): the first becomes the main thread (tid = pid).
  pub fn register_current(ctx: *mut GuestContext, stacks: HostStacks) {
-+    let native=crate::process_identity::thread().map(|result|result.expect("thread identity lease"));
-     let th = with_table_mut(|t| {
--        let tid = if t.contains_key(&pid()) {
-+        let tid = if let Some(id)=native {id} else if t.contains_key(&pid()) {
-             alloc_tid(t).expect("no free tid")
-         } else {
-             pid()
-@@ -464,7 +460,7 @@ fn spawn(ctx: &GuestContext, flags: u64, newsp: u64, ptid: u64, tls: u64, ctid:
-         c.sp = newsp;
-     }
-     let th = with_table_mut(|t| {
--        let tid = alloc_tid(t)?;
-+        let tid = alloc_tid(t).map_err(|error|(error,t.len()))?;
-         let th = Arc::new(Thread::new(tid, child_ctx, parent.sig.mask()));
-         *th.name.lock().unwrap() = *parent.name.lock().unwrap();
-         for (d, s) in [
-@@ -479,12 +475,17 @@ fn spawn(ctx: &GuestContext, flags: u64, newsp: u64, ptid: u64, tls: u64, ctid:
-         }
+-    let th = with_table_mut(|t| {
+-        let reservation = t
+-            .contains_key(&pid())
++    // The native owner has already adopted this physical thread's lease.
++    // Initial and borrowed identities never become AIM-owned reservations.
++    let native = crate::process_identity::thread()
++        .map(|result| result.expect("thread identity lease"));
++    let th = with_table_mut(|t| {
++        let reservation = (native.is_none() && t.contains_key(&pid()))
+             .then(|| alloc_tid(t).expect("no free tid"));
+-        let tid = reservation.as_ref().map_or(pid(), |r| r.tid);
++        let tid = native.unwrap_or_else(|| reservation.as_ref().map_or(pid(), |r| r.tid));
+         let th = Arc::new(Thread::new(tid, ctx, 0, reservation));
          t.insert(tid, th.clone());
-         super::procrec::thread(tid, 0, &th.name.lock().unwrap());
--        Some(th)
-+        Ok::<_,(i64,usize)>(th)
-     });
--    let Some(th) = th else {
--        // SAFETY: never handed out.
--        drop(unsafe { Box::from_raw(child_ctx) });
--        return -(EAGAIN as i64);
-+    let th = match th {
-+        Ok(thread)=>thread,
-+        Err((error,registered_threads))=>{
-+            // SAFETY: never handed out. Keep the shared lease owner's real
-+            // Linux error; a failed descriptor reservation is not exhaustion.
-+            drop(unsafe { Box::from_raw(child_ctx) });
-+            crate::diag!("[linux-abi] clone failed stage=identity errno={} registered_threads={registered_threads}",-error);
-+            return error;
-+        }
-     };
-     let tid = th.tid;
-     if let Some(e) = &traced {
-@@ -514,7 +515,7 @@ fn spawn(ctx: &GuestContext, flags: u64, newsp: u64, ptid: u64, tls: u64, ctid:
+         super::procrec::thread(tid, 0, &[0; 16]);
+@@ -658,7 +662,7 @@
      }));
      // The child may run, exit and be freed before pthread_create returns:
      // nothing of it is touched afterwards (ADR 0012, "Platform probes").
@@ -167,7 +128,7 @@
          // SAFETY: standard pthread creation with a detached attribute.
          unsafe {
              let mut attr: libc::pthread_attr_t = std::mem::zeroed();
-@@ -524,20 +525,23 @@ fn spawn(ctx: &GuestContext, flags: u64, newsp: u64, ptid: u64, tls: u64, ctid:
+@@ -668,10 +672,10 @@
              let mut pt: libc::pthread_t = std::mem::zeroed();
              let r = libc::pthread_create(&mut pt, &attr, thread_start, boot as *mut _);
              libc::pthread_attr_destroy(&mut attr);
@@ -177,248 +138,372 @@
      };
 -    if !ok {
 +    if error != 0 {
-         with_table_mut(|t| t.remove(&tid));
-         super::procrec::gone(tid);
-         super::ptrace::forget(tid);
-+        crate::process_identity::release(tid);
-         // SAFETY: the child never started; reclaim what it would own.
-         unsafe {
-             drop(Box::from_raw(boot));
+         with_table_mut(|t| {
+             super::procrec::gone(tid);
+             t.remove(&tid);
+@@ -685,7 +689,7 @@
              drop(Arc::from_raw(c.thread));
              drop(Box::from_raw(child_ctx));
          }
 -        return -(EAGAIN as i64);
-+        let darwin_error=error;let error=crate::errno::from_darwin(error);
-+        crate::diag!("[linux-abi] clone failed stage=pthread-create errno={error} darwin_errno={darwin_error}");
-+        return -(error as i64);
++        return -(crate::errno::from_darwin(error) as i64);
      }
      if let Some(e) = &traced {
          super::ptrace::clone_stop(e, tid, &Cpu::from_ctx(ctx));
-@@ -549,6 +553,7 @@ extern "C" fn thread_start(arg: *mut libc::c_void) -> *mut libc::c_void {
+@@ -697,6 +701,9 @@
      // SAFETY: `arg` is the Boot handed over by `spawn`.
      let boot = unsafe { Box::from_raw(arg as *mut Boot) };
      let th = &boot.thread;
-+    crate::process_identity::adopt(th.tid).expect("reserved thread identity lease");
++    if let Some(reservation) = th.reservation.lock().unwrap().as_mut() {
++        reservation.adopt().expect("reserved thread identity lease");
++    }
      let ctx = th.ctx;
      let anchor = 0u8;
      let host_sp = (&anchor as *const u8 as u64 - 256) & !15;
-@@ -637,7 +642,7 @@ fn end_process(code: i32) -> ! {
+@@ -798,7 +805,7 @@
      // and waitid report.
      // SAFETY: trivial.
      if !super::pidns::contains(unsafe { libc::getppid() }) {
 -        super::cred::forget(pid());
-+        super::cred::forget(unsafe{libc::getpid()});
++        super::cred::forget(unsafe { libc::getpid() });
      }
      super::pidns::leave();
      // SAFETY: ending the process without host atexit handlers, as Linux's
---- a/crates/aim-linux-abi/src/sys/procrec.rs
-+++ b/crates/aim-linux-abi/src/sys/procrec.rs
-@@ -24,7 +24,7 @@
- 
- use super::procfs::StackInfo;
- 
--/// One slot per possible thread of a process (`thread::slot`).
-+/// One slot per live thread of a process, independent of the ID encoding.
- const SLOTS: usize = 2048;
- /// Then slots for threads that run as processes of their own.
- const FOREIGN: usize = 16;
-@@ -179,12 +179,9 @@
- 
- fn slot(tid: i32) -> Option<&'static Slot> {
-     let t = table()?;
--    // SAFETY: trivial.
--    if super::thread::owner(tid) == unsafe { libc::getpid() } {
--        t.slots.get(super::thread::slot(tid))
--    } else {
--        t.slots[SLOTS..].iter().find(|s| s.tid.load(Acquire) == tid)
--    }
-+    // The existing record owns slots independently of the identity encoding.
-+    // Logical leases can be reused only after their old thread retires.
-+    t.slots.iter().find(|s| s.tid.load(Acquire) == tid)
- }
- 
- /// Process `tid` is a thread of this one, named `name` (a fork's own-files
-@@ -211,7 +208,7 @@
-         t.slots[SLOTS..]
-             .iter()
-             .map(|s| s.tid.load(Acquire))
--            .filter(|&tid| tid != 0)
-+            .filter(|&tid| tid > 0)
-             .collect()
-     })
- }
-@@ -233,9 +230,15 @@
- /// Thread `tid` exists, named `name`, on host thread `host` (0 until it
- /// runs).
- pub fn thread(tid: i32, host: u64, name: &[u8; 16]) {
--    if let Some(s) = slot(tid) {
-+    let target=slot(tid).or_else(||{
-+        let t=table()?;
-+        let own=super::thread::owner(tid)==unsafe{libc::getpid()};
-+        let slots=if own{&t.slots[..SLOTS]}else{&t.slots[SLOTS..]};
-+        slots.iter().find(|s|s.tid.compare_exchange(0,-1,AcqRel,Acquire).is_ok())
-+    });
-+    if let Some(s) = target {
-         s.host.store(host, Relaxed);
--        named(tid, name);
-+        for (d,&b) in s.name.iter().zip(name){d.store(b,Relaxed);}
-         s.tid.store(tid, Release);
-     }
- }
-@@ -305,7 +308,7 @@
-         .chunks_exact(SLOT)
-         .filter_map(|s| {
-             let tid = i32::from_le_bytes(s[..4].try_into().unwrap());
--            (tid != 0).then(|| ThreadInfo {
-+            (tid > 0).then(|| ThreadInfo {
-                 tid,
-                 host: u64_at(s, 8),
-                 name: s[16..32].try_into().unwrap(),
 --- a/crates/aim-linux-abi/src/sys/pidns.rs
 +++ b/crates/aim-linux-abi/src/sys/pidns.rs
-@@ -226,10 +226,15 @@
+@@ -469,7 +469,7 @@
  
  /// Resolve a guest identifier without ever treating Darwin PID 1 as Android init.
- pub fn host_pid(guest:i32)->Result<i32,i64>{
--    if guest==1{
-+    if guest==1&&!crate::process_identity::enabled(){
-         let Some(init)=init_registration()? else{return Err(-(ESRCH as i64));};
-         if !pid_ready()?||!init.process.is_live(){return Err(-(ESRCH as i64));}
+ pub fn host_pid(guest: i32) -> Result<i32, i64> {
+-    if guest == 1 {
++    if guest == 1 && !crate::process_identity::enabled() {
+         let Some(init) = init_registration()? else {
+             return Err(-(ESRCH as i64));
+         };
+@@ -478,6 +478,13 @@
+         }
          return Ok(init.process.host_pid);
-+    }
-+    if let Some(host)=crate::process_identity::child_host(guest){return if contains(host){Ok(host)}else{Err(-(ESRCH as i64))};}
-+    if let Some(result)=crate::process_identity::owner(guest){
-+        let owner=result?;
-+        return if owner.kind==1&&contains(owner.host){Ok(owner.host)}else{Err(-(ESRCH as i64))};
      }
-     if contains(guest){Ok(guest)}else{Err(-(ESRCH as i64))}
- }
-@@ -248,10 +253,21 @@
-     Ok((1..=64).contains(&signal)&&caught&(1u64<<(signal-1))!=0)
++    if let Some(host) = crate::process_identity::child_host(guest) {
++        return if contains(host) { Ok(host) } else { Err(-(ESRCH as i64)) };
++    }
++    if let Some(result) = crate::process_identity::owner(guest) {
++        let owner = result?;
++        return if owner.kind == 1 && contains(owner.host) { Ok(owner.host) } else { Err(-(ESRCH as i64)) };
++    }
+     if contains(guest) {
+         Ok(guest)
+     } else {
+@@ -516,10 +523,44 @@
  }
  
--pub fn syscall_pid(pid:i32)->Result<i32,i64>{if pid==1{host_pid(pid)}else{Ok(pid)}}
-+pub fn syscall_pid(pid:i32)->Result<i32,i64>{
-+    if pid>0&&(pid==1||crate::process_identity::enabled()){host_pid(pid)}else{Ok(pid)}
+ pub fn syscall_pid(pid: i32) -> Result<i32, i64> {
+-    if pid == 1 { host_pid(pid) } else { Ok(pid) }
++    if pid > 0 && (pid == 1 || crate::process_identity::enabled()) { host_pid(pid) } else { Ok(pid) }
 +}
-+/// Thread IDs already name the shared lease in Thread/procrec/futex state.
-+/// A process argument instead resolves to Darwin only at its OS call boundary.
-+pub fn syscall_tid(tid:i32)->Result<i32,i64>{
-+    if tid>0 {if let Some(result)=crate::process_identity::owner(tid){
-+        let owner=result?;return if contains(owner.host){Ok(tid)}else{Err(-(ESRCH as i64))};
-+    }}
-+    if tid==1{host_pid(tid)}else{Ok(tid)}
++
++/// Internal leader TID: native leases when installed, Darwin PID otherwise.
++/// This is distinct from the externally published namespace-init PID 1.
++pub fn process_tid(host: i32) -> Result<i32, i64> {
++    if crate::process_identity::enabled() { guest_pid(host) } else { Ok(host) }
 +}
- 
- pub fn guest_pid(host:i32)->Result<i32,i64>{
--    Ok(if pid_ready()? &&init_registration()?.is_some_and(|init|init.process.host_pid==host){1}else{host})
-+    if let Some(result)=crate::process_identity::from_host(host){return result;}
-+    Ok(if pid_ready()?&&init_registration()?.is_some_and(|init|init.process.host_pid==host){1}else{host})
++
++/// Resolve a logical process group through its authenticated live members.
++/// A group remains valid after its leader exits; a live-process lookup of the
++/// group ID cannot provide that lifetime.
++pub fn syscall_group(group: i32) -> Result<i32, i64> {
++    if group <= 0 || !crate::process_identity::enabled() { return syscall_pid(group); }
++    for host in members().ok_or(-(ESRCH as i64))? {
++        let Ok(guest) = guest_pid(host) else { continue; };
++        if crate::process_identity::getpgid(guest) == Some(group as i64) {
++            let physical = unsafe { libc::getpgid(host) };
++            if physical > 0 { return Ok(physical); }
++        }
++    }
++    Err(-(ESRCH as i64))
++}
++
++/// Logical TIDs remain unchanged in thread records, signals and futex keys.
++/// Translate a process to Darwin only at a host process syscall boundary.
++pub fn syscall_tid(tid: i32) -> Result<i32, i64> {
++    if tid > 0 {
++        if let Some(result) = crate::process_identity::owner(tid) {
++            let owner = result?;
++            return if contains(owner.host) { Ok(tid) } else { Err(-(ESRCH as i64)) };
++        }
++    }
++    if tid == 1 { host_pid(tid) } else { Ok(tid) }
  }
  
- /// The pids of the members, in order. None without a table.
-@@ -329,7 +345,6 @@
+ pub fn guest_pid(host: i32) -> Result<i32, i64> {
++    if let Some(result) = crate::process_identity::from_host(host) { return result; }
+     Ok(
+         if pid_ready()? && init_registration()?.is_some_and(|init| init.process.host_pid == host) {
+             1
+@@ -657,7 +698,6 @@
  }
  /// The members in process group `pgrp`. None without a table.
  pub fn group(pgrp: i32) -> Option<Vec<i32>> {
--    let pgrp=syscall_pid(pgrp).ok()?;
+-    let pgrp = syscall_pid(pgrp).ok()?;
      Some(
          members_info()?
              .into_iter()
+--- a/crates/aim-linux-abi/src/sys/pidns/tids.rs
++++ b/crates/aim-linux-abi/src/sys/pidns/tids.rs
+@@ -202,25 +202,52 @@
+ 
+ pub(in crate::sys) struct Reservation {
+     pub tid: i32,
+-    dir: Option<PathBuf>,
+-    owner: ProcessIdentity,
++    lease: Lease,
+ }
++enum Lease {
++    Shared(PathBuf, ProcessIdentity),
++    Local,
++    Native { adopted: bool },
++}
++impl Reservation {
++    pub(in crate::sys) fn adopt(&mut self) -> Result<(), crate::errno::Errno> {
++        if let Lease::Native { adopted } = &mut self.lease {
++            if !*adopted {
++                crate::process_identity::adopt(self.tid)
++                    .map_err(|error| (-error) as crate::errno::Errno)?;
++                // Physical ownership survives guest exit and late TLS/JNI cleanup.
++                // Keeping this reservation does not extend the native lease.
++                *adopted = true;
++            }
++        }
++        Ok(())
++    }
++}
+ impl Drop for Reservation {
+     fn drop(&mut self) {
+-        let Some(dir) = &self.dir else {
+-            if let Some(Namespace::Process(local)) = OWN.get() {
+-                local.lock().unwrap().used.remove(&self.tid);
++        let (dir, owner) = match &self.lease {
++            Lease::Native { adopted } => {
++                if !*adopted {
++                    crate::process_identity::release(self.tid);
++                }
++                return;
+             }
+-            return;
++            Lease::Local => {
++                if let Some(Namespace::Process(local)) = OWN.get() {
++                    local.lock().unwrap().used.remove(&self.tid);
++                }
++                return;
++            }
++            Lease::Shared(dir, owner) => (dir, *owner),
+         };
+         let release = || -> io::Result<()> {
+             let table = Table::open(dir, true)?;
+-            if table.read(self.tid) == self.owner {
++            if table.read(self.tid) == owner {
+                 table.write(
+                     self.tid,
+                     ProcessIdentity {
+                         host_pid: 0,
+-                        ..self.owner
++                        ..owner
+                     },
+                 );
+             }
+@@ -233,6 +260,14 @@
+ }
+ 
+ pub(in crate::sys) fn allocate() -> Result<Reservation, crate::errno::Errno> {
++    if let Some(result) = crate::process_identity::reserve() {
++        return result
++            .map(|tid| Reservation {
++                tid,
++                lease: Lease::Native { adopted: false },
++            })
++            .map_err(|error| (-error) as crate::errno::Errno);
++    }
+     let allocate = || -> io::Result<Reservation> {
+         initialize()?;
+         let owner = ProcessIdentity::running_strict(unsafe { libc::getpid() })?;
+@@ -243,12 +278,19 @@
+             ),
+             Namespace::Process(local) => (local.lock().unwrap().allocate(PID_MAX)?, None),
+         };
+-        Ok(Reservation { tid, dir, owner })
++        let lease = match dir {
++            Some(dir) => Lease::Shared(dir, owner),
++            None => Lease::Local,
++        };
++        Ok(Reservation { tid, lease })
+     };
+     allocate().map_err(|error| crate::errno::from_darwin(error.raw_os_error().unwrap_or(libc::EIO)))
+ }
+ 
+ pub(crate) fn initialize() -> io::Result<()> {
++    if crate::process_identity::enabled() {
++        return Ok(());
++    }
+     if OWN.get().is_none() {
+         let namespace = match super::super::cred::by_pid_dir() {
+             Some(dir) => {
+@@ -265,6 +307,9 @@
+ }
+ 
+ pub(in crate::sys) fn owner(tid: i32) -> Option<i32> {
++    if let Some(result) = crate::process_identity::owner(tid) {
++        return result.ok().map(|identity| identity.host);
++    }
+     if tid < FIRST {
+         return Some(tid);
+     }
+@@ -325,8 +370,7 @@
+             .unwrap();
+         Reservation {
+             tid,
+-            dir: Some(dir.to_owned()),
+-            owner,
++            lease: Lease::Shared(dir.to_owned(), owner),
+         }
+     }
+ 
+@@ -446,8 +490,7 @@
+         };
+         let last = Reservation {
+             tid,
+-            dir: Some(dir.0.clone()),
+-            owner: me(),
++            lease: Lease::Shared(dir.0.clone(), me()),
+         };
+         assert_eq!(last.tid, PID_MAX - 1);
+         assert_eq!(mapping.record(last.tid).get(), me());
 --- a/crates/aim-linux-abi/src/sys/process.rs
 +++ b/crates/aim-linux-abi/src/sys/process.rs
-@@ -44,6 +44,8 @@
- pub fn exe_host_path() -> String {
+@@ -48,6 +48,10 @@
      exe(|e| e.host.clone()).unwrap_or_default()
  }
-+
-+pub fn guest_pid() -> i64 { super::pidns::guest_pid(getpid() as i32).map(|pid|pid as i64).unwrap_or_else(|error|error) }
  
++pub fn guest_pid() -> i64 {
++    super::pidns::guest_pid(getpid_tgid() as i32).map(|pid| pid as i64).unwrap_or_else(|error| error)
++}
++
  pub fn getpid() -> i64 {
      // SAFETY: trivial.
-@@ -149,7 +151,7 @@
- /// process's threads are checked, not changed (#1616).
+     unsafe { libc::getpid() as i64 }
+@@ -374,7 +378,7 @@
+ /// carry scalar arguments to the owner, never the caller's guest pointers.
  pub fn sched_policy(nr: u64, a: [u64; 6]) -> i64 {
-     let mut a=a;
--    a[0]=match super::pidns::syscall_pid(a[0] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};
-+    a[0]=match super::pidns::syscall_tid(a[0] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};
-     let th = match sched_target(a[0] as i64) {
-         Ok(t) => t,
-         Err(e) => return e,
-@@ -208,7 +210,7 @@
+     let mut a = a;
+-    a[0] = match super::pidns::syscall_pid(a[0] as i32) {
++    a[0] = match super::pidns::syscall_tid(a[0] as i32) {
+         Ok(pid) => pid as u64,
+         Err(error) => return error,
+     };
+@@ -465,7 +469,7 @@
  /// sched_setaffinity: accepted; Darwin places the host threads.
  pub fn sched_setaffinity(a: [u64; 6]) -> i64 {
-     let mut a=a;
--    a[0]=match super::pidns::syscall_pid(a[0] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};
-+    a[0]=match super::pidns::syscall_tid(a[0] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};
-     match sched_target(a[0] as i64) {
-         Ok(Some(_)) => 0,
-         Ok(None) => may_change(a[0] as i64).map_or_else(|e| e, |_| 0),
-@@ -220,7 +222,7 @@
+     let mut a = a;
+-    a[0] = match super::pidns::syscall_pid(a[0] as i32) {
++    a[0] = match super::pidns::syscall_tid(a[0] as i32) {
+         Ok(pid) => pid as u64,
+         Err(error) => return error,
+     };
+@@ -480,7 +484,7 @@
  /// as the kernel does (a multiple of 8 covering the CPUs).
  pub fn sched_getaffinity(a: [u64; 6]) -> i64 {
-     let mut a=a;
--    a[0]=match super::pidns::syscall_pid(a[0] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};
-+    a[0]=match super::pidns::syscall_tid(a[0] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};
-     let (pid, len, mask) = (a[0] as i64, a[1] as usize, a[2]);
-     if let Err(e) = sched_target(pid) {
-         return e;
+     let mut a = a;
+-    a[0] = match super::pidns::syscall_pid(a[0] as i32) {
++    a[0] = match super::pidns::syscall_tid(a[0] as i32) {
+         Ok(pid) => pid as u64,
+         Err(error) => return error,
+     };
 --- a/crates/aim-linux-abi/src/sys/signal.rs
 +++ b/crates/aim-linux-abi/src/sys/signal.rs
-@@ -1271,7 +1271,7 @@
- pub fn kill(a: [u64; 6]) -> i64 {
-     if !(0..=NSIG).contains(&(a[1] as i32)) { return -(EINVAL as i64); }
-     let mut a=a;
--    a[0]=match super::pidns::syscall_pid(a[0] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};
-+    a[0]=if (a[0] as i32) < -1{match super::pidns::syscall_pid(-(a[0] as i32)){Ok(pid)=>(-pid)as u64,Err(error)=>return error}}else{match super::pidns::syscall_pid(a[0] as i32){Ok(pid)=>pid as u64,Err(error)=>return error}};
+@@ -1553,9 +1553,17 @@
+         return -(EINVAL as i64);
+     }
+     let mut a = a;
+-    a[0] = match super::pidns::syscall_pid(a[0] as i32) {
+-        Ok(pid) => pid as u64,
+-        Err(error) => return error,
++    let pid = a[0] as i32;
++    a[0] = if pid < -1 {
++        match pid.checked_neg().ok_or(-(EINVAL as i64)).and_then(super::pidns::syscall_group) {
++            Ok(group) => (-group) as u64,
++            Err(error) => return error,
++        }
++    } else {
++        match super::pidns::syscall_pid(pid) {
++            Ok(pid) => pid as u64,
++            Err(error) => return error,
++        }
+     };
      let (pid, sig) = (a[0] as i32 as i64, a[1] as i32);
      if !(0..=NSIG).contains(&sig) {
+@@ -1645,12 +1653,16 @@
          return -(EINVAL as i64);
-@@ -1353,8 +1353,8 @@
-     let sig = if nr == 131 { a[2] } else { a[1] } as i32;
-     if !(0..=NSIG).contains(&sig) || a[0] as i32 <= 0 || nr == 131 && a[1] as i32 <= 0 { return -(EINVAL as i64); }
-     let mut a=a;
--    a[0]=match super::pidns::syscall_pid(a[0] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};
--    if nr==131{a[1]=match super::pidns::syscall_pid(a[1] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};}
-+    a[0]=match if nr==131{super::pidns::syscall_pid(a[0] as i32)}else{super::pidns::syscall_tid(a[0] as i32)}{Ok(pid)=>pid as u64,Err(error)=>return error};
-+    if nr==131{a[1]=match super::pidns::syscall_tid(a[1] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};}
-     let (tgid, tid, sig) = if nr == 131 {
-         (Some(a[0] as i32 as i64), a[1] as i32 as i64, a[2] as i32)
-     } else {
-@@ -1439,7 +1439,8 @@
- pub fn rt_tgsigqueueinfo(a: [u64; 6]) -> i64 {
-     if !valid(a[2] as i32 as u64) || a[0] as i32 <= 0 || a[1] as i32 <= 0 { return -(EINVAL as i64); }
-     let mut a=a;
--    for index in [0,1]{a[index]=match super::pidns::syscall_pid(a[index] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};}
-+    a[0]=match super::pidns::syscall_pid(a[0] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};
-+    a[1]=match super::pidns::syscall_tid(a[1] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};
+     }
+     let mut a = a;
+-    a[0] = match super::pidns::syscall_pid(a[0] as i32) {
++    a[0] = match if nr == 131 {
++        super::pidns::syscall_pid(a[0] as i32)
++    } else {
++        super::pidns::syscall_tid(a[0] as i32)
++    } {
+         Ok(pid) => pid as u64,
+         Err(error) => return error,
+     };
+     if nr == 131 {
+-        a[1] = match super::pidns::syscall_pid(a[1] as i32) {
++        a[1] = match super::pidns::syscall_tid(a[1] as i32) {
+             Ok(pid) => pid as u64,
+             Err(error) => return error,
+         };
+@@ -1752,12 +1764,14 @@
+         return -(EINVAL as i64);
+     }
+     let mut a = a;
+-    for index in [0, 1] {
+-        a[index] = match super::pidns::syscall_pid(a[index] as i32) {
+-            Ok(pid) => pid as u64,
+-            Err(error) => return error,
+-        };
+-    }
++    a[0] = match super::pidns::syscall_pid(a[0] as i32) {
++        Ok(pid) => pid as u64,
++        Err(error) => return error,
++    };
++    a[1] = match super::pidns::syscall_tid(a[1] as i32) {
++        Ok(tid) => tid as u64,
++        Err(error) => return error,
++    };
      let sig = a[2] as i32;
      if !valid(sig as u64) {
          return -(EINVAL as i64);
 --- a/crates/aim-linux-abi/src/sys/procfs.rs
 +++ b/crates/aim-linux-abi/src/sys/procfs.rs
-@@ -392,7 +392,7 @@
+@@ -427,7 +427,7 @@
          }
          None => (p, comm(p), ti.pti_total_user, ti.pti_total_system, state),
      };
--    let id=super::pidns::guest_pid(id).ok()?;
-+    let id=if thread.is_some(){id}else{super::pidns::guest_pid(id).ok()?};
+-    let id = super::pidns::guest_pid(id).ok()?;
++    let id = if thread.is_some() { id } else { super::pidns::guest_pid(id).ok()? };
      Some(format!(
          "{id} ({name}) {state} {} {} {} 0 -1 4194560 {} 0 {} 0 {} {} 0 0 20 {} {} 0 {start} {} {rss_pages} 18446744073709551615 0 0 {} 0 0 0 0 0 0 0 0 0 17 0 0 0 0 0 0 0 0 0 {} {} {} {} 0\n",
          super::process::linux_ppid(b.pbi_ppid as i32),
-@@ -448,9 +448,9 @@
+@@ -492,9 +492,9 @@
          thread
              .and_then(|tid| thread_comm(p, tid))
              .unwrap_or_else(|| comm(p)),
 -        super::pidns::guest_pid(thread.unwrap_or(p)).ok()?,
 +        thread.unwrap_or(guest_tgid),
          super::process::linux_ppid(t.pbsd.pbi_ppid as i32),
--        super::pidns::guest_pid(tracer(p,thread.unwrap_or(p))).ok()?,
-+        super::pidns::guest_pid(tracer(p,thread.unwrap_or(guest_tgid))).ok()?,
+-        super::pidns::guest_pid(tracer(p, thread.unwrap_or(p))).ok()?,
++        super::pidns::guest_pid(tracer(p, thread.unwrap_or(guest_tgid))).ok()?,
          cred_lines(p),
-         kb(t.ptinfo.pti_virtual_size),
-         kb(t.ptinfo.pti_virtual_size),
-@@ -882,7 +882,7 @@
+         kb(peak),
+         kb(total),
+@@ -1006,7 +1006,7 @@
      } else {
          super::procrec::threads(p).map_or(Vec::new(), |v| v.into_iter().map(|t| t.tid).collect())
      };
@@ -426,25 +511,34 @@
 +    if t.is_empty() { super::pidns::guest_pid(p).ok().into_iter().collect() } else { t }
  }
  
- fn entries(names: &[(&str, u8)]) -> Vec<Entry> {
-@@ -1061,7 +1061,6 @@
+ pub(super) fn entries(names: &[(&str, u8)]) -> Vec<Entry> {
+@@ -1202,7 +1202,7 @@
+         }
+         "mem" => Node::Mem(p),
+         "cmdline" => Node::File(cmdline(p)),
+-        "cgroup" => Node::File(super::cgroup::proc_cgroup(p, thread.unwrap_or(p)).into_bytes()),
++        "cgroup" => Node::File(super::cgroup::proc_cgroup(p, thread.unwrap_or(super::pidns::process_tid(p).ok()?)).into_bytes()),
+         "comm" => {
+             let named = thread.and_then(|t| thread_comm(p, t));
+             Node::File(format!("{}\n", named.unwrap_or_else(|| comm(p))).into_bytes())
+@@ -1256,7 +1256,6 @@
          "task" if thread.is_none() => Node::Dir(
              tids(p)
                  .into_iter()
--                .filter_map(|t|super::pidns::guest_pid(t).ok())
+-                .filter_map(|t| super::pidns::guest_pid(t).ok())
                  .map(|t| Entry::new(t as u64, dir::DT_DIR, t.to_string()))
                  .collect(),
          ),
-@@ -1078,7 +1077,7 @@
+@@ -1276,7 +1275,7 @@
              let t = rest.strip_prefix("task/").filter(|_| thread.is_none())?;
              let (tid, sub) = t.split_once('/').unwrap_or((t, ""));
              let tid: i32 = tid.parse().ok()?;
--            let tid=super::pidns::syscall_pid(tid).ok()?;
-+            let tid=super::pidns::syscall_tid(tid).ok()?;
+-            let tid = super::pidns::syscall_pid(tid).ok()?;
++            let tid = super::pidns::syscall_tid(tid).ok()?;
              if !tids(p).contains(&tid) {
                  return None;
              }
-@@ -1118,12 +1117,12 @@
+@@ -1318,12 +1317,12 @@
                  );
                  Node::Dir(e)
              }
@@ -455,23 +549,23 @@
              "net" => return pid_node(me, &format!("net/{tail}"), None),
              "thread-self" if tail.is_empty() => {
 -                Node::Link(format!("{me}/task/{}", super::process::gettid()))
-+                Node::Link(format!("{}/task/{}", super::pidns::guest_pid(me).ok()?,super::process::gettid()))
++                Node::Link(format!("{}/task/{}", super::pidns::guest_pid(me).ok()?, super::process::gettid()))
              }
              "self" => return pid_node(me, tail, None),
              "thread-self" => {
-@@ -1147,9 +1146,9 @@
+@@ -1353,9 +1352,9 @@
                  // thread's view of its process, as on Linux, with the
                  // process's tasks.
                  let guest: i32 = n.parse().ok()?;
--                let n=super::pidns::syscall_pid(guest).ok()?;
-+                let n=super::pidns::syscall_tid(guest).ok()?;
+-                let n = super::pidns::syscall_pid(guest).ok()?;
++                let n = super::pidns::syscall_tid(guest).ok()?;
                  let p = super::thread::owner(n);
 -                if p == n {
-+                if super::pidns::guest_pid(p).ok()==Some(n) {
++                if super::pidns::process_tid(p).ok() == Some(n) {
                      return pid_node(p, tail, None);
                  }
                  if !tids(p).contains(&n) {
-@@ -1525,7 +1524,7 @@
+@@ -1754,7 +1753,7 @@
  /// Canonical form: `self` and `thread-self` become the pid path.
  /// `/proc/self/...` below the link itself: `/proc/self` alone stays a link.
  fn canonical(guest: &str) -> String {
@@ -480,18 +574,21 @@
      if let Some(t) = guest.strip_prefix("/proc/self/") {
          return format!("/proc/{me}/{t}");
      }
-@@ -1539,8 +1538,8 @@
- /// referenced descriptor before changing its inode, rather than reopen its name.
+@@ -1769,11 +1768,11 @@
  pub(super) fn current_fd_link(guest: &str) -> Option<Result<i32, Errno>> {
      let canon = canonical(guest);
--    let tail = canon.strip_prefix(&format!("/proc/{}/fd/", pid()))
--        .or_else(|| canon.strip_prefix(&format!("/proc/{}/task/{}/fd/", pid(), super::process::gettid())))?;
-+    let tail = canon.strip_prefix(&format!("/proc/{}/fd/", super::pidns::guest_pid(pid()).unwrap_or(0)))
-+        .or_else(|| canon.strip_prefix(&format!("/proc/{}/task/{}/fd/", super::pidns::guest_pid(pid()).unwrap_or(0), super::process::gettid())))?;
-     let fd: i32 = tail.parse().ok()?;
-     if fd < 0 || fdtab::is_hidden(fd) { return Some(Err(ENOENT)); }
-     if unsafe { libc::fcntl(fd, libc::F_GETFD) } < 0 { return Some(Err(ENOENT)); }
-@@ -1551,7 +1550,7 @@
+     let tail = canon
+-        .strip_prefix(&format!("/proc/{}/fd/", pid()))
++        .strip_prefix(&format!("/proc/{}/fd/", super::pidns::guest_pid(pid()).unwrap_or(0)))
+         .or_else(|| {
+             canon.strip_prefix(&format!(
+                 "/proc/{}/task/{}/fd/",
+-                pid(),
++                super::pidns::guest_pid(pid()).unwrap_or(0),
+                 super::process::gettid()
+             ))
+         })?;
+@@ -1791,7 +1790,7 @@
  fn comm_tid(canon: &str) -> Option<i32> {
      let rest = canon.strip_prefix("/proc/")?.strip_suffix("/comm")?;
      let (p, tid) = match rest.split_once("/task/") {
@@ -500,7 +597,18 @@
          None => {
              let t: i32 = rest.parse().ok()?;
              (super::thread::owner(t), t)
-@@ -1622,7 +1621,7 @@
+@@ -1807,7 +1806,9 @@
+         .strip_prefix("/proc/")?
+         .strip_suffix("/oom_score_adj")?;
+     let p: i32 = rest.split('/').next()?.parse().ok()?;
+-    node(canon).is_some().then_some(p)
++    node(canon)?;
++    let host = super::thread::owner(p);
++    (host > 0).then_some(host)
+ }
+ 
+ const O_ACCMODE: u64 = 3;
+@@ -1935,7 +1936,7 @@
      }
      // /proc/<pid>/fd/N reopens the file behind fd N.
      if let Some(n) = canon
@@ -508,8 +616,8 @@
 +        .strip_prefix(&format!("/proc/{}/fd/", super::pidns::guest_pid(pid()).unwrap_or(0)))
          .and_then(|n| n.parse::<i32>().ok())
      {
-         if fdtab::is_hidden(n) {
-@@ -1784,7 +1783,7 @@
+         if !fdtab::visible(n) {
+@@ -2199,7 +2200,7 @@
          return Some(Ok(st));
      }
      let mut st: libc::stat = unsafe { std::mem::zeroed() };
@@ -518,7 +626,7 @@
      st.st_uid = owner.0;
      st.st_gid = owner.1;
      st.st_blksize = 1024;
-@@ -1869,7 +1868,7 @@
+@@ -2302,7 +2303,7 @@
  
  /// Whether `path` names `/proc/self/exe`.
  pub fn is_self_exe(path: &[u8]) -> bool {
@@ -529,143 +637,168 @@
  #[cfg(test)]
 --- a/crates/aim-linux-abi/src/sys/ptrace/mod.rs
 +++ b/crates/aim-linux-abi/src/sys/ptrace/mod.rs
-@@ -115,7 +115,7 @@
+@@ -116,7 +116,7 @@
  /// ptrace(request, pid, addr, data).
  pub fn ptrace(a: [u64; 6]) -> i64 {
-     let mut a=a;
--    a[1]=match pidns::syscall_pid(a[1] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};
-+    a[1]=match pidns::syscall_tid(a[1] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};
-     let (req, tid, addr, data) = (a[0], a[1] as i32, a[2], a[3]);
-     let pid = match tracee_process(tid, req == PTRACE_SEIZE) {
-         Ok(p) => p,
-@@ -242,7 +242,7 @@
+     let mut a = a;
+-    a[1] = match pidns::syscall_pid(a[1] as i32) {
++    a[1] = match pidns::syscall_tid(a[1] as i32) {
+         Ok(pid) => pid as u64,
+         Err(error) => return error,
+     };
+@@ -247,7 +247,7 @@
          }
      };
      // A child's end: reaped by `wait4` itself, with its rusage.
 -    if tid == pid && pidns::is_child(pid) && st & 0x7f != 0x7f {
-+    if Some(tid)==pidns::guest_pid(pid).ok() && pidns::is_child(pid) && st & 0x7f != 0x7f {
++    if Some(tid) == pidns::process_tid(pid).ok() && pidns::is_child(pid) && st & 0x7f != 0x7f {
          return None;
      }
      Some(Ok(Some(st)))
 --- a/crates/aim-linux-abi/src/sys/cred.rs
 +++ b/crates/aim-linux-abi/src/sys/cred.rs
-@@ -1172,7 +1172,7 @@
- /// A thread of this process other than the main thread.
- fn other_thread(who: u64) -> Option<i32> {
-     let tid = who as i32;
--    (tid > 0 && !is_self(tid) && super::thread::find(tid).is_some()).then_some(tid)
-+    (tid > 0 && tid!=super::thread::main_tid() && super::thread::find(tid).is_some()).then_some(tid)
- }
- 
- /// The `who` of a call: for PRIO_PROCESS, 0 is the calling thread, as on
-@@ -1188,8 +1188,8 @@
-         a[1] as i32
-     };
-     let owner = super::thread::owner(who);
--    if owner != who && !is_self(owner) {
--        return (owner as u64, true);
-+    if !is_self(owner)||who==super::thread::main_tid() {
-+        return (owner as u64, !is_self(owner));
-     }
-     (who as u32 as u64, false)
- }
-@@ -1204,7 +1204,7 @@
+@@ -1389,7 +1389,7 @@
          let pgrp = if who == 0 {
              unsafe { libc::getpgrp() }
          } else {
 -            who as i32
-+            super::pidns::syscall_pid(who as i32).ok()?
++            super::pidns::syscall_group(who as i32).ok()?
          };
-         return super::pidns::group(pgrp);
+         return super::pidns::group(pgrp).map(priority_threads);
      }
-@@ -1227,7 +1227,8 @@
- /// The nice value of process `p`: this process's own, the host's for
- /// another.
- fn process_nice(p: i32) -> Result<i32, i64> {
--    let r = getpriority([PRIO_PROCESS, p as u64, 0, 0, 0, 0]);
-+    let guest=super::pidns::guest_pid(p)?;
-+    let r = getpriority([PRIO_PROCESS, guest as u64, 0, 0, 0, 0]);
-     if r < 0 { Err(r) } else { Ok(20 - r as i32) }
- }
- 
-@@ -1236,7 +1237,7 @@
- /// highest of a group's or user's processes.
+@@ -1417,14 +1417,14 @@
+             if is_self(p) {
+                 super::thread::with_table(|t| {
+                     if t.is_empty() {
+-                        vec![p]
++                        super::pidns::guest_pid(p).ok().into_iter().collect::<Vec<_>>()
+                     } else {
+                         t.keys().copied().collect()
+                     }
+                 })
+             } else {
+                 super::procrec::threads(p)
+-                    .map_or_else(|| vec![p], |t| t.into_iter().map(|t| t.tid).collect())
++                    .map_or_else(|| super::pidns::guest_pid(p).ok().into_iter().collect::<Vec<_>>(), |t| t.into_iter().map(|t| t.tid).collect())
+             }
+         })
+         .collect()
+@@ -1442,7 +1442,7 @@
  pub fn getpriority(a: [u64; 6]) -> i64 {
-     let mut a=a;
--    if a[0]==PRIO_PROCESS{a[1]=match super::pidns::syscall_pid(a[1] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};}
-+    if a[0]==PRIO_PROCESS{a[1]=match super::pidns::syscall_tid(a[1] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};}
-     if a[0] > PRIO_USER {
-         return -(EINVAL as i64);
+     let mut a = a;
+     if a[0] == PRIO_PROCESS {
+-        a[1] = match super::pidns::syscall_pid(a[1] as i32) {
++        a[1] = match super::pidns::syscall_tid(a[1] as i32) {
+             Ok(pid) => pid as u64,
+             Err(error) => return error,
+         };
+@@ -1468,7 +1468,7 @@
+         if let Err(e) = super::pidns::check(owner) {
+             return e;
+         }
+-        if tid != owner {
++        if Some(tid) != super::pidns::process_tid(owner).ok() {
+             return super::ptrace::remote_priority(owner, tid, None);
+         }
+         if let Some(id) = identity_of(owner) {
+@@ -1476,7 +1476,7 @@
+         }
+         // A native namespace owner has no guest nice state or agent;
+         // Darwin owns its scheduling, so read that task's actual value.
+-        a[1] = tid as u32 as u64;
++        a[1] = owner as u32 as u64;
      }
-@@ -1282,7 +1283,7 @@
+     // SAFETY: errno is cleared first because -1 is a valid priority.
+     unsafe {
+@@ -1491,7 +1491,7 @@
  
  /// The nice value of `tid`, a thread of this process.
  pub fn thread_nice(tid: i32) -> i32 {
 -    if is_self(tid) {
-+    if tid==super::thread::main_tid() {
++    if tid == super::thread::main_tid() {
          return read(|id| id.priority);
      }
      let nice = THREAD_NICE
-@@ -1320,7 +1321,7 @@
- /// (`process::apply_host_sched`).
+@@ -1539,12 +1539,12 @@
+ /// the target thread; Darwin refuses remote raises of task importance.
+ pub(super) fn own_priority(tid: i32, new: Option<i32>, caller: &Identity) -> i64 {
+     let th = super::thread::find(tid);
+-    if !is_self(tid) && th.is_none() {
++    if tid != super::thread::main_tid() && th.is_none() {
+         return -(ESRCH as i64);
+     }
+     let result = with(|id| {
+         let mut table = THREAD_NICE.lock().unwrap();
+-        let old = if is_self(tid) {
++        let old = if tid == super::thread::main_tid() {
+             id.priority
+         } else {
+             table
+@@ -1558,7 +1558,7 @@
+         if let Err(e) = renice_permission(caller, id, old, nice) {
+             return e;
+         }
+-        if is_self(tid) {
++        if tid == super::thread::main_tid() {
+             id.priority = nice;
+         } else {
+             table.retain(|t| t.0 != tid);
+@@ -1592,7 +1592,7 @@
  pub fn setpriority(a: [u64; 6]) -> i64 {
-     let mut a=a;
--    if a[0]==PRIO_PROCESS{a[1]=match super::pidns::syscall_pid(a[1] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};}
-+    if a[0]==PRIO_PROCESS{a[1]=match super::pidns::syscall_tid(a[1] as i32){Ok(pid)=>pid as u64,Err(error)=>return error};}
-     let nice = (a[2] as i32).clamp(-20, 19);
-     if a[0] > PRIO_USER {
-         return -(EINVAL as i64);
-@@ -1332,7 +1333,7 @@
-         // failure sticks, as in the kernel's `set_one_prio`.
-         let mut err = -(ESRCH as i64);
-         for p in targets {
--            match setpriority([PRIO_PROCESS, p as u64, nice as u64, 0, 0, 0]) {
-+            match super::pidns::guest_pid(p).map_or_else(|error|error,|guest|setpriority([PRIO_PROCESS, guest as u64, nice as u64, 0, 0, 0])) {
-                 0 if err == -(ESRCH as i64) => err = 0,
-                 0 => {}
-                 e => err = e,
-@@ -1348,7 +1349,7 @@
-     }
-     if foreign {
-         // Accepted for a live process; not kept.
--        let r = getpriority([PRIO_PROCESS, who, 0, 0, 0, 0]);
-+        let r = super::pidns::guest_pid(who as i32).map_or_else(|error|error,|guest|getpriority([PRIO_PROCESS, guest as u64, 0, 0, 0, 0]));
-         return if r < 0 { r } else { 0 };
-     }
-     let a = [a[0], who, a[2], a[3], a[4], a[5]];
-@@ -1362,7 +1363,7 @@
-             // best effort.
-             // SAFETY: plain setpriority.
-             unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, nice) };
--            nice_changed(a[1] as i32, nice);
-+            nice_changed(super::thread::main_tid(), nice);
-             0
-         });
-     }
+     let mut a = a;
+     if a[0] == PRIO_PROCESS {
+-        a[1] = match super::pidns::syscall_pid(a[1] as i32) {
++        a[1] = match super::pidns::syscall_tid(a[1] as i32) {
+             Ok(pid) => pid as u64,
+             Err(error) => return error,
+         };
 --- a/crates/aim-linux-abi/src/sys/wait.rs
 +++ b/crates/aim-linux-abi/src/sys/wait.rs
-@@ -99,8 +99,6 @@
+@@ -103,19 +103,6 @@
+ }
  
  pub fn wait4(a: [u64; 6]) -> i64 {
-     let mut a=a;
--    let pid=a[0] as i32;
--    a[0]=if pid < -1 {match super::pidns::syscall_pid(-pid){Ok(group)=>(-group) as u64,Err(error)=>return error}}else{match super::pidns::syscall_pid(pid){Ok(pid)=>pid as u64,Err(error)=>return error}};
+-    let mut a = a;
+-    let pid = a[0] as i32;
+-    a[0] = if pid < -1 {
+-        match super::pidns::syscall_pid(-pid) {
+-            Ok(group) => (-group) as u64,
+-            Err(error) => return error,
+-        }
+-    } else {
+-        match super::pidns::syscall_pid(pid) {
+-            Ok(pid) => pid as u64,
+-            Err(error) => return error,
+-        }
+-    };
      let (pid, status, options, rusage) = (a[0] as i32, a[1], a[2], a[3]);
      if options & !(WNOHANG | WUNTRACED | WCONTINUED | WNOTHREAD | WALL | WCLONE) != 0 {
          return -(EINVAL as i64);
-@@ -123,6 +121,7 @@
+@@ -138,6 +125,17 @@
              Err(e) => e,
          };
      }
-+    let pid=if pid < -1 {match super::pidns::syscall_pid(-pid){Ok(group)=>-group,Err(error)=>return error}}else{match super::pidns::syscall_pid(pid){Ok(pid)=>pid,Err(error)=>return error}};
++    let pid = if pid < -1 {
++        match pid.checked_neg().ok_or(-(EINVAL as i64)).and_then(super::pidns::syscall_group) {
++            Ok(group) => -group,
++            Err(error) => return error,
++        }
++    } else {
++        match super::pidns::syscall_pid(pid) {
++            Ok(pid) => pid,
++            Err(error) => return error,
++        }
++    };
      let mut hopts = 0;
      if options & WNOHANG != 0 {
          hopts |= libc::WNOHANG;
-@@ -140,10 +139,12 @@
+@@ -155,10 +153,14 @@
      if r < 0 {
          return -(errno::last() as i64);
      }
-+    let guest=if r>0{super::pidns::guest_pid(r).map(|id|id as i64).unwrap_or_else(|error|error)}else{r as i64};
++    let guest = if r > 0 {
++        super::pidns::guest_pid(r).map(|pid| pid as i64).unwrap_or_else(|error| error)
++    } else { r as i64 };
      if r > 0 {
          if st & 0x7f != 0x7f {
              // Exited or killed: reaped.
@@ -674,29 +807,53 @@
          }
          if status != 0 {
              // SAFETY: guest int.
-@@ -153,7 +154,7 @@
-             put_rusage(&ru, rusage);
+@@ -168,13 +170,7 @@
+             user_try!(put_rusage(&ru, rusage));
          }
      }
--    if r>0 {super::pidns::guest_pid(r).map(|pid|pid as i64).unwrap_or(-(crate::errno::ESRCH as i64))} else {r as i64}
+-    if r > 0 {
+-        super::pidns::guest_pid(r)
+-            .map(|pid| pid as i64)
+-            .unwrap_or(-(crate::errno::ESRCH as i64))
+-    } else {
+-        r as i64
+-    }
 +    guest
  }
  
  /// The Linux `siginfo_t` fields `waitid` writes.
-@@ -260,6 +261,7 @@
-     if infop != 0 {
-         put_wait_siginfo(infop, Some((&info, uid)));
+@@ -234,7 +230,7 @@
+                 // SAFETY: trivial.
+                 unsafe { libc::getpgrp() as u32 }
+             } else {
+-                match super::pidns::syscall_pid(id as i32) {
++                match super::pidns::syscall_group(id as i32) {
+                     Ok(group) => group as u32,
+                     Err(error) => return error,
+                 }
+@@ -305,7 +301,13 @@
+         super::cred::forget(info.si_pid);
      }
-+    if info.si_pid!=0&&ended&&options&WNOWAIT==0{crate::process_identity::reap_child(info.si_pid);}
+     if infop != 0 {
+-        user_try!(put_wait_siginfo(infop, Some((&info, uid))));
++        let written = put_wait_siginfo(infop, Some((&info, uid)));
++        if info.si_pid != 0 && ended && options & WNOWAIT == 0 {
++            crate::process_identity::reap_child(info.si_pid);
++        }
++        user_try!(written);
++    } else if info.si_pid != 0 && ended && options & WNOWAIT == 0 {
++        crate::process_identity::reap_child(info.si_pid);
+     }
      0
  }
- 
-@@ -415,7 +417,7 @@
+@@ -510,7 +512,9 @@
  /// after the process exited is no longer in the namespace.
  fn send_signal(pid: i32, sig: i32) -> i64 {
      if pid as i64 == super::process::getpid() {
 -        return super::signal::kill([pid as u64, sig as u64, 0, 0, 0, 0]);
-+        return super::pidns::guest_pid(pid).map_or_else(|error|error,|guest|super::signal::kill([guest as u64,sig as u64,0,0,0,0]));
++        return super::pidns::guest_pid(pid).map_or_else(|error| error, |guest| {
++            super::signal::kill([guest as u64, sig as u64, 0, 0, 0, 0])
++        });
      }
      if let Err(e) = super::pidns::check(pid) {
          return e;
@@ -716,12 +873,20 @@
  use std::sync::{Arc, Mutex, RwLock};
  
  use aim_binder_driver::{
-@@ -500,7 +507,7 @@
+@@ -692,6 +699,7 @@
+             Ok((device, nonblocking, euid, ctx))
+         };
+         let (device, nonblocking, euid, security_context) = parse()?;
++        let guest_pid = android_pid(req.pid)?;
+         let socket = req
+             .ports
+             .first()
+@@ -703,7 +711,7 @@
              return Err(errno::ENOMEM);
          };
          let creds = Credentials {
 -            pid: req.pid,
-+            pid: android_pid(req.pid)?,
++            pid: guest_pid,
              euid,
              security_context,
          };
@@ -786,7 +951,7 @@
  /// The layer reaps it; the guest never forked it.
 -fn own_files_thread_started(pid: i32, r: &Request) {
 -    super::procrec::foreign(pid, &super::thread::name());
-+fn own_files_thread_started(pid: i32, tid:i32, r: &Request) {
++fn own_files_thread_started(pid: i32, tid: i32, r: &Request) {
 +    super::procrec::foreign(tid, &super::thread::name());
      if r.flags & CLONE_CHILD_CLEARTID == 0 || r.child_tid == 0 {
          std::thread::spawn(move || {
@@ -796,25 +961,25 @@
          });
      }
      if r.child_tid == 0 {
-@@ -99,7 +99,7 @@
-     // SAFETY: guest word named by CLONE_CHILD_SETTID/CLEARTID.
+@@ -100,7 +100,7 @@
      unsafe {
          if r.flags & CLONE_CHILD_SETTID != 0 {
--            (r.child_tid as *mut i32).write_volatile(pid);
-+            (r.child_tid as *mut i32).write_volatile(tid);
+             // Linux ignores a failed TID store during clone/exit.
+-            let _ = super::user_memory::write_value(r.child_tid, &(pid as i32));
++            let _ = super::user_memory::write_value(r.child_tid, &tid);
          }
      }
      if r.flags & CLONE_CHILD_CLEARTID == 0 {
-@@ -108,7 +108,7 @@
+@@ -109,7 +109,7 @@
      let addr = r.child_tid;
      std::thread::spawn(move || {
          reap(pid);
 -        super::procrec::gone(pid);
 +        super::procrec::gone(tid);
          // SAFETY: the guest's tid word; the guest waits on it.
-         unsafe { (addr as *mut i32).write_volatile(0) };
-         super::futex::wake_one(addr);
-@@ -120,6 +120,7 @@
+         // mm_release ignores put_user failure and still wakes the futex.
+         let _ = unsafe { super::user_memory::write_value(addr, &0i32) };
+@@ -122,6 +122,7 @@
      let mut status = 0;
      // SAFETY: waiting for our child.
      while unsafe { libc::waitpid(pid, &mut status, 0) } < 0 && errno::last() == errno::EINTR {}
@@ -822,24 +987,28 @@
  }
  
  /// `struct clone_args` flags of a `clone3` call, for [`is_fork`].
-@@ -241,13 +242,14 @@
+@@ -250,14 +251,18 @@
              return e;
          }
      };
-+    let guest_pid=match super::pidns::guest_pid(pid){Ok(id)=>id,Err(error)=>return error};
++    let guest_pid = match super::pidns::guest_pid(pid) {
++        Ok(id) => id,
++        Err(error) => return error,
++    };
      if own_files_thread {
 -        own_files_thread_started(pid, &r);
-+        own_files_thread_started(pid,guest_pid, &r);
++        own_files_thread_started(pid, guest_pid, &r);
      }
      // SAFETY: guest pointers named by the caller's flags.
      unsafe {
          if r.flags & CLONE_PARENT_SETTID != 0 && r.parent_tid != 0 {
--            (r.parent_tid as *mut i32).write_unaligned(pid);
-+            (r.parent_tid as *mut i32).write_unaligned(guest_pid);
+             // copy_process does not fail a created child for parent_tid.
+-            let _ = super::user_memory::write_value(r.parent_tid, &pid);
++            let _ = super::user_memory::write_value(r.parent_tid, &guest_pid);
          }
-         if r.flags & CLONE_PIDFD != 0 && r.pidfd != 0 {
+         if r.flags & CLONE_PIDFD != 0 {
              let fd = super::wait::open_pidfd(pid, false);
-@@ -255,7 +257,7 @@
+@@ -271,7 +276,7 @@
          }
      }
      if let Some(e) = &traced {
@@ -848,7 +1017,7 @@
      }
      if vfork {
          // SAFETY: our pipe: read until the child's end closes.
-@@ -268,14 +270,14 @@
+@@ -284,14 +289,14 @@
              libc::close(done[0]);
          }
      }
@@ -867,37 +1036,42 @@
      if set_tid != 0 {
 --- a/crates/aim-linux-abi/src/sys/fork/spawn.rs
 +++ b/crates/aim-linux-abi/src/sys/fork/spawn.rs
-@@ -659,7 +659,7 @@
-     let ready=std::sync::Arc::new(HandoverReady::default());
-     let started = std::thread::Builder::new()
+@@ -722,7 +722,7 @@
          .name("fork-handover".into())
--        .spawn({let ready=ready.clone();move || serve(port,snap,blob,fork_lease,ready)});
-+        .spawn({let ready=ready.clone();move || serve(port,snap,blob,fork_lease,ready,pid)});
+         .spawn({
+             let ready = ready.clone();
+-            move || serve(port, snap, blob, fork_lease, ready)
++            move || serve(port, snap, blob, fork_lease, ready, pid)
+         });
      if let Err(e) = started {
          // The child finds no parent port and ends.
-         crate::diag!("[linux-abi] fork: no handover thread: {e}");
-@@ -804,7 +804,7 @@
- }
- 
- /// Hand the child its state when it asks, on a host thread of the parent.
--fn serve(port:Port,mut snap:Snapshot,blob:Vec<u8>,mut fork_lease:Option<aim_storage::verity_control::ForkLease>,ready:std::sync::Arc<HandoverReady>){
-+fn serve(port:Port,mut snap:Snapshot,blob:Vec<u8>,mut fork_lease:Option<aim_storage::verity_control::ForkLease>,ready:std::sync::Arc<HandoverReady>,pid:i32){
+@@ -1117,6 +1117,7 @@
+     blob: Vec<u8>,
+     mut fork_lease: Option<aim_storage::verity_control::ForkLease>,
+     ready: std::sync::Arc<HandoverReady>,
++    pid: i32,
+ ) {
      let mut hello: Received<Header> = Received {
          msg: Header::default(),
-         trailer: [0; 128],
-@@ -869,7 +869,10 @@
-                 if valid&&ready.msg.member!=0{lease.child_published(ready.msg.member)}else{let cleanup=lease.abort();cleanup.and_then(|_|Err(std::io::Error::from_raw_os_error(libc::EPROTO)))}
-             }else if valid{Ok(())}else{Err(std::io::Error::from_raw_os_error(libc::EPROTO))};
-             if valid{
--                let error=verified.err().map(|error|crate::errno::from_darwin(error.raw_os_error().unwrap_or(libc::EIO))).unwrap_or(0);
-+                let error=match verified{
-+                    Ok(())=>crate::process_identity::retain_child(pid).err().map(|error|-error as i32).unwrap_or(0),
-+                    Err(error)=>crate::errno::from_darwin(error.raw_os_error().unwrap_or(libc::EIO)),
+@@ -1204,12 +1205,11 @@
+                 Err(std::io::Error::from_raw_os_error(libc::EPROTO))
+             };
+             if valid {
+-                let error = verified
+-                    .err()
+-                    .map(|error| {
+-                        crate::errno::from_darwin(error.raw_os_error().unwrap_or(libc::EIO))
+-                    })
+-                    .unwrap_or(0);
++                let error = match verified {
++                    Ok(()) => crate::process_identity::retain_child(pid)
++                        .err().map(|error| -error as i32).unwrap_or(0),
++                    Err(error) => crate::errno::from_darwin(error.raw_os_error().unwrap_or(libc::EIO)),
 +                };
-                 let mut ack=ReadyAck{header:Header{bits:MACH_MSG_TYPE_MOVE_SEND_ONCE,size:std::mem::size_of::<ReadyAck>()as u32,remote:ready.msg.header.remote,id:READY_ACK,..Header::default()},error};
-                 let sent=unsafe{mach_msg(&mut ack.header,MACH_SEND_MSG,std::mem::size_of::<ReadyAck>()as u32,0,0,0,0)};
-                 if sent!=0{crate::diag!("[linux-abi] fork ready acknowledgement: kr {sent:#x}");}
-@@ -1064,7 +1067,7 @@
+                 let mut ack = ReadyAck {
+                     header: Header {
+                         bits: MACH_MSG_TYPE_MOVE_SEND_ONCE,
+@@ -1510,7 +1510,7 @@
      // the first guest instruction.
      if let Some((tracer, options)) = traced {
          // SAFETY: trivial.
@@ -912,7 +1086,7 @@
  use crate::errno::{self, EINVAL};
  
  pub fn setsid() -> i64 {
-+    if let Some(result)=crate::process_identity::setsid(){return result;}
++    if let Some(result) = crate::process_identity::setsid() { return result; }
      // SAFETY: trivial.
      errno::check(unsafe { libc::setsid() } as i64)
  }
@@ -920,86 +1094,90 @@
  }
  
  pub fn setpgid(a: [u64; 6]) -> i64 {
-+    if let Some(result)=crate::process_identity::setpgid(a[0]as i32,a[1]as i32){return result;}
++    if let Some(result) = crate::process_identity::setpgid(a[0] as i32, a[1] as i32) { return result; }
      if (a[1] as i32) < 0 {
          return -(EINVAL as i64);
      }
-@@ -48,10 +50,12 @@
+@@ -54,10 +56,12 @@
  }
  
  pub fn getpgid(a: [u64; 6]) -> i64 {
-+    if let Some(result)=crate::process_identity::getpgid(a[0]as i32){return result;}
++    if let Some(result) = crate::process_identity::getpgid(a[0] as i32) { return result; }
      ns_id(a[0], libc::getpgid)
  }
  
  pub fn getsid(a: [u64; 6]) -> i64 {
-+    if let Some(result)=crate::process_identity::getsid(a[0]as i32){return result;}
++    if let Some(result) = crate::process_identity::getsid(a[0] as i32) { return result; }
      ns_id(a[0], libc::getsid)
  }
  
 --- a/crates/aim-linux-abi/src/sys/fuse_client.rs
 +++ b/crates/aim-linux-abi/src/sys/fuse_client.rs
-@@ -5,7 +5,7 @@
-     let identity=super::cred::current();
-     if !route.allow_other&&identity.uid[1]!=route.uid&&identity.uid[1]!=0{return Err(crate::errno::EACCES);}
-     if route.read_only&&matches!(opcode,4|6|8|9|10|11|12|13|16|21|24|35|43|45){return Err(crate::errno::EROFS);}
--    Client::from_key(&SessionKey::from_transport(route.session.clone()))?.request(opcode,node,data,identity.uid[3],identity.gid[3],super::process::getpid() as u32).map(|reply|reply.body)
-+    Client::from_key(&SessionKey::from_transport(route.session.clone()))?.request(opcode,node,data,identity.uid[3],identity.gid[3],super::process::guest_pid() as u32).map(|reply|reply.body)
+@@ -24,7 +24,7 @@
+             data,
+             identity.uid[3],
+             identity.gid[3],
+-            super::process::getpid() as u32,
++            super::process::guest_pid() as u32,
+         )
+         .map(|reply| reply.body)
  }
- fn u64_at(data:&[u8],at:usize)->Result<u64,Errno>{Ok(u64::from_le_bytes(data.get(at..at+8).ok_or(EIO)?.try_into().unwrap()))}
- fn u32_at(data:&[u8],at:usize)->Result<u32,Errno>{Ok(u32::from_le_bytes(data.get(at..at+4).ok_or(EIO)?.try_into().unwrap()))}
-@@ -14,7 +14,7 @@
- fn put32(data:&mut Vec<u8>,value:u32){data.extend(value.to_le_bytes());}
- pub fn forget(route:&FuseRoute,node:u64,count:u64)->Result<(),Errno>{
-     if node==1{return Ok(());}let identity=super::cred::current();
--    Client::from_key(&SessionKey::from_transport(route.session.clone()))?.request_no_reply(2,node,&count.to_le_bytes(),identity.uid[3],identity.gid[3],super::process::getpid() as u32)
-+    Client::from_key(&SessionKey::from_transport(route.session.clone()))?.request_no_reply(2,node,&count.to_le_bytes(),identity.uid[3],identity.gid[3],super::process::guest_pid() as u32)
+@@ -58,7 +58,7 @@
+         &count.to_le_bytes(),
+         identity.uid[3],
+         identity.gid[3],
+-        super::process::getpid() as u32,
++        super::process::guest_pid() as u32,
+     )
  }
- pub fn lookup(route:&FuseRoute)->Result<u64,Errno>{
-     let mut node=1;
-@@ -26,7 +26,7 @@
-             let uid=u32_at(&attributes,68)?;let gid=u32_at(&attributes,72)?;let shift=if identity.uid[3]==uid{6}else if identity.gid[3]==gid||identity.groups.contains(&gid){3}else{0};
-             if identity.uid[3]!=0&&(mode>>shift)&1==0{return Err(crate::errno::EACCES);}
-         }
--        let mut name=component.as_bytes().to_vec();name.push(0);let reply=match request(route,1,node,&name){Ok(reply)=>reply,Err(error)=>{eprintln!("FUSE LOOKUP failed session={} relative={} parent={} component={} uid={} gid={} pid={} errno={}",route.session.display(),route.relative,node,component,super::cred::current().uid[3],super::cred::current().gid[3],super::process::getpid(),error);if node!=1{let _=forget(route,node,1);}return Err(error);}};
-+        let mut name=component.as_bytes().to_vec();name.push(0);let reply=match request(route,1,node,&name){Ok(reply)=>reply,Err(error)=>{eprintln!("FUSE LOOKUP failed session={} relative={} parent={} component={} uid={} gid={} pid={} errno={}",route.session.display(),route.relative,node,component,super::cred::current().uid[3],super::cred::current().gid[3],super::process::guest_pid(),error);if node!=1{let _=forget(route,node,1);}return Err(error);}};
-         let next=u64_at(&reply,0)?;if next==0{return Err(crate::errno::ENOENT);}
-         if node!=1{forget(route,node,1)?;}node=next;
-     }Ok(node)
-@@ -111,7 +111,7 @@
-         request(&opened.route,4,opened.node,&data)?;
-     }
-     let identity=super::cred::current();
--    let fd=super::fuse::open_description(&SessionKey::from_transport(opened.route.session.clone()),opened.node,opened.fh,opened.flags,opened.directory,&opened.route.relative,&opened.guest,opened.open_flags,&super::fuse::MountPolicy{uid:opened.route.uid,gid:opened.route.gid,allow_other:opened.route.allow_other,default_permissions:opened.route.default_permissions,read_only:opened.route.read_only},identity.uid[3],identity.gid[3],super::process::getpid() as u32)?;
-+    let fd=super::fuse::open_description(&SessionKey::from_transport(opened.route.session.clone()),opened.node,opened.fh,opened.flags,opened.directory,&opened.route.relative,&opened.guest,opened.open_flags,&super::fuse::MountPolicy{uid:opened.route.uid,gid:opened.route.gid,allow_other:opened.route.allow_other,default_permissions:opened.route.default_permissions,read_only:opened.route.read_only},identity.uid[3],identity.gid[3],super::process::guest_pid() as u32)?;
-     opened.broker_owned=true;
-     let file=std::sync::Arc::new(opened);
-     if let Err(error)=super::fuse_cache::register_file(&file){unsafe{libc::close(fd);}return Err(error);}
-@@ -228,11 +228,11 @@
-     let mut payload=Vec::new();put32(&mut payload,flags);put32(&mut payload,mode);put32(&mut payload,current_umask());put32(&mut payload,0);
-     let reply=request(&route,51,parent,&payload)?;let node=u64_at(&reply,0)?;let fh=u64_at(&reply,128)?;let open_flags=u32_at(&reply,136)?;
-     let mut opened=Open{guest,route,node,fh,flags,open_flags,broker_owned:false,directory:false,offset:std::sync::Mutex::new(0)};
--    let identity=super::cred::current();let fd=super::fuse::open_description(&SessionKey::from_transport(opened.route.session.clone()),node,fh,flags,false,&opened.route.relative,&opened.guest,open_flags,&super::fuse::MountPolicy{uid:opened.route.uid,gid:opened.route.gid,allow_other:opened.route.allow_other,default_permissions:opened.route.default_permissions,read_only:opened.route.read_only},identity.uid[3],identity.gid[3],super::process::getpid() as u32)?;
-+    let identity=super::cred::current();let fd=super::fuse::open_description(&SessionKey::from_transport(opened.route.session.clone()),node,fh,flags,false,&opened.route.relative,&opened.guest,open_flags,&super::fuse::MountPolicy{uid:opened.route.uid,gid:opened.route.gid,allow_other:opened.route.allow_other,default_permissions:opened.route.default_permissions,read_only:opened.route.read_only},identity.uid[3],identity.gid[3],super::process::guest_pid() as u32)?;
-     opened.broker_owned=true;let file=std::sync::Arc::new(opened);if let Err(error)=super::fuse_cache::register_file(&file){unsafe{libc::close(fd);}return Err(error);}FILES.lock().unwrap().insert(fd,file);if let Some(slow)=super::fdtab::SLOW.get(fd as usize){slow.store(1,std::sync::atomic::Ordering::Relaxed);}
-     if let Err(error)=super::fdtab::publish_typed_guest(fd){super::fdtab::on_close(fd);unsafe{libc::close(fd);}return Err(error);}Ok(fd)
+ fn search(route: &FuseRoute, node: u64) -> Result<(), Errno> {
+@@ -154,7 +154,7 @@
+                     component,
+                     super::cred::current().uid[3],
+                     super::cred::current().gid[3],
+-                    super::process::getpid(),
++                    super::process::guest_pid(),
+                     error
+                 );
+                 if node != 1 {
+@@ -536,7 +536,7 @@
+         },
+         identity.uid[3],
+         identity.gid[3],
+-        super::process::getpid() as u32,
++        super::process::guest_pid() as u32,
+     )?;
+     opened.broker_owned = true;
+     let file = std::sync::Arc::new(opened);
+@@ -1225,7 +1225,7 @@
+         },
+         identity.uid[3],
+         identity.gid[3],
+-        super::process::getpid() as u32,
++        super::process::guest_pid() as u32,
+     )?;
+     opened.broker_owned = true;
+     let file = std::sync::Arc::new(opened);
+@@ -1256,7 +1256,7 @@
+     put64(&mut payload, file.fh);
+     put32(&mut payload, 0);
+     put32(&mut payload, 0);
+-    put64(&mut payload, super::process::getpid() as u64);
++    put64(&mut payload, super::process::guest_pid() as u64);
+     request(&file.route, 25, file.node, &payload).map(|_| ())
  }
--pub fn flush(file:&Open)->Result<(),Errno>{if file.flags&0o10000000!=0{return Ok(());}let mut payload=Vec::new();put64(&mut payload,file.fh);put32(&mut payload,0);put32(&mut payload,0);put64(&mut payload,super::process::getpid() as u64);request(&file.route,25,file.node,&payload).map(|_|())}
-+pub fn flush(file:&Open)->Result<(),Errno>{if file.flags&0o10000000!=0{return Ok(());}let mut payload=Vec::new();put64(&mut payload,file.fh);put32(&mut payload,0);put32(&mut payload,0);put64(&mut payload,super::process::guest_pid() as u64);request(&file.route,25,file.node,&payload).map(|_|())}
  
- #[cfg(test)]
- mod private_alias_tests {
 --- a/crates/aim-linux-abi/src/sys/fuse.rs
 +++ b/crates/aim-linux-abi/src/sys/fuse.rs
-@@ -200,7 +200,7 @@
-     let relative=read_text(&body,&mut at)?;let guest=read_text(&body,&mut at)?;if at!=body.len(){return Err(EIO)}
-     Ok(Description{key,node:u64::from_le_bytes(body[..8].try_into().unwrap()),fh:u64::from_le_bytes(body[8..16].try_into().unwrap()),flags:u32::from_le_bytes(body[16..20].try_into().unwrap()),directory:body[20]!=0,open_flags:u32::from_le_bytes(body[21..25].try_into().unwrap()),policy,relative,guest})}
- pub fn offset(fd:RawFd,next:Option<u64>)->Result<u64,Errno>{let(key,number)=descriptor(fd)?;let body=next.map(|value|value.to_le_bytes().to_vec()).unwrap_or_default();let value=rpc(&key,FILE_OFFSET,number,&body)?;if value.len()!=8{return Err(EIO)}Ok(u64::from_le_bytes(value.try_into().unwrap()))}
--pub fn description_io_at(fd:RawFd,write:bool,position:Option<u64>,data:&[u8],size:usize)->Result<IoReply,Errno>{let(key,number)=descriptor(fd)?;let mut body=Vec::new();body.push(write as u8);body.push(position.is_some() as u8);body.extend(position.unwrap_or(0).to_le_bytes());body.extend((size as u32).to_le_bytes());let credentials=super::cred::current();body.extend(credentials.uid[3].to_le_bytes());body.extend(credentials.gid[3].to_le_bytes());body.extend((super::process::getpid() as u32).to_le_bytes());body.extend(data);let reply=rpc(&key,FILE_IO,number,&body)?;if reply.len()<8{return Err(EIO)}Ok(IoReply{offset:u64::from_le_bytes(reply[..8].try_into().unwrap()),body:reply[8..].to_vec()})}
-+pub fn description_io_at(fd:RawFd,write:bool,position:Option<u64>,data:&[u8],size:usize)->Result<IoReply,Errno>{let(key,number)=descriptor(fd)?;let mut body=Vec::new();body.push(write as u8);body.push(position.is_some() as u8);body.extend(position.unwrap_or(0).to_le_bytes());body.extend((size as u32).to_le_bytes());let credentials=super::cred::current();body.extend(credentials.uid[3].to_le_bytes());body.extend(credentials.gid[3].to_le_bytes());body.extend((super::process::guest_pid() as u32).to_le_bytes());body.extend(data);let reply=rpc(&key,FILE_IO,number,&body)?;if reply.len()<8{return Err(EIO)}Ok(IoReply{offset:u64::from_le_bytes(reply[..8].try_into().unwrap()),body:reply[8..].to_vec()})}
- pub fn description_io(fd:RawFd,write:bool,position:Option<u64>,data:&[u8],size:usize)->Result<Vec<u8>,Errno>{description_io_at(fd,write,position,data,size).map(|reply|reply.body)}
- 
- pub fn description_flags(fd:RawFd,next:Option<u32>)->Result<u32,Errno>{let(key,number)=descriptor(fd)?;let body=next.map(|flags|flags.to_le_bytes().to_vec()).unwrap_or_default();let reply=rpc(&key,FILE_FLAGS,number,&body)?;if reply.len()!=4{return Err(EIO)}Ok(u32::from_le_bytes(reply.try_into().unwrap()))}
+@@ -750,7 +750,7 @@
+     let credentials = super::cred::current();
+     body.extend(credentials.uid[3].to_le_bytes());
+     body.extend(credentials.gid[3].to_le_bytes());
+-    body.extend((super::process::getpid() as u32).to_le_bytes());
++    body.extend((super::process::guest_pid() as u32).to_le_bytes());
+     body.extend(data);
+     let reply = rpc(&key, FILE_IO, number, &body)?;
+     if reply.len() < 8 {
 --- a/crates/aim-linux-abi/src/sys/selinuxfs.rs
 +++ b/crates/aim-linux-abi/src/sys/selinuxfs.rs
 @@ -50,7 +50,7 @@
@@ -1013,53 +1191,86 @@
          Some(_) => return None,
 --- a/crates/aim-linux-abi/src/sys/netlink.rs
 +++ b/crates/aim-linux-abi/src/sys/netlink.rs
-@@ -189,7 +189,7 @@
+@@ -230,7 +230,7 @@
  /// A new port id: the process id for its first socket of the protocol,
  /// then negative numbers unique to the process, as Linux autobinds.
  fn new_portid(proto: u64) -> u32 {
 -    let pid = super::process::getpid() as u32;
 +    let pid = super::process::guest_pid() as u32;
-     let next = &NEXT[(proto == NETLINK_KOBJECT_UEVENT) as usize];
+     let next = &NEXT[proto as usize];
      match next.fetch_add(1, Ordering::Relaxed) {
          0 => pid,
+@@ -1074,7 +1074,11 @@
+     let group = groups & groups.wrapping_neg();
+     let path = s.path.lock().unwrap().clone();
+     let c = super::cred::peer(super::process::getpid() as i32);
+-    let cred = [c.pid as u32, c.uid, c.gid];
++    let pid = match super::pidns::guest_pid(c.pid) {
++        Ok(pid) => pid,
++        Err(error) => return error,
++    };
++    let cred = [pid as u32, c.uid, c.gid];
+     if group != 0 {
+         broadcast(
+             s.proto,
 --- a/crates/aim-storage/src/posix_broker.rs
 +++ b/crates/aim-storage/src/posix_broker.rs
-@@ -4,6 +4,14 @@
- use std::{collections::BTreeMap,io,os::fd::{AsRawFd,FromRawFd},path::PathBuf,process::{Child,Command},sync::{Arc,Mutex,atomic::{AtomicBool,AtomicU64,Ordering}},thread,time::{Duration,Instant}};
- fn error(code:i32)->io::Error{io::Error::from_raw_os_error(code)}
- type Key=(i32,u64,u64);
-+static PID_RESOLVER:std::sync::OnceLock<unsafe extern "C" fn(i32)->i32>=std::sync::OnceLock::new();
-+pub fn set_pid_resolver(resolver:unsafe extern "C" fn(i32)->i32)->Result<(),String>{
-+ PID_RESOLVER.set(resolver).map_err(|_|"POSIX identity resolver is already installed".into())
+@@ -17,6 +17,17 @@
+     thread,
+     time::{Duration, Instant},
+ };
++static PID_RESOLVER: std::sync::OnceLock<unsafe extern "C" fn(i32) -> i32> = std::sync::OnceLock::new();
++pub fn set_pid_resolver(resolver: unsafe extern "C" fn(i32) -> i32) -> Result<(), String> {
++    PID_RESOLVER.set(resolver).map_err(|_| "POSIX identity resolver is already installed".into())
 +}
-+fn guest_pid(actor:ProcessIdentity,init:ProcessIdentity)->io::Result<i32>{
-+ if let Some(resolve)=PID_RESOLVER.get(){let pid=unsafe{resolve(actor.host_pid)};if pid>0{Ok(pid)}else{Err(error(libc::ESRCH))}}
-+ else{Ok(if actor==init{1}else{actor.host_pid})}
++fn guest_pid(actor: ProcessIdentity, init: Option<ProcessIdentity>) -> io::Result<i32> {
++    if let Some(resolve) = PID_RESOLVER.get() {
++        let pid = unsafe { resolve(actor.host_pid) };
++        if pid > 0 { Ok(pid) } else { Err(error(libc::ESRCH)) }
++    } else { Ok(if Some(actor) == init { 1 } else { actor.host_pid }) }
 +}
- #[derive(Clone,Copy,Debug)]
- pub struct Credentials{pub uid:u32,pub effective_uid:u32,pub effective_capabilities:u64}
- /// Read the kernel-published identity for this exact registered incarnation.
-@@ -195,7 +203,7 @@
-   if init.process!=namespace.init.process||init.mount_namespace!=namespace.init.mount_namespace
-    ||child_namespace!=parent_namespace{return Err(failed("fork-namespace-match",error(libc::EPERM)));}
-   if !actor.is_live()||!parent.owner.process.is_live(){return Err(failed("fork-parent-child-live",error(libc::ESRCH)));}
--  let owner=Owner{process:actor,guest_pid:if actor==namespace.init.process{1}else{actor.host_pid}};
-+  let owner=Owner{process:actor,guest_pid:guest_pid(actor,namespace.init.process)?};
-   let holder=Holder::new(&self.config,owner,self.controller);
-   if !actor.is_live()||!parent.owner.process.is_live(){holder.stop().map_err(|failure|failed("fork-holder-stop",failure))?;return Err(failed("fork-post-spawn-live",error(libc::ESRCH)));}
-   if crate::process_namespace::mount_namespace_of(&namespace.table,actor).map_err(|failure|failed("fork-post-child-namespace",failure))?!=child_namespace
-@@ -224,7 +232,7 @@
-   if let Some(namespace)=self.namespace.lock().unwrap().clone(){crate::process_namespace::InitNamespaceEntry::retire_dead(&namespace.table,self.controller)?;}
-   let namespace=self.external_namespace(actor)?;
-   let init=self.namespace.lock().unwrap().clone().ok_or_else(||error(libc::EPERM))?.init;
--  let guest_pid=if actor==init.process{1}else{actor.host_pid};
-+  let guest_pid=guest_pid(actor,init.process)?;
-   let holder=Holder::new(&self.config,Owner{process:actor,guest_pid},self.controller);
-   let validation=self.external_namespace(actor);
-   if !matches!(validation,Ok(ref current)if *current==namespace){holder.stop()?;return Err(validation.err().unwrap_or_else(||error(libc::EPERM)));}
++
+ fn error(code: i32) -> io::Error {
+     io::Error::from_raw_os_error(code)
+ }
+@@ -705,7 +716,7 @@
+                 &self.config,
+                 Owner {
+                     process: actor,
+-                    guest_pid: actor.host_pid,
++                    guest_pid: guest_pid(actor, None)?,
+                 },
+                 self.controller,
+             );
+@@ -765,11 +776,7 @@
+         }
+         let owner = Owner {
+             process: actor,
+-            guest_pid: if !namespace.standalone && actor == namespace.init.process {
+-                1
+-            } else {
+-                actor.host_pid
+-            },
++            guest_pid: guest_pid(actor, (!namespace.standalone).then_some(namespace.init.process))?,
+         };
+         let holder = Holder::new(&self.config, owner, self.controller);
+         if !actor.is_live() || !parent.owner.process.is_live() {
+@@ -865,11 +872,7 @@
+             .clone()
+             .ok_or_else(|| error(libc::EPERM))?
+             .init;
+-        let guest_pid = if actor == init.process {
+-            1
+-        } else {
+-            actor.host_pid
+-        };
++        let guest_pid = guest_pid(actor, Some(init.process))?;
+         let holder = Holder::new(
+             &self.config,
+             Owner {
 --- a/crates/aim-linux-abi/src/sys/net.rs
 +++ b/crates/aim-linux-abi/src/sys/net.rs
-@@ -268,6 +268,22 @@
+@@ -347,6 +347,22 @@
  }
  fn sock(input: &SocketInput) -> Option<Arc<Sock>> {
      any_sock(input).filter(|socket| matches!(socket.family, Family::Unix))
@@ -1070,25 +1281,90 @@
 +struct TransportPeer {descriptor:i32,android_pid:i32,host_pid:i32,host_uid:u32,host_gid:u32}
 +pub(crate) fn transport_peer(address:u64,length:u64)->i64{
 + if address==0||length!=std::mem::size_of::<TransportPeer>()as u64{return -(errno::EINVAL as i64);}
-+ let packet=address as *mut TransportPeer;
-+ let input=match SocketInput::capture(unsafe{packet.read_unaligned()}.descriptor){Ok(input)=>input,Err(error)=>return error};
++ let packet=user_read!(address,TransportPeer);
++ let input=match SocketInput::capture(packet.descriptor){Ok(input)=>input,Err(error)=>return error};
 + let fd=input.fd();
 + let Some(host_pid)=get_int(fd,0,libc::LOCAL_PEERPID)else{return -(errno::last()as i64);};
 + let(mut uid,mut gid)=(0,0);
 + if unsafe{libc::getpeereid(fd,&mut uid,&mut gid)}<0{return -(errno::last()as i64);}
 + let android_pid=match super::pidns::guest_pid(host_pid){Ok(pid)if pid>0=>pid,Ok(_)=>return -(errno::ESRCH as i64),Err(error)=>return error};
-+ unsafe{packet.write_unaligned(TransportPeer{descriptor:packet.read_unaligned().descriptor,android_pid,host_pid,host_uid:uid,host_gid:gid});}
++ user_write!(address,TransportPeer,TransportPeer{descriptor:packet.descriptor,android_pid,host_pid,host_uid:uid,host_gid:gid});
 + 0
  }
  
  // ---- recognition --------------------------------------------------------
 --- a/crates/aim-linux-abi/src/sys/fdtab.rs
 +++ b/crates/aim-linux-abi/src/sys/fdtab.rs
-@@ -334,6 +334,6 @@
- struct StorageAllocation{_guard:Lifecycle}
- impl aim_storage::private_fd::AllocationGuard for StorageAllocation{}
+@@ -747,7 +747,7 @@
+     _guard: Lifecycle,
+ }
+ impl aim_storage::private_fd::AllocationGuard for StorageAllocation {}
 -struct StorageRegistrar;
 +pub(crate) struct StorageRegistrar;
- impl aim_storage::private_fd::Registrar for StorageRegistrar{
-     fn enter(&self)->Box<dyn aim_storage::private_fd::AllocationGuard>{Box::new(StorageAllocation{_guard:lifecycle()})}
-     fn adopt(&self,descriptor:std::os::fd::OwnedFd)->std::io::Result<std::os::fd::OwnedFd>{
+ impl aim_storage::private_fd::Registrar for StorageRegistrar {
+     fn enter(&self) -> Box<dyn aim_storage::private_fd::AllocationGuard> {
+         Box::new(StorageAllocation {
+--- a/crates/aim-linux-abi/src/sys/cgroup.rs
++++ b/crates/aim-linux-abi/src/sys/cgroup.rs
+@@ -218,7 +218,7 @@
+ 
+ /// A tid as the guest numbers it (the main thread's is its pid's).
+ fn guest_tid(pid: i32, tid: i32) -> i32 {
+-    if tid == pid {
++    if !crate::process_identity::enabled() && tid == pid {
+         super::pidns::guest_pid(pid).unwrap_or(tid)
+     } else {
+         tid
+@@ -230,7 +230,9 @@
+     let mut v: Vec<(i32, i32)> = all_tasks()
+         .into_iter()
+         .filter(|&(_, tid)| group_of(m, tid) == group)
+-        .map(|(pid, tid)| (guest_tid(pid, pid), guest_tid(pid, tid)))
++        .filter_map(|(pid, tid)| {
++            super::pidns::guest_pid(pid).ok().map(|guest| (guest, guest_tid(pid, tid)))
++        })
+         .collect();
+     v.sort_unstable();
+     v
+@@ -292,11 +294,10 @@
+     let id: i32 = text.trim().parse().map_err(|_| EINVAL)?;
+     let procs = open.file == File::Procs;
+     let tid = match id {
+-        0 if procs => me(),
++        0 if procs => super::thread::main_tid(),
+         0 => super::thread::gettid() as i32,
+-        1 => super::pidns::host_pid(1).map_err(|e| -e as Errno)?,
+         id if id < 0 => return Err(ESRCH),
+-        id => id,
++        id => super::pidns::syscall_tid(id).map_err(|e| -e as Errno)?,
+     };
+     let owner = super::thread::owner(tid);
+     let start = start_of(owner).ok_or(ESRCH)?;
+@@ -337,11 +338,16 @@
+         .iter()
+         .map(|pid| Ok((*pid, start_of(*pid).ok_or(ESRCH)?)))
+         .collect::<Result<Vec<_>, Errno>>()?;
++    let leader = if crate::process_identity::enabled() {
++        super::pidns::guest_pid(owner).map_err(|e| -e as Errno)?
++    } else {
++        owner
++    };
+     transact(&open.root, |m| {
+         if open.controller.is_none() {
+             // cgroup_procs_write_permission uses the opener's credentials
+             // at the common ancestor, not the migrating process's uid.
+-            let mut ancestor = open.root.join(group_of(m, owner).trim_start_matches('/'));
++            let mut ancestor = open.root.join(group_of(m, leader).trim_start_matches('/'));
+             while !open.dir.starts_with(&ancestor) {
+                 if !ancestor.pop() {
+                     return Err(EINVAL);
+@@ -683,7 +689,8 @@
+ /// groups; the main thread's (its tid is the pid) stays.
+ pub fn exec_reset() {
+     let pid = me();
+-    let other = |t: i32| t != pid && super::thread::owner(t) == pid;
++    let leader = super::thread::main_tid();
++    let other = |t: i32| t != leader && super::thread::owner(t) == pid;
+     for (_, root) in hierarchies() {
+         if snapshot(&root).threads.iter().any(|(t, ..)| other(*t)) {
+             let _ = transact(&root, |m| {

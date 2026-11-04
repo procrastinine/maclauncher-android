@@ -8,10 +8,21 @@ export function prepareUserOutput(aim){
  copyChanged(path.join(import.meta.dirname,'native/user-output.rs'),path.join(root,'sys/user-output.rs'));
  edit('sys/mod.rs',[['pub(crate) mod user_memory;','pub(crate) mod user_memory;\n#[path="user-output.rs"]\npub(crate) mod user_output;']]);
  edit('sys/regular_file.rs',[
-  ['unsafe extern "C"{static mach_task_self_:u32;fn mach_vm_write(task:u32,address:u64,data:usize,length:u32)->i32;}',''],
-  ['   let result=unsafe{match(position,write){','   if !write{let result=super::user_output::readv(fd.as_raw_fd(),iov,position,true);return if result<0{Err((-result)as Errno)}else{Ok(result)};}\n   let result=unsafe{match(position,write){'],
-  ['    let result=unsafe{mach_vm_write(mach_task_self_,(target.iov_base as u64)+copied as u64,bytes.as_ptr()as usize,bytes.len()as u32)};\n    if result!=0{return if total>0{Ok(total)}else{Err(14)}};',
-   '    if let Err(error)=super::user_memory::write_prepared((target.iov_base as u64)+copied as u64,&bytes){return if total>0{Ok(total)}else{Err(error)}};'],
+  ['unsafe extern "C" {\n    static mach_task_self_: u32;\n    fn mach_vm_write(task: u32, address: u64, data: usize, length: u32) -> i32;\n}',''],
+  ['let result = unsafe {\n                match (position, write) {','   if !write{let result=super::user_output::readv(fd.as_raw_fd(),iov,position,true);return if result<0{Err((-result)as Errno)}else{Ok(result)};}\n   let result=unsafe{match(position,write){'],
+  [`                let result = unsafe {
+                    mach_vm_write(
+                        mach_task_self_,
+                        (target.iov_base as u64) + copied as u64,
+                        bytes.as_ptr() as usize,
+                        bytes.len() as u32,
+                    )
+                };
+                if result != 0 {
+                    return if total > 0 { Ok(total) } else { Err(14) };
+                };`,
+   '                if let Err(error)=super::user_memory::write_prepared((target.iov_base as u64)+copied as u64,&bytes){return if total>0{Ok(total)}else{Err(error)}};'],
+
  ]);
  edit('sys/regular_file.rs',[
   ['        assert_eq!(u64::from_le_bytes(bytes), 2);',
@@ -26,14 +37,14 @@ export function prepareUserOutput(aim){
   ['            let mut got = 0u64;\n            // SAFETY: a fault-safe copy within our own task.','            // SAFETY: a fault-safe copy within our own task.'],
  ]);
  edit('sys/fs.rs',[
-  ['errno::check(unsafe{libc::readv(actual,iov.as_ptr(),iov.len() as i32)} as i64)','super::user_output::readv(actual,iov,None,false)'],
-  ['errno::check(unsafe{if write{libc::pwrite(actual,buf as *const _,len,pos)}else{libc::pread(actual,buf as *mut _,len,pos)}} as i64)','if write{errno::check(unsafe{libc::pwrite(actual,buf as *const _,len,pos)}as i64)}else{super::user_output::read(actual,buf,len,Some(pos))}'],
+  ['errno::check(unsafe { libc::readv(actual, iov.as_ptr(), iov.len() as i32) } as i64)','super::user_output::readv(actual,iov,None,false)'],
+  ['errno::check(unsafe {\n                if write {\n                    libc::pwrite(actual, buf as *const _, len, pos)\n                } else {\n                    libc::pread(actual, buf as *mut _, len, pos)\n                }\n            } as i64)','if write{errno::check(unsafe{libc::pwrite(actual,buf as *const _,len,pos)}as i64)}else{super::user_output::read(actual,buf,len,Some(pos))}'],
   ['errno::check(\n            unsafe { libc::pread(fd, buf as *mut _, len, pos) } as i64,\n        )','super::user_output::read(fd,buf,len,Some(pos))'],
   ['errno::check(unsafe { libc::read(fd, buf as *mut _, len) } as i64)','super::user_output::read(fd,buf,len,None)'],
   ['errno::check(\n        unsafe { libc::pread(a[0] as i32, a[1] as *mut _, a[2] as usize, a[3] as i64) } as i64,\n    )','super::user_output::read(a[0]as i32,a[1],a[2]as usize,Some(a[3]as i64))'],
   ['errno::check(unsafe { libc::readv(a[0] as i32, v.as_ptr(), v.len() as i32) } as i64)','super::user_output::readv(a[0]as i32,v,None,false)'],
-  ['errno::check(unsafe{libc::readv(actual,vectors.as_ptr(),vectors.len()as i32)}as i64)','super::user_output::readv(actual,vectors,None,false)'],
-  ['errno::check(unsafe{if write{libc::pwrite(actual,vector.iov_base,vector.iov_len,pos+total)}else{libc::pread(actual,vector.iov_base,vector.iov_len,pos+total)}}as i64)','if write{errno::check(unsafe{libc::pwrite(actual,vector.iov_base,vector.iov_len,pos+total)}as i64)}else{super::user_output::read(actual,vector.iov_base as u64,vector.iov_len,Some(pos+total))}'],
+  ['errno::check(\n                    unsafe { libc::readv(actual, vectors.as_ptr(), vectors.len() as i32) } as i64,\n                )','super::user_output::readv(actual,vectors,None,false)'],
+  ['errno::check(unsafe {\n                if write {\n                    libc::pwrite(actual, vector.iov_base, vector.iov_len, pos + total)\n                } else {\n                    libc::pread(actual, vector.iov_base, vector.iov_len, pos + total)\n                }\n            } as i64)','if write{errno::check(unsafe{libc::pwrite(actual,vector.iov_base,vector.iov_len,pos+total)}as i64)}else{super::user_output::read(actual,vector.iov_base as u64,vector.iov_len,Some(pos+total))}'],
  ]);
  edit('sys/net.rs',[
   ['fn recv(\n    input: &SocketInput,\n    iov: &[libc::iovec],\n    want_name: bool,\n    ctrl_cap: usize,\n    flags: u64,\n) -> Result<Received, i64> {',
@@ -43,9 +54,6 @@ export function prepareUserOutput(aim){
   ['                recv_exact(fd, prefix(iov, copy), 0)?;\n                let mut left = len - copy;','                initialized=recv_exact(fd, prefix(iov, copy), 0)?;\n                let mut left = len - initialized;'],
   ['                    left -= n;\n                }\n            }\n            Ok(Received {','                    left -= n;\n                }\n                complete=left==0;\n            }\n            Ok(Received {'],
   ['                n: if flags & L_MSG_TRUNC != 0 {\n                    len as i64\n                } else {\n                    copy as i64\n                },','                n: if flags & L_MSG_TRUNC != 0 && complete {\n                    len as i64\n                } else {\n                    initialized as i64\n                },'],
-  ['                unsafe { std::ptr::copy_nonoverlapping(n.as_ptr(), m.name as *mut u8, k) };',
-   '                if let Err(error)=super::user_memory::write_exact(m.name,&n[..k]){return -(error as i64);}'],
-  ['    unsafe { (mp as *mut LinuxMsghdr).write_unaligned(m) };',
-   '    let bytes=unsafe{std::slice::from_raw_parts((&m as*const LinuxMsghdr).cast::<u8>(),std::mem::size_of::<LinuxMsghdr>())};\n    if let Err(error)=super::user_memory::write_exact(mp,bytes){return -(error as i64);}'],
+
  ]);
 }

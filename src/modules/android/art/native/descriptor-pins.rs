@@ -48,7 +48,7 @@ pub(super) fn pin(fd:i32)->Result<Option<Pinned>,crate::errno::Errno> {
     require_guest_visible(fd)?;
     let owner=OWNERS.lock().unwrap().get(&fd).cloned();
     Ok(owner.map(|owner| Pinned { descriptor:None, kind:owner.kind.clone(), socket_allowed:owner.socket_allowed,
-        fuse:owner.fuse.clone(), borrowed:None, retained:Some(owner) }))
+        fuse:owner.fuse.clone(), borrowed:None,regular_access:None, retained:Some(owner) }))
 }
 
 fn capture(fd:i32)->Result<Arc<Owner>,crate::errno::Errno> {

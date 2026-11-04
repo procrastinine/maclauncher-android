@@ -1,62 +1,82 @@
 --- a/crates/aim-linux-abi/src/sys/fdtab.rs
 +++ b/crates/aim-linux-abi/src/sys/fdtab.rs
-@@ -286,16 +286,19 @@
+@@ -655,24 +655,24 @@
+     }
  }
  
- static LIFECYCLE:Mutex<()>=Mutex::new(());
+-static LIFECYCLE: Mutex<()> = Mutex::new(());
++static LIFECYCLE:Mutex<()>=Mutex::new(());
 +thread_local!{static RETIRED_PATHS:std::cell::RefCell<Option<Vec<Arc<OpenedPath>>>>=const{std::cell::RefCell::new(None)};}
- thread_local!{static RETIRED:std::cell::RefCell<Option<Vec<Kind>>>=const{std::cell::RefCell::new(None)};}
- pub(crate) struct Lifecycle{guard:Option<std::sync::MutexGuard<'static,()>>}
- impl Drop for Lifecycle{fn drop(&mut self){
-     let retired=RETIRED.with(|owners|owners.borrow_mut().take());
-+    let paths=RETIRED_PATHS.with(|owners|owners.borrow_mut().take());
-     drop(self.guard.take());
--    drop(retired);
-+    drop(retired);drop(paths);
- }}
- pub(crate) fn lifecycle()->Lifecycle{
-     let guard=LIFECYCLE.lock().unwrap_or_else(|error|error.into_inner());
-     RETIRED.with(|owners|{assert!(owners.borrow().is_none());*owners.borrow_mut()=Some(Vec::new());});
-+    RETIRED_PATHS.with(|paths|{assert!(paths.borrow().is_none());*paths.borrow_mut()=Some(Vec::new());});
-     Lifecycle{guard:Some(guard)}
+ thread_local! {static RETIRED:std::cell::RefCell<Option<Vec<Kind>>>=const{std::cell::RefCell::new(None)};}
+ pub(crate) struct Lifecycle {
+     guard: Option<std::sync::MutexGuard<'static, ()>>,
  }
- fn retire(kind:Option<Kind>){
-@@ -364,8 +367,8 @@
-     if self.borrowed.is_some(){return;}
-     let fd=self.descriptor().as_raw_fd();
-     if let Some(file)=&self.fuse{super::fuse_client::remove_private_alias(fd,file);}
--    let (previous,last_socket)={let mut table=TABLE.write().unwrap();let previous=table.remove(&fd);let last=match &self.kind{Some(Kind::Sock(socket))=>!table.values().any(|kind|matches!(kind,Kind::Sock(other) if Arc::ptr_eq(socket,other))),_=>false};(previous,last)};
--    retire(previous);drop(self.descriptor.take());
-+    let (previous,last_socket)={let mut table=TABLE.write().unwrap();let previous=table.remove(&fd);let last=match &self.kind{Some(Kind::Sock(socket))=>!table.values().any(|kind|matches!(&kind.kind,Some(Kind::Sock(other)) if Arc::ptr_eq(socket,other))),_=>false};(previous,last)};
-+    retire_entry(previous);drop(self.descriptor.take());
-     // A pin can outlive the public alias and discard its actual receive queue.
-     if last_socket{super::close_effects::note_socket_close();}
- }}
-@@ -373,12 +376,12 @@
- pub fn pin_guest(fd:i32)->Result<Pinned,crate::errno::Errno>{
+ impl Drop for Lifecycle {
+     fn drop(&mut self) {
+-        let retired = RETIRED.with(|owners| owners.borrow_mut().take());
++        let retired=RETIRED.with(|owners|owners.borrow_mut().take());
++    let paths=RETIRED_PATHS.with(|owners|owners.borrow_mut().take());
+         drop(self.guard.take());
+-        drop(retired);
++        drop(retired);drop(paths);
+     }
+ }
+ pub(crate) fn lifecycle() -> Lifecycle {
+     let guard = LIFECYCLE.lock().unwrap_or_else(|error| error.into_inner());
+-    RETIRED.with(|owners| {
+-        assert!(owners.borrow().is_none());
+-        *owners.borrow_mut() = Some(Vec::new());
+-    });
++    RETIRED.with(|owners|{assert!(owners.borrow().is_none());*owners.borrow_mut()=Some(Vec::new());});
++    RETIRED_PATHS.with(|paths|{assert!(paths.borrow().is_none());*paths.borrow_mut()=Some(Vec::new());});
+     Lifecycle { guard: Some(guard) }
+ }
+ fn retire(kind: Option<Kind>) {
+@@ -826,12 +826,12 @@
+             let last = match &self.kind {
+                 Some(Kind::Sock(socket)) => !table
+                     .values()
+-                    .any(|kind| matches!(kind,Kind::Sock(other) if Arc::ptr_eq(socket,other))),
++                    .any(|entry| matches!(&entry.kind,Some(Kind::Sock(other)) if Arc::ptr_eq(socket,other))),
+                 _ => false,
+             };
+             (previous, last)
+         };
+-        retire(previous);
++        retire_entry(previous);
+         drop(self.descriptor.take());
+         // A pin can outlive the public alias and discard its actual receive queue.
+         if last_socket {
+@@ -843,15 +843,12 @@
+ pub fn pin_guest(fd: i32) -> Result<Pinned, crate::errno::Errno> {
      use std::os::fd::FromRawFd;
-     install_storage_registrar().map_err(|_|crate::errno::EIO)?;
--    let mut kind=None;let mut socket_allowed=false;let mut fuse=None;
+     install_storage_registrar().map_err(|_| crate::errno::EIO)?;
+-    let mut kind = None;
+-    let mut socket_allowed = false;
+-    let mut fuse = None;
 +    let mut kind=None;let mut socket_allowed=false;let mut fuse=None;let mut entry=None;
-     let descriptor=aim_storage::private_fd::PrivateFd::allocate(||{
+     let descriptor = aim_storage::private_fd::PrivateFd::allocate(|| {
          require_guest_visible(fd).map_err(std::io::Error::from_raw_os_error)?;
          super::net::adopt(fd);
          super::dir::adopt(fd).map_err(std::io::Error::from_raw_os_error)?;
--        kind=get(fd);fuse=super::fuse_client::get(fd);
+-        kind = get(fd);
+-        fuse = super::fuse_client::get(fd);
 +        kind=get(fd);entry=TABLE.read().unwrap().get(&fd).cloned();fuse=super::fuse_client::get(fd);
-         let mut stat:libc::stat=unsafe{std::mem::zeroed()};
-         if unsafe{libc::fstat(fd,&mut stat)}<0{return Err(std::io::Error::last_os_error());}
-         socket_allowed=stat.st_mode&libc::S_IFMT==libc::S_IFSOCK&&matches!(kind,None|Some(Kind::Sock(_)))&&!super::fuse_device::is_device(fd)&&super::fuse_client::get(fd).is_none();
-@@ -387,7 +390,7 @@
-         if held<0{return Err(std::io::Error::last_os_error());}
-         Ok(unsafe{std::os::fd::OwnedFd::from_raw_fd(held)})
-     }).map_err(|error|crate::errno::from_darwin(error.raw_os_error().unwrap_or(libc::EIO)))?;
--    {use std::os::fd::AsRawFd;if let Some(file)=&fuse{super::fuse_client::install_private_alias(descriptor.as_raw_fd(),file.clone())?;}if let Some(kind)=&kind{insert(descriptor.as_raw_fd(),kind.clone());}}
-+    {use std::os::fd::AsRawFd;if let Some(file)=&fuse{super::fuse_client::install_private_alias(descriptor.as_raw_fd(),file.clone())?;}if let Some(entry)=entry{TABLE.write().unwrap().insert(descriptor.as_raw_fd(),entry);set_slow(descriptor.as_raw_fd(),true);}}
-     Ok(Pinned{descriptor:Some(descriptor),kind,socket_allowed,fuse,borrowed:None})
- }
- 
-@@ -433,7 +436,32 @@
+         let mut stat: libc::stat = unsafe { std::mem::zeroed() };
+         if unsafe { libc::fstat(fd, &mut stat) } < 0 {
+             return Err(std::io::Error::last_os_error());
+@@ -881,9 +878,7 @@
+                 socket_allowed = false;
+             }
+         }
+-        if let Some(kind) = &kind {
+-            insert(descriptor.as_raw_fd(), kind.clone());
+-        }
++        if let Some(entry)=entry {TABLE.write().unwrap().insert(descriptor.as_raw_fd(),entry);set_slow(descriptor.as_raw_fd(),true);}
+     }
+     Ok(Pinned {
+         descriptor: Some(descriptor),
+@@ -1017,7 +1012,32 @@
      Draining(Some(at))
  }
  
@@ -89,26 +109,29 @@
 +}
  
  #[cfg(test)]
- pub(crate) fn isolated_kernel_test(name:&str)->bool{
-@@ -457,7 +485,7 @@
- /// A producer publishes only after the complete open description is installed.
- pub fn publish_guest(fd:i32)->Result<(),crate::errno::Errno>{
-     if is_hidden(fd)||unsafe{libc::fcntl(fd,libc::F_GETFD)}<0{return Err(crate::errno::EBADF);}
--    let typed=get(fd).is_some()||super::fuse_device::is_device(fd)||super::fuse_client::get(fd).is_some()||super::fd_visibility::role(fd)==super::fd_visibility::Role::Typed;
+ pub(crate) fn isolated_kernel_test(name: &str) -> bool {
+@@ -1082,10 +1102,7 @@
+     if is_hidden(fd) || unsafe { libc::fcntl(fd, libc::F_GETFD) } < 0 {
+         return Err(crate::errno::EBADF);
+     }
+-    let typed = get(fd).is_some()
+-        || super::fuse_device::is_device(fd)
+-        || super::fuse_client::get(fd).is_some()
+-        || super::fd_visibility::role(fd) == super::fd_visibility::Role::Typed;
 +    let typed=TABLE.read().unwrap().contains_key(&fd)||super::fuse_device::is_device(fd)||super::fuse_client::get(fd).is_some()||super::fd_visibility::role(fd)==super::fd_visibility::Role::Typed;
-     super::fd_visibility::publish(fd,typed)?;
-     set_slow(fd,typed);Ok(())
- }
-@@ -470,7 +498,7 @@
- pub fn withdraw_guest(fd:i32)->Result<(),crate::errno::Errno>{set_slow(fd,true);super::fd_visibility::withdraw(fd).map(|_|())}
- 
- pub fn insert(fd: i32, kind: Kind) {
--    let previous = TABLE.write().unwrap().insert(fd, kind);
-+    let previous = TABLE.write().unwrap().entry(fd).or_default().kind.replace(kind);
-     set_slow(fd, true);
-     retire(previous);
- }
-@@ -482,7 +510,7 @@
+     super::fd_visibility::publish(fd, typed)?;
+     set_slow(fd, typed);
+     Ok(())
+@@ -1119,7 +1136,7 @@
+     let install = || {
+         let mut table = TABLE.write().unwrap();
+         clear_regular_access(fd);
+-        table.insert(fd, kind)
++        table.entry(fd).or_default().kind.replace(kind)
+     };
+     let previous = match key {
+         Some(key) => memfd::install(fd, key, install),
+@@ -1136,7 +1153,7 @@
      {
          return None;
      }
@@ -117,9 +140,9 @@
  }
  
  /// The guest closed `fd` (or is about to replace it with dup2).
-@@ -490,13 +518,13 @@
-     super::fuse_client::close(fd);
-     if super::fuse_device::is_device(fd){set_slow(fd,false);}
+@@ -1147,13 +1164,13 @@
+         set_slow(fd, false);
+     }
      match get(fd) {
 -        None => return,
 +        None if !TABLE.read().unwrap().contains_key(&fd) => return,
@@ -134,10 +157,10 @@
  }
  
  /// `new` now refers to the same open file as `old`.
-@@ -504,9 +532,8 @@
-     on_close(new);
-     super::fuse_client::dup(old,new);
-     if super::fuse_device::is_device(old){super::fuse_device::adopt(new);}
+@@ -1163,9 +1180,8 @@
+     if super::fuse_device::is_device(old) {
+         super::fuse_device::adopt(new);
+     }
 -    if let Some(k) = get(old) {
 -        insert(new, k);
 -    }
@@ -146,7 +169,7 @@
  }
  
  /// Recognize an fd that arrived from elsewhere (exec, `SCM_RIGHTS`,
-@@ -593,7 +620,7 @@
+@@ -1283,7 +1299,7 @@
          {
              continue;
          }
@@ -155,48 +178,86 @@
          set_slow(fd, true);
          drop(table);
          drop(old);
-@@ -702,25 +729,28 @@
+@@ -1440,7 +1456,7 @@
  
- pub(crate) fn regular_exec_text()->Result<String,crate::errno::Errno>{
-     let mut records=Vec::new();
--    for (fd,kind) in TABLE.read().unwrap().iter(){
+ pub(crate) fn regular_exec_text() -> Result<String, crate::errno::Errno> {
+     let mut records = Vec::new();
+-    for (fd, kind) in TABLE.read().unwrap().iter() {
 +    for (fd,entry) in TABLE.read().unwrap().iter(){
-         if !visible(*fd){continue;}
-         let flags=unsafe{libc::fcntl(*fd,libc::F_GETFD)};
--        if flags<0{return Err(crate::errno::last());}
-+        if flags<0{return Err(crate::errno::last());}if flags&libc::FD_CLOEXEC!=0{continue;}
-         use std::os::fd::AsRawFd;
--        match kind{
--            Kind::Regular(description)=>records.push(format!("{}\t{}\t{}",fd,description.flags,description.writer.as_ref().map(|writer|writer.descriptor().as_raw_fd()).unwrap_or(-1))),
--            Kind::Pty(description)=>records.push(format!("pty\t{}\t{}",fd,description.carrier()?.as_raw_fd())),
-+        if let Some(origin)=&entry.path{let (guest,initial)=origin.exec_fields();records.push(format!("origin\t{fd}\t{}\t{guest}\t{initial}",origin.descriptor()));}
-+        match &entry.kind{
-+            Some(Kind::Regular(description))=>records.push(format!("{}\t{}\t{}",fd,description.flags,description.writer.as_ref().map(|writer|writer.descriptor().as_raw_fd()).unwrap_or(-1))),
-+            Some(Kind::Pty(description))=>records.push(format!("pty\t{}\t{}",fd,description.carrier()?.as_raw_fd())),
-             _=>{},
+         if !visible(*fd) {
+             continue;
          }
-     }Ok(records.join("\n"))
+@@ -1448,9 +1464,11 @@
+         if flags < 0 {
+             return Err(crate::errno::last());
+         }
++        if flags & libc::FD_CLOEXEC!=0 {continue;}
++        if let Some(origin)=&entry.path{let (guest,initial)=origin.exec_fields();records.push(format!("origin\t{fd}\t{}\t{guest}\t{initial}",origin.descriptor()));}
+         use std::os::fd::AsRawFd;
+-        match kind {
+-            Kind::Regular(description) => records.push(format!(
++        match &entry.kind {
++            Some(Kind::Regular(description)) => records.push(format!(
+                 "{}\t{}\t{}",
+                 fd,
+                 description.flags,
+@@ -1460,7 +1478,7 @@
+                     .map(|writer| writer.descriptor().as_raw_fd())
+                     .unwrap_or(-1)
+             )),
+-            Kind::Path(description) => {
++            Some(Kind::Path(description)) => {
+                 let mut bytes = description.flags.to_le_bytes().to_vec();
+                 if let Some(reference) = &description.reference {
+                     bytes.extend_from_slice(&reference.encode());
+@@ -1471,12 +1489,12 @@
+                     .collect::<String>();
+                 records.push(format!("path\t{fd}\t{hex}"));
+             }
+-            Kind::Pty(description) => records.push(format!(
++            Some(Kind::Pty(description)) => records.push(format!(
+                 "pty\t{}\t{}",
+                 fd,
+                 description.carrier()?.as_raw_fd()
+             )),
+-            Kind::Signal(description) => records.push(format!(
++            Some(Kind::Signal(description)) => records.push(format!(
+                 "signal\t{fd}\t{}",
+                 super::signalfd::shared(description).as_raw_fd()
+             )),
+@@ -1485,19 +1503,15 @@
+     }
+     Ok(records.join("\n"))
  }
--pub(crate) struct ExecWriterFlags(Vec<(Kind,i32,i32)>);
+-pub(crate) struct ExecWriterFlags(Vec<(Kind, i32, i32)>);
 +pub(crate) struct ExecWriterFlags(Vec<(Kind,i32,i32)>,Vec<(Arc<OpenedPath>,i32)>);
- impl Drop for ExecWriterFlags{
-- fn drop(&mut self){for(_,fd,flags)in &self.0{unsafe{libc::fcntl(*fd,libc::F_SETFD,*flags);}}}
-+ fn drop(&mut self){for(_,fd,flags)in &self.0{unsafe{libc::fcntl(*fd,libc::F_SETFD,*flags);}}for(path,flags)in &self.1{unsafe{libc::fcntl(path.descriptor(),libc::F_SETFD,*flags);}}}
+ impl Drop for ExecWriterFlags {
+-    fn drop(&mut self) {
+-        for (_, fd, flags) in &self.0 {
+-            unsafe {
+-                libc::fcntl(*fd, libc::F_SETFD, *flags);
+-            }
+-        }
+-    }
++    fn drop(&mut self){for(_,fd,flags)in &self.0{unsafe{libc::fcntl(*fd,libc::F_SETFD,*flags);}}for(path,flags)in &self.1{unsafe{libc::fcntl(path.descriptor(),libc::F_SETFD,*flags);}}}
  }
- pub(crate) fn prepare_regular_exec()->Result<ExecWriterFlags,crate::errno::Errno>{
+ pub(crate) fn prepare_regular_exec() -> Result<ExecWriterFlags, crate::errno::Errno> {
      use std::os::fd::AsRawFd;
--    let mut changed=ExecWriterFlags(Vec::new());
+-    let mut changed = ExecWriterFlags(Vec::new());
 +    let mut changed=ExecWriterFlags(Vec::new(),Vec::new());
 +    let paths=TABLE.read().unwrap().iter().filter(|(fd,_)|visible(**fd)&&unsafe{libc::fcntl(**fd,libc::F_GETFD)}&libc::FD_CLOEXEC==0).filter_map(|(_,entry)|entry.path.clone()).collect::<Vec<_>>();
 +    for path in paths{if changed.1.iter().any(|(old,_)|Arc::ptr_eq(old,&path)){continue;}let fd=path.descriptor();if fd<0{continue;}let flags=unsafe{libc::fcntl(fd,libc::F_GETFD)};if flags<0{return Err(crate::errno::last());}if unsafe{libc::fcntl(fd,libc::F_SETFD,flags&!libc::FD_CLOEXEC)}<0{return Err(crate::errno::last());}changed.1.push((path,flags));}
-     let mut writers=std::collections::HashSet::new();
-     for(guest,kind)in fds_where(|kind|matches!(kind,Kind::Regular(_)|Kind::Pty(_))){
-         if !visible(guest){continue;}
-@@ -737,7 +767,15 @@
- pub(crate) fn restore_regular_exec(text:&str)->Result<(),crate::errno::Errno>{
-     let mut inherited=Vec::new();
-     for line in text.lines(){
--        let fields=line.split('\t').collect::<Vec<_>>();if fields.len()!=3{return Err(crate::errno::EINVAL);}
+     let mut writers = std::collections::HashSet::new();
+     for (guest, kind) in
+         fds_where(|kind| matches!(kind, Kind::Regular(_) | Kind::Pty(_) | Kind::Signal(_)))
+@@ -1540,10 +1554,15 @@
+     let mut inherited = Vec::new();
+     let mut signals = std::collections::HashMap::new();
+     for line in text.lines() {
+-        let fields = line.split('\t').collect::<Vec<_>>();
+-        if fields.len() != 3 {
+-            return Err(crate::errno::EINVAL);
+-        }
 +        let fields=line.split('\t').collect::<Vec<_>>();
 +        if fields.first()==Some(&"origin"){
 +            if fields.len()!=5{return Err(crate::errno::EINVAL);}
@@ -206,10 +267,10 @@
 +            if anchor>=0&&!inherited.contains(&anchor){inherited.push(anchor);}continue;
 +        }
 +        if fields.len()!=3{return Err(crate::errno::EINVAL);}
-         if fields[0]=="pty"{
-             let fd=fields[1].parse::<i32>().map_err(|_|crate::errno::EINVAL)?;
-             let carrier=fields[2].parse::<i32>().map_err(|_|crate::errno::EINVAL)?;
-@@ -813,8 +851,7 @@
+         if fields[0] == "path" {
+             let fd = fields[1].parse::<i32>().map_err(|_| crate::errno::EINVAL)?;
+             let hex = fields[2];
+@@ -1778,8 +1797,7 @@
          .read()
          .unwrap()
          .iter()
@@ -219,17 +280,17 @@
          .collect()
  }
  
-@@ -910,7 +947,7 @@
+@@ -1886,7 +1904,7 @@
      let table = TABLE.read().unwrap();
      let mut objects: Vec<*const ()> = Vec::new();
      let mut entries: Vec<(i32, &Kind, usize, bool)> = Vec::new();
--    for (fd, k) in table.iter().filter(|(fd,_)|visible(**fd)) {
+-    for (fd, k) in table.iter().filter(|(fd, _)| visible(**fd)) {
 +    for (fd, k) in table.iter().filter(|(fd,_)|visible(**fd)).filter_map(|(fd,entry)|entry.kind.as_ref().map(|kind|(fd,kind))) {
          let p = match k {
              Kind::Regular(a) => Arc::as_ptr(a) as *const (),
              Kind::Pty(a) => Arc::as_ptr(a) as *const (),
-@@ -980,6 +1017,9 @@
-             Kind::Content | Kind::Knob(_) | Kind::Evdev(_) | Kind::Binder(_) => unreachable!(),
+@@ -2019,6 +2037,9 @@
+             Kind::Content | Kind::Evdev(_) | Kind::Binder(_) => unreachable!(),
          }
      });
 +    let paths=table.iter().filter(|(fd,_)|visible(**fd)).filter_map(|(fd,entry)|entry.path.as_ref().map(|path|(*fd,path))).collect::<Vec<_>>();
@@ -237,8 +298,8 @@
 +    w.seq(paths.into_iter(),|w,(fd,path)|{w.i32(fd);let pointer=Arc::as_ptr(path);if let Some(index)=origins.iter().position(|old|*old==pointer){w.u64(index as u64);w.bool(false);}else{w.u64(origins.len()as u64);origins.push(pointer);w.bool(true);path.save(w);}});
      // Private targets are installed from the explicit fork receipt before the
      // runtime starts. Parent-only guards and transient pins are not inherited.
-     w.seq(std::iter::empty::<i32>(),|w,fd|w.i32(fd));
-@@ -1017,6 +1057,9 @@
+     w.seq(std::iter::empty::<i32>(), |w, fd| w.i32(fd));
+@@ -2153,6 +2174,9 @@
              insert(fd, k);
          }
      }
@@ -246,13 +307,13 @@
 +    let origins=r.seq(|r|{let fd=r.i32();let index=r.u64()as usize;let path=if r.bool(){match OpenedPath::restore(r){Ok((path,anchor))=>{if anchor>=0&&!inherited_writers.contains(&anchor){inherited_writers.push(anchor);}paths.push(path.clone());Some(path)},Err(_)=>{r.invalidate();None}}}else{paths.get(index).cloned()};(fd,path)});
 +    for(fd,path)in origins{if let Some(path)=path{TABLE.write().unwrap().entry(fd).or_default().path=Some(path);set_slow(fd,true);}}
      keep_inherited_hidden(r.seq(|r| r.i32()));
-     RESTORED_PRIVATE.with(|targets|targets.borrow_mut().extend(inherited_writers));
-     let visible=r.seq(|r|r.i32());
+     RESTORED_PRIVATE.with(|targets| targets.borrow_mut().extend(inherited_writers));
+     let visible = r.seq(|r| r.i32());
 --- a/crates/aim-linux-abi/src/sys/fs.rs
 +++ b/crates/aim-linux-abi/src/sys/fs.rs
-@@ -267,6 +267,7 @@
+@@ -502,6 +502,7 @@
+             fdtab::insert(fd, Kind::Regular(description));
          }
-         if let Some(description)=description{fdtab::insert(fd,Kind::Regular(description));}
      }
 +    if let Err(error)=fdtab::remember_path(fd,&r){fdtab::on_close(fd);unsafe{libc::close(fd);}return -(error as i64);}
      // Or it is replaced by the translated file here.
@@ -260,7 +321,7 @@
      if matches!(r.guest.as_str(), "/dev/random" | "/dev/urandom") {
 --- a/crates/aim-linux-abi/src/sys/procfs.rs
 +++ b/crates/aim-linux-abi/src/sys/procfs.rs
-@@ -97,6 +97,7 @@
+@@ -117,6 +117,7 @@
      if let Some(p) = crate::xrt::original_guest_path(fd) {
          return Ok(p);
      }
@@ -268,15 +329,15 @@
      let mut buf = [0u8; libc::PATH_MAX as usize];
      // SAFETY: F_GETPATH writes at most PATH_MAX bytes.
      if unsafe { libc::fcntl(fd, libc::F_GETPATH, buf.as_mut_ptr()) } < 0 {
-@@ -109,6 +110,7 @@
- 
- /// Target of `/proc/self/fd/N`.
- pub(super) fn fd_link(fd: i32) -> Option<String> {
-+    if !fdtab::is_hidden(fd) {if let Some(path)=fdtab::virtual_path(fd){return Some(path);}}
-     if fdtab::is_hidden(fd) {
+@@ -132,6 +133,7 @@
+     if !fdtab::visible(fd) {
          return None;
      }
-@@ -1574,6 +1576,16 @@
++    if let Some(path)=fdtab::virtual_path(fd){return Some(path);}
+     if let Some(Kind::TracePipe(open)) = fdtab::get(fd) {
+         return Some(open.path.clone());
+     }
+@@ -1843,6 +1845,16 @@
  }
  
  pub fn open(guest: &str, flags: u64, host_flags: i32) -> Option<i64> {
@@ -290,25 +351,28 @@
 +    Some(result)
 +}
 +fn open_owned(guest: &str, flags: u64, host_flags: i32) -> Option<i64> {
-     if let Some(result)=super::fuse_sysfs::open(guest,flags){return Some(result);}
-     if !is_kernfs(guest) {
-         return None;
-@@ -1660,12 +1672,12 @@
-     Some(match node(&canon) {
-         Some(Node::MountTable {host_pid,info}) => {
-             if write {return Some(-(EACCES as i64));}
--            match process_mount_points(host_pid){Ok(points)=>content_fd(if info{mountinfo(points)}else{mounts(points)}.as_bytes(),cloexec),Err(error)=>-(error as i64)}
-+            match process_mount_points(host_pid){Ok(points)=>content_fd_unpublished(if info{mountinfo(points)}else{mounts(points)}.as_bytes(),cloexec),Err(error)=>-(error as i64)}
-         }
-         Some(Node::NetTable(kind)) => {
-             if write { return Some(-(EACCES as i64)); }
-             match super::net::proc_table(&kind) {
+     if let Some(result) = super::fuse_sysfs::open(guest, flags) {
+         return Some(result);
+     }
+@@ -1999,7 +2011,7 @@
+                 return Some(-(EACCES as i64));
+             }
+             match process_mount_points(host_pid) {
+-                Ok(points) => content_fd(
++                Ok(points) => content_fd_unpublished(
+                     if info {
+                         mountinfo(points)
+                     } else {
+@@ -2021,7 +2033,7 @@
+                 super::net::proc_table(&kind)
+             };
+             match table {
 -                Ok(bytes) => content_fd(&bytes, cloexec),
 +                Ok(bytes) => content_fd_unpublished(&bytes, cloexec),
                  Err(error) => -(error as i64),
              }
          }
-@@ -1679,7 +1691,7 @@
+@@ -2035,7 +2047,7 @@
                  // under kernfs like init's writes, or refuse.
                  return Some(record_write(guest, host_flags));
              }
@@ -316,16 +380,17 @@
 +            content_fd_unpublished(&data, cloexec)
          }
          Some(Node::Dir(list)) => dir_fd(&canon, list, cloexec),
-         Some(Node::Link(t)) => {
-@@ -1692,14 +1704,14 @@
-             if let Some(Node::MountTable { host_pid, info }) = linked {
-                 if write { return Some(-(EACCES as i64)); }
-                 match process_mount_points(host_pid) {
--                    Ok(points) => content_fd(if info { mountinfo(points) } else { mounts(points) }.as_bytes(), cloexec),
-+                    Ok(points) => content_fd_unpublished(if info { mountinfo(points) } else { mounts(points) }.as_bytes(), cloexec),
-                     Err(error) => -(error as i64),
+         Some(Node::Denied(_)) => -(EACCES as i64),
+@@ -2051,7 +2063,7 @@
+                     return Some(-(EACCES as i64));
                  }
-             } else if let Some(Node::Dir(list)) = linked {
+                 match process_mount_points(host_pid) {
+-                    Ok(points) => content_fd(
++                    Ok(points) => content_fd_unpublished(
+                         if info {
+                             mountinfo(points)
+                         } else {
+@@ -2066,7 +2078,7 @@
                  dir_fd(&canonical(&target), list, cloexec)
              } else if let Some(Node::File(data)) = linked.filter(|_| !write) {
                  // /proc/mounts -> self/mounts.
@@ -336,7 +401,7 @@
                      Ok(r) => r,
 --- a/crates/aim-linux-abi/src/vfs.rs
 +++ b/crates/aim-linux-abi/src/vfs.rs
-@@ -821,6 +821,12 @@
+@@ -1935,6 +1935,12 @@
          .find_map(|m| Some((m, below(&m.guest, guest)?)).filter(|(m, _)| !hidden(mounts, m)))
  }
  
@@ -349,7 +414,7 @@
  /// Host path and area of a normalized absolute guest path, without
  /// following symlinks.
  pub fn lookup(guest: &str) -> (PathBuf, Area) {
-@@ -1217,6 +1223,7 @@
+@@ -2720,6 +2726,7 @@
      }
      let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
      let host = Path::new(OsStr::from_bytes(&buf[..len]));
