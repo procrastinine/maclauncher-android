@@ -2,7 +2,6 @@
   "version": "9.10.1",
   "artifact": "org.ow2.asm:asm:9.10.1",
   "url": "https://repo.maven.apache.org/maven2/org/ow2/asm/asm/9.10.1/asm-9.10.1.jar",
-  "license": "BSD-3-Clause",
   "purpose": "Build-time classfile normalization only; not loaded in game processes",
   "files": [
     {

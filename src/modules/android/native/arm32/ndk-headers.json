@@ -8,15 +8,13 @@
   "files": 3671,
   "bytes": 25560704,
   "treeSha256": "289f86acaca303786009fc1c8ba2675a1b2223030050be1cef4bdfcc29899912",
-  "license": "Original component licenses retained in the NDK NOTICE and source headers",
   "sourcePropertiesSha256": "716f3518a923198cfab037abb32dc3f1b1f7e9a9dcdcda6b66be5906215d2658",
   "centralDirectorySha256": "b2054f06a13ca8a163caffd00f7ec113ccd98118ea9acc31b95a467a37477487",
   "compilerRuntime": {
     "entry": "android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/21/lib/linux/libclang_rt.builtins-arm-android.a",
     "file": "libclang_rt.builtins-arm-android.a",
     "bytes": 228288,
-    "sha256": "9b9a580d98d7b653a4f0894bbb5a4a8bc176e649e094c78e3e19f1a09eaaa2c2",
-    "noticeEntry": "android-ndk-r29/NOTICE.toolchain"
+    "sha256": "9b9a580d98d7b653a4f0894bbb5a4a8bc176e649e094c78e3e19f1a09eaaa2c2"
   },
   "caseSensitiveHeaders": [
     {

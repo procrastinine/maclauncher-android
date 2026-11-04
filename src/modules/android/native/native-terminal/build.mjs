@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,7 +15,7 @@ const root=path.dirname(fileURLToPath(import.meta.url));
  * Its ioctl calls share the same physical translation as direct guest ioctl. */
 export function prepareNativeTerminal({bionicSource,build,ninja,python,libc}){
   const output=path.join(build,'native-terminal'),source=path.join(output,'source');
-  exportSources(bionicSource,pins.aospBionic,['libc/bionic/termios.cpp','libc/include','libc/kernel','libc/NOTICE'],source);
+  exportSources(bionicSource,pins.aospBionic,['libc/bionic/termios.cpp', 'libc/include', 'libc/kernel'],source);
   const original=path.join(source,'libc'),android=['-target','aarch64-linux-android36','-D_GNU_SOURCE','-ffreestanding','-fno-stack-protector','-fno-builtin','-fPIC','-O2','-Wno-nullability-completeness','-I'+path.join(original,'include'),'-I'+path.join(original,'kernel/uapi'),'-I'+path.join(original,'kernel/uapi/asm-arm64'),'-I'+path.join(original,'kernel/android/uapi')];
   const compile=(name,input,flags,compiler='clang')=>compileHostObject({name,inputs:[input],flags,directory:path.join(build,'host-objects'),cwd:source,ninja,python,compiler}).output;
   const boundary=path.join(output,'original-boundary.h');
@@ -32,7 +31,7 @@ export function prepareNativeTerminal({bionicSource,build,ninja,python,libc}){
   const headers=['asm-generic/termbits-common.h','asm-generic/termbits.h','asm-generic/termios.h','asm-generic/ioctls.h'];
   const constants=[...new Set(headers.flatMap(file=>[...fs.readFileSync(path.join(original,'kernel/uapi',file),'utf8').matchAll(/^#define\s+(\w+)\s+(?!_IO)([^\n]+)/gm)].map(match=>match[1])))].filter(name=>!name.startsWith('_'));
   const evaluated=run('clang',[...android,'-x','c','-S','-emit-llvm','-o','-','-'],'#include <termios.h>\nconst unsigned long klj_values[]={'+constants.join(',')+'};\n');
-  const values=[...evaluated.match(/@klj_values =[^\n]+\[([^\n]+)\], align/)?.[1].matchAll(/i64 (\d+)/g)||[]].map(match=>match[1]);
+  const values=[...(evaluated.match(/@klj_values =[^\n]+\[([^\n]+)\], align/)?.[1].matchAll(/i64 (\d+)/g) || [])].map(match=>match[1]);
   if(values.length!==constants.length)throw Error('Original terminal constants could not be evaluated');
   const declarations=run('clang',[...android,'-x','c','-E','-P','-'],'#include <termios.h>\n');
   const records=['termios','termios2','winsize'].map(name=>{
@@ -72,8 +71,10 @@ export function prepareNativeTerminal({bionicSource,build,ninja,python,libc}){
     text=includeDependencies(text.replace(entry,entry+'\n    int terminalResult;\n    if(klj_terminal_ioctl_dispatch(fd,req,arg,&terminalResult))return terminalResult;'), '#include <stdint.h>\nextern int klj_terminal_ioctl_dispatch(int,unsigned long,uintptr_t,int *);');
     writeChanged(libc,text);
   }
-  const licenses=path.join(output,'licenses');
-  addLicense(path.dirname(licenses),'native-terminal',path.join(original,'NOTICE'));
   writeChanged(path.join(output,'exports.json'),JSON.stringify({exports:names},null,2)+'\n');
-  return {objects,names,licenses,output};
+  return {
+    objects,
+    names,
+    output
+  };
 }

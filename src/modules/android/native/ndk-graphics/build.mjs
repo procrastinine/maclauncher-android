@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -18,8 +17,20 @@ const units=['native/graphics/jni/bitmap.cpp','libs/hwui/apex/android_bitmap.cpp
 
 export function prepareNdkGraphicsSources({frameworkSource,skiaSource,nativeSource,incfsSource,ziparchiveSource,output}) {
   const sources=Object.fromEntries(['framework','skia','native','incfs','ziparchive'].map(name=>[name,path.join(output,'source',name)]));
-  const files=read('git',['-C',frameworkSource,'ls-tree','-r','--name-only',framework.declarationSource.revision,'libs/hwui','libs/androidfw/include','native/graphics','native/android','core/jni/include','NOTICE'])
-    .split('\n').filter(file=>/\.(h|hpp|inc)$/.test(file)||units.includes(file)||file==='NOTICE');
+  const files=read('git',[
+    '-C',
+    frameworkSource,
+    'ls-tree',
+    '-r',
+    '--name-only',
+    framework.declarationSource.revision,
+    'libs/hwui',
+    'libs/androidfw/include',
+    'native/graphics',
+    'native/android',
+    'core/jni/include'
+  ])
+    .split('\n').filter(file=>/\.(h|hpp|inc)$/.test(file)||units.includes(file));
   exportSources(frameworkSource,framework.declarationSource.revision,files,sources.framework);
   exportSources(skiaSource,catalog[0].revision,catalog[0].trees,sources.skia);
   exportSources(nativeSource,pins.aospNative,['include','libs/nativewindow/include','libs/arect/include'],sources.native);
@@ -127,12 +138,11 @@ export function buildNdkGraphics({output,frameworkSource,skiaSource,nativeSource
     binder.library,processLibrary,'-Wl,-rpath,@loader_path','-o',library]);
   for(const name of ['libandroid-binder-rpc.dylib','libklepton-jvm.dylib'])
     run('install_name_tool',['-change','@rpath/'+name,'@loader_path/'+name,library]);
-  const licenses=path.join(output,'licenses');
-  addLicense(path.dirname(licenses),'ndk-graphics',path.join(sources.framework,'NOTICE'));
-  for(const relative of fs.globSync(['**/LICENSE','**/LICENSE.*','**/NOTICE','**/NOTICE.*'],{cwd:sources.skia})){
-    addLicense(path.dirname(licenses),'ndk-graphics',path.join(sources.skia,relative));
-  }
 
-  const result={library,licenses,bindings,exports};
+  const result={
+    library,
+    bindings,
+    exports
+  };
   fs.writeFileSync(path.join(output,'build.json'),JSON.stringify(result,null,2)+'\n');return result;
 }

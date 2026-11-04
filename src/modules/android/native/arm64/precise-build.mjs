@@ -15,7 +15,11 @@ export function buildPrecise({source,output,work=path.join(output,'work'),unicor
  execFileSync('clang++',['-std=c++20','-O2','-g0','-fPIC','-arch','arm64','-mmacosx-version-min=13.0',...nativePathFlags({source:here,build:work,roots:[[source,'/src/unicorn']]}),'-I'+path.join(source,'include'),'-c',path.join(here,'precise.cpp'),'-o',object],{stdio:'inherit'});
  execFileSync('ar',['crs',archive,object],{stdio:'inherit'});
  const unicorn=path.join(output,'libunicorn.a');copyChanged(path.join(dependency.build,'libunicorn.a'),unicorn);
- const result={schemaVersion:1,archives:[archive,unicorn],licenses:dependency.licenses,upstream:dependency.identity};
+ const result={
+  schemaVersion:1,
+  archives:[archive,unicorn],
+  upstream:dependency.identity
+ };
  fs.writeFileSync(path.join(output,'precise-build.json'),JSON.stringify(result,null,2)+'\n');return result;
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){

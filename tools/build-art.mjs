@@ -15,7 +15,7 @@ export async function buildArtRuntime({inputs,check=false}){
  if(fs.existsSync(path.join(options.output,'runtime')))throw Error('ART supplier output already exists.');
  if(providedArchive!==undefined&&(!path.isAbsolute(providedArchive)||!fs.statSync(providedArchive).isFile()))throw Error('ART sourceArchive must be an absolute source archive path.');
  const toolPath=value=>typeof value==='string'?value:value?.path;
- const hwui=hwuiSources||(options.hwui?{sources:options.hwui.sources,registry:path.join(options.hwui.work||path.join(options.output,'build/hwui'),'module/sources/SOURCES.json'),registryCache:options.hwui.licenseInputs?.cargo?.registryCache||path.join(toolPath(options.hwui.tools?.cargoHome)||'','registry/cache')}:undefined);
+ const hwui=hwuiSources||(options.hwui?{sources:options.hwui.sources,registry:path.join(options.hwui.work||path.join(options.output,'build/hwui'),'module/sources/SOURCES.json'),registryCache:path.join(toolPath(options.hwui.tools?.cargoHome)||'','registry/cache')}:undefined);
  const bridge=options.nativeBridge;
  let ndkHeaders=bridge?.ndkHeaders||sources.ndkHeaders;
  if(!ndkHeaders&&bridge?.imports?.directory){const input=path.join(bridge.imports.directory,'guest-input.json');if(fs.existsSync(input))ndkHeaders=JSON.parse(fs.readFileSync(input)).include;}

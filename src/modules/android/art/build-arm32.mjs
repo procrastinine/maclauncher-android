@@ -1,4 +1,3 @@
-import {addLicense,includeLicenses} from '../native/upstream/licenses.mjs';
 import {prepareSourceTree,copyChanged} from '../native/upstream/source-files.mjs';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -67,9 +66,8 @@ export async function buildArtNativeBridge(options){
  const library=compileHostExecutable({name:components.bindings.art,inputs:objects,extra:[adapter.archive,...adapter.dependencies],flags:['-shared','-static-libstdc++','-Wl,--no-undefined','-Wl,-z,nodelete','-Wl,-soname,'+components.bindings.art,'-L'+path.resolve(image,'apex/com.android.runtime/lib64/bionic'),'-ldl_android'],directory,cwd:root,ninja,python,compiler,pathRoots:roots}).output;
  const target=path.join(output,components.bindings.art),temporary=target+'.tmp';
  execFileSync(path.join(bin,'llvm-strip'),['--strip-debug','-o',temporary,library]);copyChanged(temporary,target);fs.rmSync(temporary);
- const licenses=path.join(output,'licenses');
- includeLicenses(path.dirname(licenses),original.licenses);
- addLicense(path.dirname(licenses),'libffi',ffi.license);
- includeLicenses(path.dirname(licenses),arm32.licenses);
- return {nativeBridge:target,nativeBridgeLicenses:licenses,...arm32.preloads};
+ return {
+  nativeBridge:target,
+  ...arm32.preloads
+ };
 }

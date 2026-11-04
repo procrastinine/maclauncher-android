@@ -5,19 +5,13 @@
       "id": "aosp-arm-optimized-routines",
       "repository": "https://android.googlesource.com/platform/external/arm-optimized-routines",
       "path": "src/external/aosp-arm-optimized-routines",
-      "revision": "43049f685bc5dae7182a8800e673cab6471f3ac1",
-      "licensePaths": [
-        "LICENSE"
-      ]
+      "revision": "43049f685bc5dae7182a8800e673cab6471f3ac1"
     },
     "llvmLibc": {
       "id": "aosp-llvm-libc",
       "repository": "https://android.googlesource.com/platform/external/llvm-libc",
       "path": "src/external/aosp-llvm-libc",
-      "revision": "549bb629f8325dc9f5221bb16a3de908a753c304",
-      "licensePaths": [
-        "LICENSE"
-      ]
+      "revision": "549bb629f8325dc9f5221bb16a3de908a753c304"
     }
   }
 }

@@ -23,7 +23,7 @@ function copySource(from,to,logical=''){
 function archiveCheckout(record,checkout,output,trees=['.']){
  if(typeof checkout!=='string'||!path.isAbsolute(checkout))throw Error('ART source export requires the '+record.id+' source checkout.');
  if(git(checkout,['rev-parse','HEAD'])!==record.revision)throw Error('ART source checkout differs from its selected revision: '+record.id);
- const selected=[...new Set([...trees,...record.licensePaths])];
+ const selected=[...new Set(trees)];
  const members=git(checkout,['ls-tree','-r','--name-only','-z',record.revision,'--',...selected]).split('\0').filter(Boolean);
  const published=members.filter(name=>!Content.excludedReason(name));
  const temporary=fs.mkdtempSync(path.join(path.dirname(output),'.pinned-source-'));
@@ -44,7 +44,6 @@ function lockedArtSources(aim,aosp,destination){
    const [project,subtree,digest,revision]=match[1].split('|');
    if(!relative(project)||subtree&&!relative(subtree)||!/^[a-f0-9]{64}$/.test(digest))throw Error('ART source lock contains an invalid source input.');
    const name=path.posix.join(project.replace(/^platform\//,''),subtree),file=path.join(aosp,name);
-   if(!tree&&/(?:^|\/)(?:NOTICE|LICENSE|COPYING)(?:[._-]|$)/i.test(subtree)){copyOptional(file,path.join(destination,name));continue;}
    if(!fs.existsSync(file))throw Error('ART source export is missing original AOSP input: '+name);
    const actual=tree?sha(regularFiles(file).map(name=>sha(fs.readFileSync(path.join(file,name)))+'  ./'+name+'\n').join('')):sha(fs.readFileSync(file));
    if(actual!==digest)throw Error('ART original AOSP source differs from its source lock: '+name);
@@ -59,10 +58,20 @@ export function nativeBridgeTrees({arm32Sources},revision){
  if(!path.isAbsolute(arm32Sources||''))throw Error('Native bridge source export requires its ARM32 component source records.');
  const read=name=>{const record=JSON.parse(fs.readFileSync(path.join(arm32Sources,name)));if(record.revision!==revision)throw Error('Native bridge source record revision differs.');return record;};
  const elf=read('bionic.json'),families=read('bionic-portable-families.json');
- const files=[...elf.files,...Object.values(families).filter(Array.isArray).flat(),
- 'linker/linker_namespaces.cpp','linker/linker_utils.cpp','libc/NOTICE','libc/include/search.h','libc/upstream-freebsd/lib/libc/stdlib/hsearch.h',
- 'libc/stdio/printf_common.h','libc/stdio/scanf_common.h','libc/stdio/vfscanf.cpp','libc/SYSCALLS.TXT','libc/tools/gensyscalls.py',
- ...['prctl.h','capability.h','securebits.h','netlink.h','fcntl.h','binfmts.h'].map(name=>'libc/kernel/uapi/linux/'+name)];
+ const files=[
+  ...elf.files,
+  ...Object.values(families).filter(Array.isArray).flat(),
+  'linker/linker_namespaces.cpp',
+  'linker/linker_utils.cpp',
+  'libc/include/search.h',
+  'libc/upstream-freebsd/lib/libc/stdlib/hsearch.h',
+  'libc/stdio/printf_common.h',
+  'libc/stdio/scanf_common.h',
+  'libc/stdio/vfscanf.cpp',
+  'libc/SYSCALLS.TXT',
+  'libc/tools/gensyscalls.py',
+  ...['prctl.h','capability.h','securebits.h','netlink.h','fcntl.h','binfmts.h'].map(name=>'libc/kernel/uapi/linux/'+name)
+ ];
  if(files.some(name=>!relative(name)))throw Error('Native bridge source records contain an invalid source path.');return [...new Set(files)].sort();
 }
 
@@ -75,7 +84,6 @@ function exportNativeBridgeHeaders({ndkHeaders},destination){
  if(files.length!==pin.files||identity.digest('hex')!==pin.treeSha256)throw Error('Native bridge NDK headers differ from the pinned release.');
  copySource(ndkHeaders,path.join(destination,'include'));
  for(const row of pin.caseSensitiveHeaders){const input=path.resolve(ndkHeaders,'../case-sensitive',row.sha256);if(sha(fs.readFileSync(input))!==row.sha256)throw Error('Original case-sensitive NDK header is absent.');copySource(input,path.join(destination,'case-sensitive',row.sha256));}
- for(const name of ['NOTICE','NOTICE.toolchain'])copyOptional(path.resolve(ndkHeaders,'..',name),path.join(destination,name));
  const properties=path.resolve(ndkHeaders,'../source.properties');if(sha(fs.readFileSync(properties))!==pin.sourcePropertiesSha256)throw Error('Original NDK source properties differ.');copySource(properties,path.join(destination,'source.properties'));
  fs.writeFileSync(path.join(destination,'source.json'),JSON.stringify(pin,null,2)+'\n');return {version:pin.version,url:pin.url,headerTreeSha256:pin.treeSha256,compilerRuntime:pin.compilerRuntime};
 }
@@ -96,16 +104,25 @@ export function exportArtSourceArchive({output,sources,unicorn,sourceCheckouts={
  try{
   fs.mkdirSync(tree);snapshotSources(path.join(repository,'src/modules/android/native'),snapshot);snapshotBuildCompanions({repository,destination:path.join(snapshot,'build-tools')});
   for(const [from,to]of [['native','src/modules/android/native'],['art','src/modules/android/art'],['profile.js','src/modules/android/profile.js'],['build-tools','']])copySource(path.join(snapshot,from),path.join(tree,to),to);
-  for(const name of ['LICENSE','README.md','package.json','upstreams.json','.gitmodules','tools/build.mjs','tools/build-art.mjs','tools/check-sources.mjs'])copySource(path.join(repository,name),path.join(tree,name),name);
   const upstream=path.join(tree,'upstream');fs.mkdirSync(upstream);const records=[];
+  for(const name of ['README.md','package.json','upstreams.json','.gitmodules','tools/build.mjs','tools/build-art.mjs','tools/check-sources.mjs'])copySource(path.join(repository,name),path.join(tree,name),name);
   for(const [id,checkout]of Object.entries(selected).sort(([a],[b])=>a.localeCompare(b))){
    const record=projects.find(project=>project.id===id),name=id+'.tar';
    const trees=id==='klepton'?['runtime']:id==='android-gles-headers'?['include','scripts/gl.xml']:id==='aosp-native'?['libs/binder']:id==='aosp-bionic'&&nativeBridgeSources?nativeBridgeTrees(nativeBridgeSources,record.revision):id==='aosp-art'?['libnativeloader/include/nativeloader/dlext_namespaces.h','libnativeloader/library_namespaces.cpp','libnativebridge/include/nativebridge/native_bridge.h']:['.'];
-   archiveCheckout(record,checkout,path.join(upstream,name),trees);records.push({id,repository:record.repository,revision:record.revision,archive:'upstream/'+name,licensePaths:record.licensePaths});
+   archiveCheckout(record,checkout,path.join(upstream,name),trees);records.push({
+   id,
+   repository:record.repository,
+   revision:record.revision,
+   archive:'upstream/'+name
+  });
   }
   const xsdcRevision=git(sources.source,['show','HEAD:upstream/android16-xsdc.lock']).match(/^XSDC_REVISION=([a-f0-9]{40})/m)?.[1];
   if(!xsdcRevision)throw Error('Original ART source has no pinned XSD compiler source.');
-  const xsdc={id:'xsdc',repository:'https://android.googlesource.com/platform/system/tools/xsdc',revision:xsdcRevision,licensePaths:[]};
+  const xsdc={
+   id:'xsdc',
+   repository:'https://android.googlesource.com/platform/system/tools/xsdc',
+   revision:xsdcRevision
+  };
   archiveCheckout(xsdc,sources.xsdc||path.join(path.dirname(sources.aosp||''),'xsdc'),path.join(upstream,'xsdc.tar'));records.push({...xsdc,archive:'upstream/xsdc.tar'});
   const aosp=lockedArtSources(sources.source,sources.aosp,path.join(upstream,'aim-aosp'));
   const nativeBridge=nativeBridgeSources?exportNativeBridgeHeaders(nativeBridgeSources,path.join(upstream,'native-bridge-ndk')):undefined;

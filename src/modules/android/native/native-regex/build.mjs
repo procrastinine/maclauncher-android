@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,7 +14,16 @@ export function prepareRegexSources({bionicSource,output}){
   const relativeUnits=names.map(name=>directory+name+'.c');
   const headers=['engine.c','utils.h','regex2.h','cname.h'].map(name=>directory+name);
   const support='libc/upstream-netbsd/android/include/';
-  exportSources(bionicSource,pins.aospBionic,[...relativeUnits,...headers,support+'netbsd-compat.h',support+'namespace.h','libc/include/regex.h','libc/include/ctype.h','libc/include/malloc.h','libc/Android.bp','libc/NOTICE'],source);
+  exportSources(bionicSource,pins.aospBionic,[
+    ...relativeUnits,
+    ...headers,
+    support+'netbsd-compat.h',
+    support+'namespace.h',
+    'libc/include/regex.h',
+    'libc/include/ctype.h',
+    'libc/include/malloc.h',
+    'libc/Android.bp'
+  ],source);
   const include=path.join(output,'include');
   writeChanged(path.join(include,'regex.h'),fs.readFileSync(path.join(source,'libc/include/regex.h')));
   const annotations=path.join(output,'annotations.h');
@@ -39,8 +47,11 @@ export function prepareNativeRegex({bionicSource,build,ninja,python}){
   const lookup=path.join(output,'lookup.c');
   writeChanged(lookup,'#include <regex.h>\n#include <string.h>\nvoid *klj_regex_lookup(const char *name){\n'+prepared.names.map(name=>' if(!strcmp(name,"'+name+'"))return (void *)&'+name+';').join('\n')+'\n return NULL;\n}\n');
   objects.push(compile('lookup.o',lookup));
-  const licenses=path.join(output,'licenses');
-  addLicense(path.dirname(licenses),'native-regex',path.join(prepared.source,'libc/NOTICE'));
 
-  return {...prepared,output,namespace,objects,licenses};
+  return {
+    ...prepared,
+    output,
+    namespace,
+    objects
+  };
 }

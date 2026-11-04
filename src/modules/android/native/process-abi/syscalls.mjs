@@ -10,10 +10,12 @@ const pins=JSON.parse(fs.readFileSync(new URL('../source-pins.json',import.meta.
 export function readSyscallStubs({bionicSource,python,output,architecture}){
   fs.mkdirSync(output,{recursive:true});
   const source=path.join(output,'source');
-  exportSources(bionicSource,pins.aospBionic,['libc/SYSCALLS.TXT','libc/tools/gensyscalls.py','libc/NOTICE'],source);
+  exportSources(bionicSource,pins.aospBionic,['libc/SYSCALLS.TXT', 'libc/tools/gensyscalls.py'],source);
   const rows=JSON.parse(execFileSync(python,[path.join(import.meta.dirname,'syscalls-parse.py'),
     path.join(source,'libc/tools/gensyscalls.py'),path.join(source,'libc/SYSCALLS.TXT'),architecture],{encoding:'utf8'}));
-  return {rows,notice:path.join(source,'libc/NOTICE')};
+  return {
+    rows
+  };
 }
 
 export function syscallConstants(include,output,target,entries){

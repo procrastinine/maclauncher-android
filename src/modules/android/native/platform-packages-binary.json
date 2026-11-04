@@ -2,7 +2,6 @@
   "schemaVersion": 1,
   "androidApi": 36,
   "implementation": "Original AOSP platform provider APKs and resources, without executable changes",
-  "license": "Apache-2.0",
   "declarationSource": {
     "url": "https://android.googlesource.com/platform/frameworks/base",
     "revision": "99b01a65cc4c104933788b3143285ab6bae65827",
@@ -16,8 +15,7 @@
     "archive": "arm64-v8a-playstore-ps16k-36_r07.zip",
     "url": "https://dl.google.com/android/repository/sys-img/google_apis_playstore/arm64-v8a-playstore-ps16k-36_r07.zip",
     "sha256": "182f51ad2b04bbb9cd9464d3e0396a81201db6d9659e1fde5951b6efc1e0a00e",
-    "component": "system/priv-app/SettingsProvider/SettingsProvider.apk",
-    "componentNotice": "system/etc/NOTICE.xml.gz: //system/priv-app/SettingsProvider/SettingsProvider.apk"
+    "component": "system/priv-app/SettingsProvider/SettingsProvider.apk"
   },
   "files": [
     {

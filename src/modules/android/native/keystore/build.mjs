@@ -1,4 +1,3 @@
-import {addLicense,includeLicenses} from '../upstream/licenses.mjs';
 import {prepareSourceTree} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -29,11 +28,9 @@ export async function prepareKeyStoreFoundation({output,checkouts={},boringssl,a
   ])),...checkouts};
   const prepared=prepareKeyStoreSources({checkouts,output});
   const sources={...prepared.sources,framework:prepared.sources['java-framework']};
-  // These sources belong to the already pinned native/crypto suppliers. Java
-  // service declarations come from the Java framework release in the catalog.
   for(const [name,revision,trees]of[
-    ['bionic',pins.aospBionic,['libc/include/sys/system_properties.h','NOTICE']],
-    ['boringssl',pins.aospBoringSSL,['src/rust','src/LICENSE','NOTICE']],
+    ['bionic',pins.aospBionic,['libc/include/sys/system_properties.h']],
+    ['boringssl',pins.aospBoringSSL,['src/rust']],
   ]){
     sources[name]=path.join(output,'source',name);
     prepareSourceTree(sources[name],temporary=>exportSources(checkouts[name],revision,trees,temporary));
@@ -42,15 +39,35 @@ export async function prepareKeyStoreFoundation({output,checkouts={},boringssl,a
     bionic:sources.bionic,output:path.join(output,'foundation'),ninja,python});
   const keyMintAidl=generateKeyMintAidl({source:sources['hardware-interfaces'],
     compiler:aidl,output:path.join(output,'keymint-aidl-generated')});
-  const context={output,checkouts,sources,foundation,keyMintAidl,boringssl,
-    aidl,aconfig,rustToolchain,ninja,python,processLibrary,licenses:prepared.licenses};
+  const context={
+    output,
+    checkouts,
+    sources,
+    foundation,
+    keyMintAidl,
+    boringssl,
+    aidl,
+    aconfig,
+    rustToolchain,
+    ninja,
+    python,
+    processLibrary
+  };
   return {foundation,context};
 }
 
 /** Link the complete original services after the shared Binder owner exists. */
 export async function buildKeyStore(context) {
-  const {output,checkouts,foundation,keyMintAidl,binder,boringssl,aidl,
-    processLibrary,licenses}=context;
+  const {
+    output,
+    checkouts,
+    foundation,
+    keyMintAidl,
+    binder,
+    boringssl,
+    aidl,
+    processLibrary
+  }=context;
   const sources={...context.sources,...foundation.sources,
     // Binder exports the complete original native directory and OS headers.
     native:path.join(binder.output,'source/native'),
@@ -73,15 +90,7 @@ export async function buildKeyStore(context) {
     nativeCheckout:checkouts.native,nativeRevision:pins.aospNative,binder,
     foundation,wrapper,rustLibrary:rust.rustLibrary,attestation,nativeHal,
     crypto:{...rust.crypto,crypto:boringssl.crypto},processLibrary});
-  includeLicenses(path.dirname(licenses),foundation.licenses);
-  if(path.resolve(rust.licenses)!==path.resolve(licenses))
-    includeLicenses(path.dirname(licenses),rust.licenses);
-  for(const name of ['framework','bionic','boringssl']){
-    for(const file of fs.globSync(['**/NOTICE','**/NOTICE.*','**/LICENSE','**/LICENSE.*'],{cwd:sources[name]})){
-      const source=path.join(sources[name],file);
-      if(!fs.statSync(source).isFile())continue;
-      addLicense(output,name,source);
-    }
-  }
-  return {...linked,licenses};
+  return {
+    ...linked
+  };
 }

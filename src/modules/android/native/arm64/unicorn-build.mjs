@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {copyChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,11 +17,14 @@ export function buildUnicorn({source,output,work=path.join(output,'work'),cmake=
  run(cmake,['--build',build,'--target','unicorn','--parallel',String(jobs)]);
  const library=path.join(output,'libunicorn.2.dylib');
  publishNativeBinary(path.join(build,'libunicorn.2.dylib'),library,{rpaths:[],installName:'@rpath/libunicorn.2.dylib'});
- const licenses=path.join(output,'licenses');
- for(const file of ['COPYING','COPYING.LGPL2','COPYING_GLIB','qemu/COPYING','qemu/COPYING.LIB','qemu/LICENSE'])addLicense(path.dirname(licenses),'unicorn-build',path.join(source,file));
  const identity={schemaVersion:1,...JSON.parse(fs.readFileSync(new URL('./unicorn-source.json',import.meta.url),'utf8')),parallelAtomics:true};
  fs.writeFileSync(path.join(output,'unicorn-build.json'),JSON.stringify(identity,null,2)+'\n');
- return {library,licenses,identity,source:projection,build};
+ return {
+  library,
+  identity,
+  source:projection,
+  build
+ };
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const options={};for(let i=2;i<process.argv.length;i+=2){const key=process.argv[i].replace(/^--/,'');if(!['source','output','work'].includes(key)||!process.argv[i+1])throw Error('Expected --source, --output and optional --work paths');options[key]=process.argv[i+1];}

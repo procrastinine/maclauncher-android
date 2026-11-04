@@ -1,4 +1,3 @@
-import {addLicense} from './upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -15,11 +14,11 @@ export async function buildFrameworkModules({root,build,jdk,framework,apacheHttp
   const pinsFile=path.join(root,'source-pins.json'),pins=JSON.parse(fs.readFileSync(pinsFile));
   const suppliers=[
     {name:'org.apache.http.legacy',source:apacheHttpSource,pin:pins.aospApacheHttp,
-      project:'platform/external/apache-http',trees:['Android.bp','src','android/src','NOTICE'],directory:'.'},
+      project:'platform/external/apache-http',trees:['Android.bp', 'src', 'android/src'],directory:'.'},
     {name:'service-statsd',source:statsdSource,pin:pins.aospStatsd,
       project:'platform/packages/modules/StatsD',trees:['service'],directory:'service'},
   ];
-  const archives=[],licenses=[];
+  const archives=[];
   for(const supplier of suppliers){
     const directory=path.join(build,'framework-modules',supplier.name),source=path.join(directory,'source');
     exportSources(supplier.source,supplier.pin,supplier.trees,source);
@@ -37,18 +36,17 @@ export async function buildFrameworkModules({root,build,jdk,framework,apacheHttp
     }
     collect(supplier.name);
     const selected=[...files].sort(),classes=path.join(directory,'classes'),archive=path.join(directory,supplier.name+'.jar');
-    const license=path.join(root,'license-inputs/aosp-framework/LICENSE');
     await cachedBuildStep({cache:path.join(directory,'reuse.json'),
       inputs:[fileURLToPath(import.meta.url),pinsFile,...javaToolInputs(jdk),framework.input.file,
         ...declarations,...selected],
       trees:[classes],files:[archive],
       key:{name:supplier.name,revision:supplier.pin,release:21,files:selected,environment:javaToolEnvironment()},build(){
-        execFileSync(path.join(jdk,'bin/javac'),['--release','21','-cp',framework.input.file,'-d',classes,...selected],{stdio:'inherit'});
-        execFileSync(path.join(jdk,'bin/jar'),['--create','--file',archive,'--date','1980-01-01T00:00:02Z','-C',classes,'.'],{stdio:'inherit'});
-        addLicense(directory,supplier.name,license);
-        if(supplier.name==='org.apache.http.legacy')addLicense(directory,supplier.name,path.join(source,'NOTICE'));
-      }});
-    archives.push(archive);licenses.push(path.join(directory,'licenses'));
+      execFileSync(path.join(jdk,'bin/javac'),['--release','21','-cp',framework.input.file,'-d',classes,...selected],{stdio:'inherit'});
+      execFileSync(path.join(jdk,'bin/jar'),['--create','--file',archive,'--date','1980-01-01T00:00:02Z','-C',classes,'.'],{stdio:'inherit'});
+    }});
+    archives.push(archive);
   }
-  return {archives,licenses};
+  return {
+    archives
+  };
 }

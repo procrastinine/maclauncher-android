@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -28,7 +27,16 @@ function rename(ir,names){return ir.replace(/@([\w.$]+)/g,(token,name)=>names.ha
 export function prepareWideStdio({bionicSource,compilerRtSource,klepton,build,shim,libcSource,table}){
   const output=path.join(build,'wide-stdio'),source=path.join(output,'source');
   const portable=nativePathFlags({source,build,roots:[[klepton,'/src/klepton']]}),hostFlags=[...baseHostFlags,...portable];
-  exportSources(bionicSource,pins.aospBionic,['libc/include','libc/kernel','libc/stdio','libc/upstream-openbsd','libc/private','libc/platform','libc/Android.bp','libc/libc.map.txt','libc/NOTICE'],source);
+  exportSources(bionicSource,pins.aospBionic,[
+    'libc/include',
+    'libc/kernel',
+    'libc/stdio',
+    'libc/upstream-openbsd',
+    'libc/private',
+    'libc/platform',
+    'libc/Android.bp',
+    'libc/libc.map.txt'
+  ],source);
   const libc=path.join(source,'libc'),bsd=path.join(libc,'upstream-openbsd'),gdtoa=path.join(bsd,'lib/libc/gdtoa');
   const include=['-I'+libc,'-I'+path.join(libc,'include'),'-I'+path.join(libc,'kernel/uapi'),'-I'+path.join(libc,'kernel/uapi/asm-arm64'),'-I'+path.join(libc,'kernel/android/uapi'),'-I'+path.join(libc,'private'),'-I'+path.join(bsd,'android/include'),'-I'+path.join(bsd,'lib/libc/include'),'-I'+path.join(bsd,'lib/libc/stdio'),'-I'+gdtoa,'-I'+root,'-I'+output];
   const declarations=path.join(output,'boundary.h');
@@ -69,7 +77,7 @@ export function prepareWideStdio({bionicSource,compilerRtSource,klepton,build,sh
   // Compiler support is selected from original build declarations by the actual
   // undefined-symbol dependency closure, including every alias a unit defines.
   const rtSource=path.join(output,'compiler-rt');
-  exportSources(compilerRtSource,compilerRtRevision,['lib/builtins','LICENSE.TXT'],rtSource);
+  exportSources(compilerRtSource,compilerRtRevision,['lib/builtins'],rtSource);
   const rt=path.join(rtSource,'lib/builtins');
   const cmake=fs.readFileSync(path.join(rt,'CMakeLists.txt'),'utf8');
   const rtUnits=[...new Set(['GENERIC_SOURCES','aarch64_SOURCES'].flatMap(name=>{
@@ -117,6 +125,9 @@ export function prepareWideStdio({bionicSource,compilerRtSource,klepton,build,sh
   }
   if(table){const text=fs.readFileSync(table,'utf8');fs.writeFileSync(table,text.replace(/^KL_FWD\((\w+)\).*\n/gm,(line,name)=>exports.includes(name)?'':line));}
   if(libcSource){const text=fs.readFileSync(libcSource,'utf8');fs.writeFileSync(libcSource,removeFunction(text,'int    klb_swprintf('));}
-  const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'wide-stdio',path.join(libc,'NOTICE'));addLicense(path.dirname(licenses),'wide-stdio',path.join(rtSource,'LICENSE.TXT'));
-  return {objects,licenses,output,exports};
+  return {
+    objects,
+    output,
+    exports
+  };
 }

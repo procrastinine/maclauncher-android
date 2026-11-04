@@ -10,9 +10,7 @@
       "client_utils/android",
       "modules/skcms",
       "src/base",
-      "src/core/SkConvertPixels.h",
-      "LICENSE",
-      "NOTICE"
+      "src/core/SkConvertPixels.h"
     ]
   },
   {
@@ -20,13 +18,18 @@
     "checkout": "aosp-incremental-delivery",
     "url": "https://android.googlesource.com/platform/system/incremental_delivery",
     "revision": "c999e3e207ec7633a172d773dda162746b6eaf18",
-    "trees": ["incfs/util/include", "incfs/include", "NOTICE"]
+    "trees": [
+      "incfs/util/include",
+      "incfs/include"
+    ]
   },
   {
     "name": "ziparchive",
     "checkout": "aosp-libziparchive",
     "url": "https://android.googlesource.com/platform/system/libziparchive",
     "revision": "8c51527debf9394dfa515f7e6c7941d2720c6d01",
-    "trees": ["include", "NOTICE"]
+    "trees": [
+      "include"
+    ]
   }
 ]

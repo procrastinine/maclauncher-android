@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,7 +12,19 @@ import {prepareArm32LegacyCharacterData} from '../native-ctype/build.mjs';
 export function prepareElf32({bionicSource,output}) {
   const pins=JSON.parse(fs.readFileSync(new URL('../source-pins.json',import.meta.url)));
   const source=path.join(output,'bionic');
-  const files=['linker/linker_reloc_iterators.h','linker/linker_sleb128.h','linker/linker_gnu_hash.h','linker/linker_soinfo.cpp','libc/NOTICE','libc/private/bionic_ssp.h','libc/stdio/stdio.cpp','libc/tzcode/localtime.c','libc/arch-arm/bionic/__aeabi.c','libc/arch-arm/bionic/exidx_dynamic.c','libc/bionic/new.cpp','libstdc++/include/new','libstdc++/NOTICE'];
+  const files=[
+    'linker/linker_reloc_iterators.h',
+    'linker/linker_sleb128.h',
+    'linker/linker_gnu_hash.h',
+    'linker/linker_soinfo.cpp',
+    'libc/private/bionic_ssp.h',
+    'libc/stdio/stdio.cpp',
+    'libc/tzcode/localtime.c',
+    'libc/arch-arm/bionic/__aeabi.c',
+    'libc/arch-arm/bionic/exidx_dynamic.c',
+    'libc/bionic/new.cpp',
+    'libstdc++/include/new'
+  ];
   exportSources(bionicSource,pins.aospBionic,files,source);
   let leb=fs.readFileSync(path.join(source,files[1]),'utf8')
     .replace('#include <async_safe/log.h>','').replace('#include "linker_debug.h"','');
@@ -54,9 +65,6 @@ ${sysv[0]}
   const timezone=fs.readFileSync(path.join(source,'libc/tzcode/localtime.c'),'utf8').match(/^char\s*\*\s*tzname\s*\[\s*\d+\s*\](?=\s*=)/m);
   if(!timezone)throw Error('Original Bionic timezone name declaration changed');
   writeChanged(stdio,'#include <stdio.h>\n#include <bits/struct_file.h>\n#include <time.h>\nextern '+streams[0]+';\nextern '+timezone[0]+';\n');
-  const licenses=path.join(output,'licenses');
-  addLicense(path.dirname(licenses),'elf-source',path.join(source,'libc/NOTICE'));
-  addLicense(path.dirname(licenses),'elf-source',path.join(source,'libstdc++/NOTICE'));
   // Allocation operators must retain ARM32 size_t and C++ symbol encoding.
   // The original unit calls the shared malloc/free owners; only its terminal
   // diagnostic is routed to the already-supplied Android logging endpoint.

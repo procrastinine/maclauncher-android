@@ -25203,11 +25203,7 @@
         "line": 18766,
         "offset": 897015
       },
-      "properties": {
-        "default_applicable_licenses": [
-          "external_perfetto_license"
-        ]
-      },
+      "properties": {},
       "type": "package"
     },
     {
@@ -25285,30 +25281,6 @@
         ]
       },
       "type": "filegroup"
-    },
-    {
-      "location": {
-        "byteOffset": 898660,
-        "column": 1,
-        "file": "<Blueprint>",
-        "line": 18820,
-        "offset": 898660
-      },
-      "properties": {
-        "license_kinds": [
-          "SPDX-license-identifier-Apache-2.0",
-          "SPDX-license-identifier-BSD",
-          "SPDX-license-identifier-CC-BY"
-        ],
-        "license_text": [
-          "LICENSE"
-        ],
-        "name": "external_perfetto_license",
-        "visibility": [
-          ":__subpackages__"
-        ]
-      },
-      "type": "license"
     },
     {
       "location": {

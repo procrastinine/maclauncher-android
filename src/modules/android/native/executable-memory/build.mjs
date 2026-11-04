@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {prepareSourceTree} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,8 +27,8 @@ export function buildExecutableMemory({source,revision,output,rustToolchain,env=
  // The original component links into the executor's existing native owner.
  // No additional runtime image, symbol loader or install name is introduced.
  const archive=path.join(target,'release/libaim_linux_abi.a');
- const licenses=path.join(output,'licenses');
- for(const name of ['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md'])
-  if(fs.existsSync(path.join(project,name)))addLicense(path.dirname(licenses),'executable-memory',path.join(project,name));
- return {archive,linkFlags:['-framework','IOKit','-lsandbox'],licenses};
+ return {
+  archive,
+  linkFlags:['-framework','IOKit','-lsandbox']
+ };
 }

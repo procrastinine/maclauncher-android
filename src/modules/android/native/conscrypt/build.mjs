@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -12,8 +11,16 @@ const run=(command,args)=>execFileSync(command,args,{stdio:'inherit'});
 export function buildConscrypt({conscryptSource,boringsslSource,binder,nativehelperSource,jdk,output}){
   const source=path.join(output,'source'),conscrypt=path.join(source,'conscrypt'),boringssl=path.join(source,'boringssl');
   const portable=nativePathFlags({source,build:output,roots:[[jdk,'/src/jdk']]});
-  exportSources(conscryptSource,pins.aospConscrypt,['Android.bp','common/src/jni','apex/ca-certificates/files','LICENSE','NOTICE'],conscrypt);
-  exportSources(boringsslSource,pins.aospBoringSSL,['CMakeLists.txt','NOTICE','src/LICENSE','src/crypto','src/ssl','src/include','src/gen','src/third_party/fiat','src/tool'],boringssl);
+  exportSources(conscryptSource,pins.aospConscrypt,['Android.bp', 'common/src/jni', 'apex/ca-certificates/files'],conscrypt);
+  exportSources(boringsslSource,pins.aospBoringSSL,[
+    'CMakeLists.txt',
+    'src/crypto',
+    'src/ssl',
+    'src/include',
+    'src/gen',
+    'src/third_party/fiat',
+    'src/tool'
+  ],boringssl);
   // This Android snapshot's generated CMake file still requests C++14 although
   // its original public headers use C++17 deduction guides. Keep every source
   // and architecture choice in the publisher's targets, correcting only this
@@ -27,16 +34,11 @@ export function buildConscrypt({conscryptSource,boringsslSource,binder,nativehel
   run('cmake',['--build',build,'--target','ssl','crypto','-j6']);
   const crypto=path.join(output,'libcrypto.dylib'),ssl=path.join(output,'libssl.dylib');
   const helper=binder?path.join(binder.output,'source/nativehelper'):path.join(source,'nativehelper');
-  if(!binder)exportSources(nativehelperSource,pins.aospLibnativehelper,['header_only_include','NOTICE'],helper);
+  if(!binder)exportSources(nativehelperSource,pins.aospLibnativehelper,['header_only_include'],helper);
   const includes=[path.join(conscrypt,'common/src/jni/main/include'),path.join(conscrypt,'common/src/jni/unbundled/include'),path.join(boringssl,'src/include'),path.join(jdk,'include'),path.join(jdk,'include/darwin'),path.join(helper,'header_only_include')];
   const sources=publisherList(conscrypt,'conscrypt_global','srcs').map(file=>path.join(conscrypt,file));
   const library=path.join(output,'libjavacrypto.dylib');
   run('clang++',[...portable,'-std=c++17','-arch','arm64','-mmacosx-version-min=13.0','-O2','-fPIC','-fvisibility=hidden','-Wall','-Wextra','-Werror','-DCONSCRYPT_OPENJDK','-DCONSCRYPT_UNBUNDLED','-DBORINGSSL_SHARED_LIBRARY','-DJNI_JARJAR_PREFIX=com/android/',...includes.map(file=>'-I'+file),'-dynamiclib','-Wl,-install_name,@loader_path/libjavacrypto.dylib',...sources,ssl,crypto,'-o',library]);
   for(const file of[crypto,ssl,library])run('codesign',['--force','--sign','-',file]);
-  const licenses=path.join(output,'licenses');
-  addLicense(path.dirname(licenses),'conscrypt',path.join(conscrypt,'LICENSE'));
-  addLicense(path.dirname(licenses),'conscrypt',path.join(boringssl,'NOTICE'));
-  addLicense(path.dirname(licenses),'conscrypt',path.join(conscrypt,'NOTICE'));
-  addLicense(path.dirname(licenses),'conscrypt',path.join(boringssl,'src/LICENSE'));
   return {library,libraries:[crypto,ssl,library],boringssl:{crypto,ssl,include:path.join(boringssl,'src/include'),revision:pins.aospBoringSSL},certificates:path.join(conscrypt,'apex/ca-certificates/files')};
 }

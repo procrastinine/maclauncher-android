@@ -33,12 +33,12 @@ Verified Maven tools are cached under the selected build workspace and copied
 into its fixed source snapshot; source files remain unchanged during a build.
 
 `npm run check` validates source import paths and exact upstream Git pins.
-`upstreams.json` records source URLs, commits and license notice paths. Upstream checkouts
+`upstreams.json` records source URLs and commits. Upstream checkouts
 are read-only inputs; adaptations are applied to owned build projections.
 
 The root LICENSE covers MacLauncher-owned code. Upstream source fragments and
 build inputs retain their original licenses, recorded in source headers,
-upstreams.json and packaged licence texts. The repository does not relicense upstream
+packaged licence texts. The repository does not relicense upstream
 components. Source Gitlinks and metadata can be checked without initializing
 checkouts; initialized checkouts are also checked for exact HEAD identity and
 tracked changes. The source check performs no downloads.
@@ -124,8 +124,8 @@ extractor and corresponding source archive. `commonDeclaration` supplies the
 common runtime identity and must match that producer manifest SHA-256.
 The caller supplies shared package inventory, Mach-O inspection and verification
 services; the producer does not read a launcher catalog or selected version.
-Optional `hwuiLibrary` and `hwuiLicenses` supplier inputs deliver a complete
-Android graphics library and its licence texts beside the original image.
+The optional `hwuiLibrary` supplier input delivers a complete
+Android graphics library beside the original image.
 `assembleArtSupplier` accepts `includeImage: false` with a verified
 `originalImage` identity for packaging an adapter from existing components.
 The image remains separately acquired; it is neither copied nor read during
@@ -201,8 +201,8 @@ prepared AIM source tree and statically links its ARM64 execution and native
 continuation components into `host/linux-run`. A supplied `buildPrecise` result
 reuses existing CPU archives; otherwise the producer builds the pinned Unicorn
 source. `buildArt` accepts this component through its optional `runner` input
-and merges the returned licence texts into `licenses/` through the shared
-`addLicense` operation. Missing or unreadable licence sources emit a warning.
+and collects available top-level licence texts through the shared collector.
+Missing or unreadable licence sources emit a warning.
 
 ## Native runtime behavior
 

@@ -1,7 +1,6 @@
 {
   "version": "8.13.2",
   "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/8.13.2/apksig-8.13.2.jar",
-  "license": "Apache-2.0",
   "files": [
     {
       "path": "apksig.jar",

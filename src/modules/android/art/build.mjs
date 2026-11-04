@@ -1,4 +1,3 @@
-import {addLicense,includeLicenses} from '../native/upstream/licenses.mjs';
 import {writeChanged} from '../native/upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -60,14 +59,9 @@ export function assembleArtSupplier({output,inputs,bootClasspath,sourceVersion,b
    if(name==='image'&&!includeImage)continue;
    const source=path.resolve(inputs[name]||'');if(!inputs[name]||!fs.existsSync(source))throw Error('Missing ART producer output: '+name);
    const destination=path.join(temporary,relative);fs.mkdirSync(path.dirname(destination),{recursive:true});
-   fs.cpSync(source,destination,{recursive:true,mode:fs.constants.COPYFILE_FICLONE,dereference:false,verbatimSymlinks:true,filter:(from,to)=>{
-    if(path.basename(from)==='licenses'){includeLicenses(temporary,from);return false;}return true;
-   }});
+   fs.cpSync(source,destination,{recursive:true,mode:fs.constants.COPYFILE_FICLONE,dereference:false,verbatimSymlinks:true});
   }
-  for(const [key,directory]of Object.entries(inputs))if(key.endsWith('Licenses')&&directory)includeLicenses(temporary,directory);
-  if(baseSupplier)includeLicenses(temporary,path.join(baseSupplier.root,'licenses'));
-  const {license,...imageAcquisition}=supplier.imageAcquisition;
-  addLicense(temporary,license.id,path.join(import.meta.dirname,license.path),license.id);
+  const imageAcquisition=supplier.imageAcquisition;
   const android={...supplier.android,architectures:[...supplier.android.architectures,...(inputs.nativeBridge?['armeabi-v7a','armeabi']:[])]};
   const bootImage=inputs.bootImage?JSON.parse(fs.readFileSync(path.join(inputs.bootImage,'boot-image.json'),'utf8')):null;
   // An explicitly selected immutable supplier can lend its complete image
@@ -105,7 +99,7 @@ export async function buildArt({output,host,runner,java,guest,sensors,composer,g
  const boot=await buildBootImage({output:path.join(output,'boot-image-cache'),aim:host.aim,components:products,bootClasspath});
  const identity=crypto.createHash('sha256');
  identity.update(boot.identity);
- for(const input of [...originalTreeFiles(import.meta.dirname),native.hostLibrary,bootstrap.bootstrapDex,...Object.entries(runnerProducts).filter(([key,value])=>typeof value==='string'&&!key.endsWith('Licenses')).map(([,value])=>value),...Object.values(guestProducts),...Object.values(sensorProducts),...Object.values(composerProducts),...Object.values(graphicsProducts),...Object.entries({...bridgeProducts,...hwuiProducts}).filter(([key])=>!key.endsWith('Licenses')).map(([,value])=>value)])
+ for(const input of [...originalTreeFiles(import.meta.dirname),native.hostLibrary,bootstrap.bootstrapDex,...Object.entries(runnerProducts).filter(([key,value])=>typeof value==='string').map(([,value])=>value),...Object.values(guestProducts),...Object.values(sensorProducts),...Object.values(composerProducts),...Object.values(graphicsProducts),...Object.values({...bridgeProducts,...hwuiProducts})])
   for(const file of fs.statSync(input).isDirectory()?originalTreeFiles(input):[input])identity.update(fs.readFileSync(file));
  return assembleArtSupplier({output:path.join(output,'runtime'),inputs:{...products,bootImage:boot.root},bootClasspath,baseSupplier,sourceVersion:'0.1.0-'+identity.digest('hex').slice(0,16)});
 }

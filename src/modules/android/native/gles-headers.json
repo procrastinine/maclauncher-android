@@ -3,7 +3,6 @@
   "repository": "https://github.com/krkrz/angle.git",
   "revision": "7dbabd125373889681e0f4169e2a2496a789e5dc",
   "directory": "src/external/android-gles-headers",
-  "license": "MIT AND SGI-B-2.0",
   "files": [
     {
       "path": "include/EGL/egl.h",

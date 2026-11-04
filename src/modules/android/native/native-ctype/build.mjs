@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,14 +11,22 @@ const pins=JSON.parse(fs.readFileSync(new URL('../source-pins.json',import.meta.
  * Both original defining units are included whole; their relocations publish
  * the byte-classification and lower/upper-case tables without host aliases. */
 export function prepareArm32LegacyCharacterData({bionicSource,output}){
- const files=['libc/upstream-openbsd/lib/libc/gen/ctype_.c','libc/bionic/ndk_cruft_data.cpp',
-  'libc/upstream-openbsd/lib/libc/include/ctype_private.h','libc/upstream-openbsd/android/include/openbsd-compat.h','libc/NOTICE'];
+ const files=[
+  'libc/upstream-openbsd/lib/libc/gen/ctype_.c',
+  'libc/bionic/ndk_cruft_data.cpp',
+  'libc/upstream-openbsd/lib/libc/include/ctype_private.h',
+  'libc/upstream-openbsd/android/include/openbsd-compat.h'
+ ];
  const source=path.join(output,'source');exportSources(bionicSource,pins.aospBionic,files,source);
  const annotations=path.join(output,'annotations.h');
  writeChanged(annotations,'#define __LIBC_HIDDEN__ __attribute__((visibility("hidden")))\n#include "openbsd-compat.h"\n');
- return {units:files.slice(0,2).map(file=>path.join(source,file)),include:path.join(source,'libc/upstream-openbsd/lib/libc/include'),
-  includes:[path.join(source,'libc/upstream-openbsd/android/include')],annotations,
-  files,licenses:files.filter(file=>file.endsWith('.c')||file.endsWith('.cpp')||file.endsWith('.h')).map(file=>path.join(source,file))};
+ return {
+  units:files.slice(0,2).map(file=>path.join(source,file)),
+  include:path.join(source,'libc/upstream-openbsd/lib/libc/include'),
+  includes:[path.join(source,'libc/upstream-openbsd/android/include')],
+  annotations,
+  files
+ };
 }
 
 /** Bionic's complete inline/out-of-line character family has one shared
@@ -27,7 +34,7 @@ export function prepareArm32LegacyCharacterData({bionicSource,output}){
  * the compilation namespace and platform declaration macros differ. */
 export function prepareNativeCtype({bionicSource,build,ninja,python}){
  build=path.resolve(build);const output=path.join(build,'native-ctype'),source=path.join(output,'source');
- exportSources(bionicSource,pins.aospBionic,['libc/bionic/ctype.cpp','libc/include/ctype.h','libc/NOTICE'],source);
+ exportSources(bionicSource,pins.aospBionic,['libc/bionic/ctype.cpp', 'libc/include/ctype.h'],source);
  const header=fs.readFileSync(path.join(source,'libc/include/ctype.h'),'utf8');
  const names=[...new Set([...header.matchAll(/__BIONIC_CTYPE_INLINE\s+int\s+(\w+)\s*\(/g)].map(match=>match[1]))];
  const namespace=path.join(output,'namespace.h');
@@ -41,6 +48,9 @@ export function prepareNativeCtype({bionicSource,build,ninja,python}){
  const lookup=path.join(output,'lookup.cpp');
  writeChanged(lookup,'#include <cstring>\n'+bindings.map(({symbol})=>`extern "C" void ${symbol}(void);`).join('\n')+'\nextern "C" void *klj_ctype_lookup(const char *name){\n'+bindings.map(({name,symbol})=>`if(!std::strcmp(name,"${name}"))return reinterpret_cast<void *>(&${symbol});`).join('\n')+'\nreturn nullptr;\n}\n');
  objects.push(compile('bionic-ctype-lookup.o',lookup,'clang++'));
- const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'native-ctype',path.join(source,'libc/NOTICE'));
- return {output,objects,names:bindings.map(binding=>binding.name),licenses};
+ return {
+  output,
+  objects,
+  names:bindings.map(binding=>binding.name)
+ };
 }

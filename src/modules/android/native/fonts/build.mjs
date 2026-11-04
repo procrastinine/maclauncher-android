@@ -1,4 +1,4 @@
-import {addLicense} from '../upstream/licenses.mjs';
+import {addLicenses} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -25,12 +25,13 @@ function read(source,file){
 /** Stage the original prebuilt font modules; no font family or fallback is synthesized. */
 export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={}){
   if(!output)throw Error('An Android font output directory is required');
-  const modules=[],packages=new Map(),licenseModules=new Map(),inputs=[];
+  const modules=[],inputs=[];
   for(const supplier of suppliers){
     const source={...supplier,checkout:sources[supplier.key]||path.join(repository,supplier.path),revision:sourcePins[supplier.key]};
     if(!/^[a-f0-9]{40}$/.test(source.revision||''))throw Error(`Missing Android font source revision: ${supplier.key}`);
     if(git(source,['rev-parse','HEAD']).toString().trim()!==source.revision)throw Error(`Android font source revision changed: ${supplier.key}`);
-    source.files=new Set(git(source,['ls-tree','-r','--name-only',source.revision,...(source.directory?[source.directory]:[])]).toString().trim().split('\n').filter(Boolean));
+    addLicenses(output,supplier.key,source.checkout);
+ source.files=new Set(git(source,['ls-tree','-r','--name-only',source.revision,...(source.directory?[source.directory]:[])]).toString().trim().split('\n').filter(Boolean));
     if(source.files.has('noto-fonts.go'))inputs.push({source:source.key,revision:source.revision,path:'noto-fonts.go',sha256:digest(read(source,'noto-fonts.go'))});
     for(const file of source.files){
       if(path.posix.basename(file)!=='Android.bp')continue;
@@ -38,9 +39,7 @@ export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={})
       inputs.push({source:source.key,revision:source.revision,path:file,sha256:digest(bytes)});
       for(const declaration of parsed.modules){
         const module={...declaration,source,file,directory:path.posix.dirname(file)};
-        if(module.type==='package')packages.set(`${source.key}:${module.directory}`,module);
-        else if(module.type==='license')licenseModules.set(`${source.key}:${module.properties.name}`,module);
-        else modules.push(module);
+        modules.push(module);
       }
     }
   }
@@ -52,7 +51,7 @@ export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={})
     if(!safe(name)||name.includes('/')||byName.has(name))throw Error(`Invalid or duplicate Android font module: ${name}`);
     byName.set(name,module);
   }
-  const root=path.join(output,'android-root'),licenses=path.join(output,'licenses'),products=[];
+  const root=path.join(output,'android-root'), products=[];
   const fontDirectory=path.join(root,'system/fonts'),etcDirectory=path.join(root,'system/etc');
   fs.rmSync(fontDirectory,{recursive:true,force:true});
   fs.mkdirSync(fontDirectory,{recursive:true});fs.mkdirSync(etcDirectory,{recursive:true});
@@ -60,24 +59,6 @@ export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={})
     const original=path.posix.normalize(path.posix.join(module.directory,relative)),bytes=read(module.source,original);
     fs.mkdirSync(path.dirname(target),{recursive:true});fs.writeFileSync(target,bytes);
     return {module:module.properties.name,source:module.source.key,revision:module.source.revision,definition:module.file,original,path:path.relative(output,target),bytes:bytes.length,sha256:digest(bytes)};
-  }
-  function copyLicenses(module){
-    let directory=module.directory,owner;
-    while(!owner){
-      owner=packages.get(`${module.source.key}:${directory}`);
-      if(directory==='.')break;
-      directory=path.posix.dirname(directory);
-    }
-    const names=[].concat(module.properties.licenses||owner?.properties.default_applicable_licenses||[]);
-    for(const name of names){
-      const license=licenseModules.get(`${module.source.key}:${name}`);
-      if(!license)continue;
-      const texts=[].concat(license.properties.license_text||[]);
-      for(const file of texts){
-        const original=path.posix.normalize(path.posix.join(license.directory,file));
-        addLicense(output,module.properties.name,path.join(module.source.checkout,original),name);
-      }
-    }
   }
   for(const module of fontModules){
     const p=module.properties;
@@ -91,7 +72,7 @@ export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={})
     const filename=p.filename||p.name;
     if(!safe(filename)||filename.includes('/'))throw Error(`Invalid installed font filename: ${filename}`);
     const item=copy(module,original,path.join(fontDirectory,filename));
-    copyLicenses(module);item.required=p.required||[];
+    item.required=p.required||[];
     if(module.type==='prebuilt_versioned_font')item.version={flag:p.versionFlag,value:p.defaultVersion};
     products.push(item);
     for(const alias of list(p.symlinks||[],`${p.name}.symlinks`)){
@@ -105,7 +86,7 @@ export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={})
   for(const module of configModules){
     // No product-specific CJK flag is set: use the original module's default src.
     const p=module.properties,item=copy(module,p.src,path.join(etcDirectory,p.name));
-    copyLicenses(module);products.push(item);
+    products.push(item);
     const xml=fs.readFileSync(path.join(output,item.path),'utf8').replace(/<!--[\s\S]*?-->/g,'');
     for(const match of xml.matchAll(/<font\b[^>]*>([\s\S]*?)<\/font>/g)){
       const file=match[1].replace(/<[^>]+>/g,'').trim();
@@ -116,5 +97,10 @@ export function stageAndroidFonts({sources={},output,sourcePins=defaultPins}={})
   if(!configModules.length||!fontModules.length)throw Error('The original Android font component is empty');
   const inventory={schemaVersion:1,suppliers:suppliers.map(({key,url})=>({key,url,revision:sourcePins[key]})),inputs,products,configurationFontFiles:[...references].sort()};
   fs.writeFileSync(path.join(output,'font-resources.json'),JSON.stringify(inventory,null,2)+'\n');
-  return {root,licenses,inventory,fontCount:fontModules.length,configCount:configModules.length};
+  return {
+    root,
+    inventory,
+    fontCount:fontModules.length,
+    configCount:configModules.length
+  };
 }

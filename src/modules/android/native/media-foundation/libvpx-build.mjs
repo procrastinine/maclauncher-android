@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {copyChanged,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -35,7 +34,9 @@ export function buildLibvpx({source=path.resolve(root,'../../../../..',pin.sourc
   }
   execFileSync('make',['-j'+Math.max(1,Math.min(8,os.availableParallelism())),'libvpx.a'],{cwd:build,stdio:'inherit'});
   const library=path.join(output,'libvpx.a');copyChanged(path.join(build,'libvpx.a'),library);
-  const licenses=path.join(output,'licenses');
-  for(const file of ['LICENSE','PATENTS','AUTHORS'])addLicense(path.dirname(licenses),'libvpx-build',path.join(original,file));
-  return {library,include:original,source:original,licenses};
+  return {
+    library,
+    include:original,
+    source:original
+  };
 }

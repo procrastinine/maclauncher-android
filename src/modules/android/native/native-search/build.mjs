@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -14,7 +13,11 @@ export function prepareSearchSources({bionicSource,output}){
   const source=path.join(output,'source');
   const units=[...['insque','remque','lsearch','tfind','tsearch'].map(name=>'libc/upstream-openbsd/lib/libc/stdlib/'+name+'.c'),
     ...['hcreate','hcreate_r','hdestroy_r','hsearch_r'].map(name=>'libc/upstream-freebsd/lib/libc/stdlib/'+name+'.c'),'libc/bionic/tdestroy.cpp'];
-  exportSources(bionicSource,pins.aospBionic,[...units,'libc/upstream-freebsd/lib/libc/stdlib/hsearch.h','libc/include/search.h','libc/NOTICE'],source);
+  exportSources(bionicSource,pins.aospBionic,[
+    ...units,
+    'libc/upstream-freebsd/lib/libc/stdlib/hsearch.h',
+    'libc/include/search.h'
+  ],source);
   const header=fs.readFileSync(path.join(source,'libc/include/search.h'),'utf8');
   const names=[...header.replace(/\/\*[\s\S]*?\*\//g,'').matchAll(/^(?:void|int|ENTRY)[^()\n]*?\b(\w+)\(/gm)].map(match=>match[1]);
   const include=path.join(output,'include');fs.mkdirSync(include,{recursive:true});
@@ -36,6 +39,9 @@ export function prepareNativeSearch({bionicSource,build}){
   const lookup=path.join(output,'lookup.c');
   fs.writeFileSync(lookup,'#include <string.h>\n#include <stddef.h>\n'+prepared.names.map(name=>`extern void klj_search_${name}(void);`).join('\n')+'\nvoid *klj_search_lookup(const char *name){\n'+prepared.names.map(name=>` if(!strcmp(name,"${name}"))return (void *)&klj_search_${name};`).join('\n')+'\n return NULL;\n}\n');
   const object=path.join(output,'lookup.o');execFileSync('clang',[...flags,'-c',lookup,'-o',object],{stdio:'inherit'});objects.push(object);
-  const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'native-search',path.join(prepared.source,'libc/NOTICE'));
-  return {...prepared,output,objects,licenses};
+  return {
+    ...prepared,
+    output,
+    objects
+  };
 }

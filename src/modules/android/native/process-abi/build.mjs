@@ -20,7 +20,10 @@ function values(definitions){
 export function prepareProcessAbi({bionicSource,build,libc}){
  const output=path.join(build,'process-abi'),source=path.join(output,'source');
  preparePrctlConstants({bionicSource,output});
- exportSources(bionicSource,pins.aospBionic,['libc/kernel/uapi/asm-generic/errno-base.h','libc/kernel/uapi/asm-generic/errno.h','libc/NOTICE'],source);
+ exportSources(bionicSource,pins.aospBionic,[
+  'libc/kernel/uapi/asm-generic/errno-base.h',
+  'libc/kernel/uapi/asm-generic/errno.h'
+ ],source);
  const guest=values(macros(execFileSync('clang',['-target','aarch64-linux-android36','-dM','-E','-I'+path.join(source,'libc/kernel/uapi'),'-include','asm-generic/errno.h','-'],{input:'',encoding:'utf8'})));
  const native=values(macros(execFileSync('clang',['-dM','-E','-include','errno.h','-'],{input:'',encoding:'utf8'})));
  const pairs=[...guest].filter(([name])=>native.has(name)).map(([name,value])=>({name,native:native.get(name),guest:value}));

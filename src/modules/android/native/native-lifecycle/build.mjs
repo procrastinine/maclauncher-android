@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -14,8 +13,12 @@ export function prepareNativeLifecycle({bionicSource,klepton,build}) {
   const output=path.join(build,'native-lifecycle'),source=path.join(output,'source');
   const portable=nativePathFlags({source,build});
   const units=['atexit','exit','pthread_atfork','__cxa_thread_atexit_impl'];
-  exportSources(bionicSource,pins.aospBionic,[...units.map(name=>'libc/bionic/'+name+'.cpp'),'libc/bionic/atexit.h',
-    'libc/platform/bionic/tls_defines.h','libc/include/bits/get_device_api_level_inlines.h','libc/NOTICE'],source);
+  exportSources(bionicSource,pins.aospBionic,[
+    ...units.map(name=>'libc/bionic/'+name+'.cpp'),
+    'libc/bionic/atexit.h',
+    'libc/platform/bionic/tls_defines.h',
+    'libc/include/bits/get_device_api_level_inlines.h'
+  ],source);
   const objects=[];
   let threadDeclarations;
   for(const name of units) {
@@ -65,13 +68,18 @@ export function prepareNativeLifecycle({bionicSource,klepton,build}) {
   slink=replace(slink,'    (void)dso;\n    return pthread_atfork(prep, parent, child);','    return klj_guest_register_atfork(prep, parent, child, dso);');
   const slinkPath=path.join(output,'kl_libc_slink.c');
   fs.writeFileSync(slinkPath,'extern int klj_guest_cxa_thread_atexit_impl(void (*)(void*),void*,void*);\nextern int klj_guest_register_atfork(void (*)(void),void (*)(void),void (*)(void),void*);\n'+slink);
-  const licenses=path.join(output,'licenses');
-  addLicense(path.dirname(licenses),'native-lifecycle',path.join(source,'libc/NOTICE'));
-  return {objects,shim:shimPath,slink:slinkPath,licenses,
+  return {
+    objects,
+    shim:shimPath,
+    slink:slinkPath,
+
     abiFlags:['-DKLEPTON_TLS_DEFINES='+JSON.stringify(path.join(source,'libc/platform/bionic/tls_defines.h')),
       '-DKLEPTON_DEVICE_API_SOURCE='+JSON.stringify(path.join(source,'libc/include/bits/get_device_api_level_inlines.h'))],
+
     // Darwin requires explicitly named optional weak imports at final link.
     // Their null state is Bionic's original absent-loader-hook behavior.
     linkFlags:['-Wl,-U,_klj_guest_loader_add_thread_local_dtor','-Wl,-U,_klj_guest_loader_remove_thread_local_dtor'],
-    ownerHeaders:[path.join(source,'libc/bionic/atexit.h'),threadDeclarations]};
+
+    ownerHeaders:[path.join(source,'libc/bionic/atexit.h'),threadDeclarations]
+  };
 }

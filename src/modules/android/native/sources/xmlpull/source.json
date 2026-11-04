@@ -2,7 +2,6 @@
   "schemaVersion": 1,
   "repository": "https://android.googlesource.com/platform/libcore",
   "commit": "a996d969fdd17c6707b84544e5d1c35e0c25b5cb",
-  "license": "Public Domain",
   "files": [
     {
       "path": "java/org/xmlpull/v1/XmlPullParser.java",

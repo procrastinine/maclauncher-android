@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {prepareSourceTree,copyChanged} from '../upstream/source-files.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
 import fs from 'node:fs';
@@ -17,8 +16,8 @@ export function buildLibcore({libcoreSource,artSource,binder,output,ninja=proces
   const source=path.join(output,'source');
   prepareSourceTree(source,source=>{
     const units=['libcore_io_Memory.cpp','ScopedBytes.h','JniConstants.h'];
-    exportSources(libcoreSource,pins.aospLibcore,[...units.map(file=>'luni/src/main/native/'+file),'NOTICE'],path.join(source,'libcore'));
-    exportSources(artSource,pins.aospArt,['runtime/native/libcore_io_Memory.cc','NOTICE'],path.join(source,'art'));
+    exportSources(libcoreSource,pins.aospLibcore,[...units.map(file=>'luni/src/main/native/'+file)],path.join(source,'libcore'));
+    exportSources(artSource,pins.aospArt,['runtime/native/libcore_io_Memory.cc'],path.join(source,'art'));
     const libcore=path.join(source,'libcore/luni/src/main/native');
     let text=fs.readFileSync(path.join(libcore,'libcore_io_Memory.cpp'),'utf8');
     text=replace(text,'#include "Portability.h"','#include "MemoryPortability.h"');
@@ -45,7 +44,5 @@ export function buildLibcore({libcoreSource,artSource,binder,output,ninja=proces
   execFileSync('install_name_tool',['-change','@rpath/libandroid-binder-rpc.dylib','@loader_path/libandroid-binder-rpc.dylib',publication],{stdio:'inherit'});
   execFileSync('codesign',['--force','--sign','-',publication],{stdio:'inherit'});
   copyChanged(publication,library);
-  const licenses=path.join(output,'licenses');
-  for(const project of ['libcore','art'])addLicense(path.dirname(licenses),'libcore',path.join(source,project,'NOTICE'));
   return {library,source};
 }

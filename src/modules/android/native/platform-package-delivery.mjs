@@ -1,5 +1,4 @@
 import {optionalFiles} from './upstream/source-files.mjs';
-import {addLicense} from './upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {verifyBinaryInputs} from './binary-inputs.mjs';
@@ -11,7 +10,6 @@ export function platformPackageInputs(root,directory){
  const definition=JSON.parse(fs.readFileSync(path.join(root,'platform-packages-binary.json')));
  if(definition.schemaVersion!==1||!Array.isArray(definition.files)||!definition.files.length)throw Error('Invalid platform package binary catalog');
  const files=verifyBinaryInputs(directory,definition.files);
- const licenseRoot=path.join(root,'license-inputs/platform-packages');
  const destinations=new Set(),packages=new Set();
  const records=files.map((file,index)=>{
   const entry=definition.files[index],source=entry.destination;
@@ -21,7 +19,11 @@ export function platformPackageInputs(root,directory){
   destinations.add(source);packages.add(record.packageName);
   return {...record,sha256:file.sha256,size:file.size};
  });
- return {definition,files,licenseRoot,catalog:{schemaVersion:1,packages:records}};
+ return {
+  definition,
+  files,
+  catalog:{schemaVersion:1,packages:records}
+ };
 }
 
 /** Output is a fresh producer runtime, never a writable application profile. */
@@ -32,8 +34,11 @@ export function stagePlatformPackages({input,output}){
   fs.mkdirSync(path.dirname(target),{recursive:true});
   fs.copyFileSync(input.files[n].file,target,fs.constants.COPYFILE_FICLONE);
  }
- for(const file of optionalFiles(input.licenseRoot))addLicense(output,'AOSP platform packages',file,input.definition.license);
  const catalog=path.join(platform,'packages.json');
  fs.writeFileSync(catalog,JSON.stringify(input.catalog,null,2)+'\n');
- return {catalog,platform,licenses:path.join(output,'licenses'),packages:input.catalog.packages};
+ return {
+  catalog,
+  platform,
+  packages:input.catalog.packages
+ };
 }

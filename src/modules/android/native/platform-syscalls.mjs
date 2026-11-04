@@ -99,12 +99,16 @@ export function preparePlatformSyscalls(file,{bionicSource,include,python,import
   const source=fs.readFileSync(file,'utf8');
   const signature='long klb_syscall(long n, long a1, long a2, long a3, long a4, long a5, long a6) {';
   if(source.split(signature).length!==2)throw Error('Klepton syscall entry changed');
-  const {rows,notice}=readSyscallStubs({bionicSource,python,output,architecture:'arm64'});
+  const {
+    rows
+  }=readSyscallStubs({bionicSource,python,output,architecture:'arm64'});
   const kernel=kernelSyscalls(include,output,'arm64');
   const declarations=JSON.parse(fs.readFileSync(path.join(importsDirectory,'host-ast.json')));
   const generated=emitPlatformSyscalls({rows,kernel,declarations});
   const preamble='#include <stdint.h>\n#include <string.h>\nextern void *kl_shim_lookup(const char *);\nextern int kl_errno_from_linux(int);\n';
   fs.writeFileSync(file,source.replace(signature,preamble+signature+generated.dispatch));
   fs.writeFileSync(path.join(output,'syscalls.json'),JSON.stringify(generated.entries,null,2)+'\n');
-  return {entries:generated.entries,notice};
+  return {
+    entries:generated.entries
+  };
 }

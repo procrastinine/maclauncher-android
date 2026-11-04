@@ -29,5 +29,9 @@ export async function buildArtFfi({source,revision,output,ndk,autoreconf='autore
    run(path.join(projected,'configure'),configure,{cwd:build,env:environment});
    run(tools.make,['-j2','install'],{cwd:build,env:environment});
   }});
- return {archive:path.join(install,'lib/libffi.a'),include:path.join(install,'include'),license:path.join(source,'LICENSE'),revision};
+ return {
+  archive:path.join(install,'lib/libffi.a'),
+  include:path.join(install,'include'),
+  revision
+ };
 }

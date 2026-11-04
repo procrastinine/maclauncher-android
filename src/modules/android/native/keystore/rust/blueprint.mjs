@@ -42,7 +42,7 @@ export function replace(file,before,after) {
   write(file,text.replace(before,after));
 }
 export function manifest({name,entry='lib.rs',dependencies=[],features=[],kind,buildDependencies=[]}) {
-  return `[package]\nname=${JSON.stringify(name)}\nversion="0.1.0"\nedition="2021"\nlicense="Apache-2.0"\n[lib]\npath=${JSON.stringify(entry)}\n${kind?'crate-type='+JSON.stringify([kind])+'\n':''}`+
+  return `[package]\nname=${JSON.stringify(name)}\nversion="0.1.0"\nedition="2021"\n[lib]\npath=${JSON.stringify(entry)}\n${kind?'crate-type='+JSON.stringify([kind])+'\n':''}`+
     (features.length?'[features]\ndefault='+JSON.stringify(features)+'\n'+features.map(f=>f+'=[]').join('\n')+'\n':'')+
     '[dependencies]\n'+dependencies.join('\n')+'\n'+(buildDependencies.length?'[build-dependencies]\n'+buildDependencies.join('\n')+'\n':'');
 }

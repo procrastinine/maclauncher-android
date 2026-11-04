@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,7 +15,11 @@ function body(text,signature){
 // owns formatting, streams, locale, diagnostics and output.
 export function prepareFormatPlan({bionicSource,output}){
   const source=path.join(output,'format-source');
-  exportSources(bionicSource,pins.aospBionic,['libc/stdio/printf_common.h','libc/stdio/scanf_common.h','libc/stdio/vfscanf.cpp','libc/NOTICE'],source);
+  exportSources(bionicSource,pins.aospBionic,[
+    'libc/stdio/printf_common.h',
+    'libc/stdio/scanf_common.h',
+    'libc/stdio/vfscanf.cpp'
+  ],source);
   const original=fs.readFileSync(path.join(source,'libc/stdio/printf_common.h'),'utf8');
   let find=body(original,'static int __find_arguments(const CHAR_TYPE* fmt0, va_list ap, union arg** argtable,\n');
   const declarations=[...original.matchAll(/^#define (?:T\w*|\w*INT|ALT|LADJUST|LONGDBL|ZEROPAD|FPT|DEFPREC|STATIC_ARG_TBL_SIZE)\b[^\n]*/gm)].map(m=>m[0]).join('\n');
@@ -41,7 +44,6 @@ export function prepareFormatPlan({bionicSource,output}){
   writeChanged(path.join(output,'format-plan.h'),'#pragma once\n#include <wchar.h>\nextern "C" {\nint klj_arm32_format_plan0(const char*,void*,int(*)(void*,unsigned));\nint klj_arm32_format_plan1(const wchar_t*,void*,int(*)(void*,unsigned));\nint klj_arm32_scan_plan(const char*,void*,int(*)(void*,unsigned));\n}\n');
   const header=path.join(output,'format-types.h');
   writeChanged(header,'#include <stddef.h>\n#include <stdint.h>\n#include <inttypes.h>\n#include <sys/types.h>\n#include <wchar.h>\nvoid __maclauncher_format_types('+types.map((type,index)=>type+' arg'+index).join(',')+');\nvoid __maclauncher_scan_types('+scan.types.map((type,index)=>type+' arg'+index).join(',')+');\n');
-  const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'format-plan',path.join(source,'libc/NOTICE'));
   return {header,types,source:path.join(output,'format-plan.cpp')};
 }
 

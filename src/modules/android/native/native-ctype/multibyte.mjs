@@ -13,7 +13,15 @@ const definitions=text=>[...text.matchAll(/^(?:define\b[^\n]*?@|@)([\w.$]+)(?=\(
  * No host wchar/mbstate record is passed into original Android code. */
 export function prepareNativeMultibyte({bionicSource,revision,build,ninja,python}){
   const output=path.join(build,'native-ctype','multibyte'),source=path.join(output,'source');
-  exportSources(bionicSource,revision,['libc/Android.bp','libc/libc.map.txt','libc/include','libc/kernel','libc/private/bionic_mbstate.h','libc/bionic','libc/upstream-openbsd/lib/libc/locale','libc/NOTICE'],source);
+  exportSources(bionicSource,revision,[
+    'libc/Android.bp',
+    'libc/libc.map.txt',
+    'libc/include',
+    'libc/kernel',
+    'libc/private/bionic_mbstate.h',
+    'libc/bionic',
+    'libc/upstream-openbsd/lib/libc/locale'
+  ],source);
   const libc=path.join(source,'libc'),manifest=fs.readFileSync(path.join(libc,'Android.bp'),'utf8');
   const candidates=[...new Set([...manifest.matchAll(/"((?:bionic\/|upstream-openbsd\/lib\/libc\/locale\/)[^"*]+\.(?:c|cpp))"/g)].map(match=>match[1]))];
   const units=candidates.filter(file=>/\bmbstate_t\b/.test(fs.readFileSync(path.join(libc,file),'utf8'))).sort();

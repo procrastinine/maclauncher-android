@@ -1,4 +1,3 @@
-import {addLicense} from './upstream/licenses.mjs';
 import {prepareSourceTree,writeChanged} from './upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,7 +9,7 @@ export function prepareLibraryNamespaces({bionicSource,artSource,output}){
  const pins=JSON.parse(fs.readFileSync(new URL('./source-pins.json',import.meta.url)));
  prepareSourceTree(output,temporary=>{
   const bionic=path.join(temporary,'bionic'),art=path.join(temporary,'art');
-  exportSources(bionicSource,pins.aospBionic,['linker/linker_namespaces.cpp','linker/linker_utils.cpp','libc/NOTICE'],bionic);
+  exportSources(bionicSource,pins.aospBionic,['linker/linker_namespaces.cpp', 'linker/linker_utils.cpp'],bionic);
   exportSources(artSource,pins.aospArt,['libnativeloader/include/nativeloader/dlext_namespaces.h','libnativeloader/library_namespaces.cpp','libnativebridge/include/nativebridge/native_bridge.h'],art);
   const namespace=fs.readFileSync(path.join(bionic,'linker/linker_namespaces.cpp'),'utf8');
   const utils=fs.readFileSync(path.join(bionic,'linker/linker_utils.cpp'),'utf8');
@@ -26,10 +25,10 @@ export function prepareLibraryNamespaces({bionicSource,artSource,output}){
   const apex=slice(loader,'constexpr const char* kApexPath =','\n');
   const location=slice(loader,'std::optional<std::string> FindApexNamespaceName(', '\n}  // namespace android::nativeloader');
   writeChanged(path.join(temporary,'art-namespace.inc'),loader.slice(0,loader.indexOf('*/')+2)+'\n'+apex+'\n'+location);
-  const licenses=path.join(temporary,'licenses');
-  addLicense(path.dirname(licenses),'library-namespace-source',path.join(bionic,'libc/NOTICE'));
-  const license=path.join(temporary,'art-native-loader-license.txt');writeChanged(license,api.slice(0,api.indexOf('#ifndef')));
-  addLicense(temporary,'ART native loader',license);fs.rmSync(license,{force:true});
  });
- return {include:output,nativeLoaderInclude:path.join(output,'art/libnativeloader/include'),nativeBridgeInclude:path.join(output,'art/libnativebridge/include'),licenses:path.join(output,'licenses')};
+ return {
+  include:output,
+  nativeLoaderInclude:path.join(output,'art/libnativeloader/include'),
+  nativeBridgeInclude:path.join(output,'art/libnativebridge/include')
+ };
 }

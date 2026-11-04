@@ -1,4 +1,4 @@
-import {addLicense} from './upstream/licenses.mjs';
+import {addLicenses} from './upstream/licenses.mjs';
 import {optionalFiles,prepareSourceTree,writeChanged} from './upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -70,14 +70,11 @@ try{
     files.push({path:name,size:data.length,sha256:digest(data),architectures:['arm64'],minimumMacOS:'13.0'});
   }
 }finally{fs.rmSync(publication,{recursive:true,force:true});}
-for(const file of optionalFiles(path.join(root,'license-inputs/angle')))addLicense(options.output,'ANGLE/'+path.basename(file),file);
-const suppliers=[['JsonCpp','third_party/jsoncpp/source/LICENSE'],['RapidJSON','third_party/rapidjson/src/license.txt']];
 if(backend==='metal-vulkan'){
- suppliers.push(['VulkanMemoryAllocator','third_party/vulkan_memory_allocator/LICENSE.txt']);
- for(const file of optionalFiles(path.join(source,'third_party/vulkan-headers/src/LICENSES')))addLicense(options.output,'Vulkan-Headers',file,path.basename(file).replace(/\.[^.]+$/,''));
+  suppliers.push(['VulkanMemoryAllocator']);
 }
-for(const [name,file]of suppliers)addLicense(options.output,name,path.join(source,file));
-const adaptations=['angle-source.mjs','angle-flip-source.mjs','angle-flip-source.json','angle-identity-source.mjs','angle-sync-source.mjs','angle-fence-completion.h','angle-current-source.mjs','angle-debug-source.mjs','angle-debug-callback.h','angle-blob-source.mjs','angle-blob-callback.h','angle-dither-source.mjs',...(backend==='metal-vulkan'?['angle-vulkan-source.mjs','angle-vulkan-image-source.mjs']:[])].map(file=>({file,sha256:digest(fs.readFileSync(path.join(root,file)))}));
+addLicenses(options.output,'ANGLE',source);
+ const adaptations=['angle-source.mjs','angle-flip-source.mjs','angle-flip-source.json','angle-identity-source.mjs','angle-sync-source.mjs','angle-fence-completion.h','angle-current-source.mjs','angle-debug-source.mjs','angle-debug-callback.h','angle-blob-source.mjs','angle-blob-callback.h','angle-dither-source.mjs',...(backend==='metal-vulkan'?['angle-vulkan-source.mjs','angle-vulkan-image-source.mjs']:[])].map(file=>({file,sha256:digest(fs.readFileSync(path.join(root,file)))}));
 const internalShaders=fs.readFileSync(path.join(output,'obj/src/libANGLE/renderer/metal/angle_metal_backend.ninja'),'utf8').includes('-DANGLE_METAL_HAS_PREBUILT_INTERNAL_SHADERS')?'embedded-metallib':'runtime-source';
 const programBinaryVersion=fs.readFileSync(path.join(output,'gen/angle/ANGLEShaderProgramVersion.h'),'utf8').match(/^#define ANGLE_PROGRAM_VERSION "([a-f0-9]+)"$/m)?.[1];
 if(!programBinaryVersion)throw Error('Missing generated ANGLE program binary version');

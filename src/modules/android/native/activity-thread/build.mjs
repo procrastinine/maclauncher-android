@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {writeChanged} from '../upstream/source-files.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
 import fs from 'node:fs';
@@ -12,7 +11,7 @@ const pins=JSON.parse(fs.readFileSync(path.join(root,'../source-pins.json')));
 export function prepareActivityThread({frameworkSource,bionicSource,build}){
   const directory=path.join(build,'activity-thread'),source=path.join(directory,'source');
   exportSources(frameworkSource,pins.aospFramework,['core/jni/android_app_ActivityThread.cpp'],source);
-  exportSources(bionicSource,pins.aospBionic,['libc/include/malloc.h','libc/platform/bionic/malloc.h','libc/NOTICE'],path.join(source,'bionic'));
+  exportSources(bionicSource,pins.aospBionic,['libc/include/malloc.h', 'libc/platform/bionic/malloc.h'],path.join(source,'bionic'));
   const original=fs.readFileSync(path.join(source,'core/jni/android_app_ActivityThread.cpp'),'utf8');
   const mallocHeader=fs.readFileSync(path.join(source,'bionic/libc/include/malloc.h'),'utf8');
   const platformHeader=fs.readFileSync(path.join(source,'bionic/libc/platform/bionic/malloc.h'),'utf8');
@@ -31,7 +30,7 @@ export function prepareActivityThread({frameworkSource,bionicSource,build}){
   const unit=path.join(directory,'activity-thread.cpp');
   fs.mkdirSync(directory,{recursive:true});
   writeChanged(unit,includeDependencies(original.replace(includes,''),`#define M_PURGE ${purge}\n#define M_INIT_ZYGOTE_CHILD_PROFILING ${profiling}\n#include ${JSON.stringify(path.join(root,'allocator.h'))}`)+'\n'+exports+'\n');
-  const licenses=path.join(directory,'licenses');
-  addLicense(path.dirname(licenses),'activity-thread',path.join(source,'bionic/libc/NOTICE'));
-  return {unit,licenses};
+  return {
+    unit
+  };
 }

@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -37,7 +36,8 @@ export function buildFileEvents({checkout,output,jdk}) {
     execFileSync('clang',[...nativePathFlags({source,build:output,roots:[[jdk,'/src/jdk']]}),'-std=gnu11','-arch','arm64','-mmacosx-version-min=13.0','-O2','-fPIC','-Wall','-Wextra','-Wno-unused-parameter','-I'+source,'-I'+path.join(jdk,'include'),'-I'+path.join(jdk,'include/darwin'),'-c',file,'-o',object],{stdio:'inherit'});
     objects.push(object);
   }
-  const licenses=path.join(output,'licenses');
-  addLicense(path.dirname(licenses),'file-events',path.join(source,'LICENSE'));
-  return {objects,include:source,licenses};
+  return {
+    objects,
+    include:source
+  };
 }

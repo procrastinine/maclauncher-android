@@ -24,7 +24,7 @@ export function acquireNdkHeaders(output,{linkLibrariesOnly=false}={}){
     if(central.readUInt32LE(offset)!==0x02014b50)throw Error('Invalid NDK ZIP directory');
     const names=central.readUInt16LE(offset+28),extra=central.readUInt16LE(offset+30),comment=central.readUInt16LE(offset+32);
     const name=central.toString('utf8',offset+46,offset+46+names);
-    if(links.has(name)||!linkLibrariesOnly&&((name.includes('/sysroot/usr/include/')&&!name.endsWith('/'))||new RegExp(`android-ndk-${pin.release}/(?:NOTICE|source.properties)$`).test(name)||[pin.compilerRuntime.entry,pin.compilerRuntime.noticeEntry].includes(name))){
+    if(links.has(name)||!linkLibrariesOnly&&((name.includes('/sysroot/usr/include/')&&!name.endsWith('/'))||new RegExp(`android-ndk-${pin.release}/source.properties$`).test(name)||name===pin.compilerRuntime.entry)){
       entries.push({name,method:central.readUInt16LE(offset+10),crc:central.readUInt32LE(offset+16),compressed:central.readUInt32LE(offset+20),size:central.readUInt32LE(offset+24),offset:central.readUInt32LE(offset+42)});
     }
     offset+=46+names+extra+comment;
@@ -64,7 +64,11 @@ export function acquireNdkHeaders(output,{linkLibrariesOnly=false}={}){
   if(headers.length!==pin.files||identity.digest('hex')!==pin.treeSha256)throw Error('Downloaded NDK headers differ from the pinned release');
   for(const [name,hash]of[['source.properties',pin.sourcePropertiesSha256]])if(records.find(row=>row.path===name)?.sha256!==hash)throw Error('NDK metadata differs from the pinned release: '+name);
   for(const [name,hash]of[[pin.compilerRuntime.file,pin.compilerRuntime.sha256]])if(records.find(row=>row.path===name)?.sha256!==hash)throw Error('NDK compiler runtime differs from the pinned release: '+name);
-  return {include:path.resolve(output,'include'),notice:path.resolve(output,'NOTICE'),compilerRuntime:path.resolve(output,pin.compilerRuntime.file),linkLibraries:linkDirectory};
+  return {
+    include:path.resolve(output,'include'),
+    compilerRuntime:path.resolve(output,pin.compilerRuntime.file),
+    linkLibraries:linkDirectory
+  };
 }
 
 if(process.argv[1]&&path.resolve(process.argv[1])===new URL(import.meta.url).pathname){

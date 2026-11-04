@@ -6,8 +6,7 @@
     "revision": "ce2aa0ef49158d0d45fb133fd42ab1deff210f8c",
     "trees": [
       "keystore",
-      "keystore2",
-      "NOTICE"
+      "keystore2"
     ]
   },
   {
@@ -35,8 +34,7 @@
     "revision": "cd2b68d71a1dd9a45668ddd9a507000ccd7ff114",
     "trees": [
       "include_all",
-      "include_vendor",
-      "NOTICE"
+      "include_vendor"
     ]
   },
   {
@@ -46,8 +44,7 @@
     "revision": "d78b713380007d3c0dde14712cbcbec27f491ad9",
     "trees": [
       "liblog",
-      "rust",
-      "NOTICE"
+      "rust"
     ]
   },
   {
@@ -57,8 +54,7 @@
     "revision": "5688f7eb1e117ed26e642a695de300b7683acb87",
     "trees": [
       "security",
-      "confirmationui",
-      "NOTICE"
+      "confirmationui"
     ]
   },
   {
@@ -67,8 +63,7 @@
     "url": "https://android.googlesource.com/platform/system/hardware/interfaces",
     "revision": "f3d42be8ff32eb4ff00873bf2762d13c013d314a",
     "trees": [
-      "keystore2",
-      "NOTICE"
+      "keystore2"
     ]
   },
   {
@@ -77,8 +72,7 @@
     "url": "https://android.googlesource.com/platform/system/apex",
     "revision": "9921a73777f97def1d8851dd0a1529f1c45bcc72",
     "trees": [
-      "apexd",
-      "NOTICE"
+      "apexd"
     ]
   },
   {
@@ -108,8 +102,7 @@
       "public",
       "private",
       "build/soong/policy.go",
-      "flagging/flagging_macros",
-      "LICENSE"
+      "flagging/flagging_macros"
     ]
   },
   {
@@ -118,8 +111,7 @@
     "url": "https://android.googlesource.com/platform/system/tools/aidl",
     "revision": "5bde6fcffe8e3ac6feca449f7bc3502eed5fc0f5",
     "trees": [
-      "build/aidl_rust_glue.py",
-      "LICENSE"
+      "build/aidl_rust_glue.py"
     ]
   },
   {
@@ -128,8 +120,7 @@
     "url": "https://android.googlesource.com/platform/build",
     "revision": "874fa586c48ae230ebfcff0df1b9c1b004fa8f7c",
     "trees": [
-      "tools/aconfig",
-      "LICENSE"
+      "tools/aconfig"
     ]
   },
   {
@@ -176,8 +167,7 @@
       "AconfigFlags.bp",
       "core/java",
       "data/etc",
-      "keystore/aaid",
-      "NOTICE"
+      "keystore/aaid"
     ]
   }
 ]

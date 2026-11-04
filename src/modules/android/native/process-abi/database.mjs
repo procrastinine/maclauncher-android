@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -9,8 +8,20 @@ const root=path.resolve(import.meta.dirname,'..');
 const replace=(text,from,to)=>{if(text.split(from).length!==2)throw Error('Pinned account database boundary changed: '+from);return text.replace(from,to);};
 export function prepareProcessDatabase({bionicSource,coreSource,buildSource,python,build}){
  const output=path.join(build,'process-database'),source=path.join(output,'source'),include=path.join(output,'include');
- exportSources(bionicSource,pins.aospBionic,['libc/bionic/grp_pwd.cpp','libc/bionic/grp_pwd_file.cpp','libc/bionic/grp_pwd_file.h','libc/private/grp_pwd.h','libc/private/ErrnoRestorer.h','libc/private/ScopedFd.h','libc/platform/bionic/macros.h','libc/include/pwd.h','libc/include/grp.h','libc/include/sys/cdefs.h','libc/libc.map.txt','libc/NOTICE'],source);
- exportSources(coreSource,pins.aospSystemCore,['libcutils/include/private/android_filesystem_config.h','libcutils/NOTICE'],path.join(output,'core'));
+ exportSources(bionicSource,pins.aospBionic,[
+  'libc/bionic/grp_pwd.cpp',
+  'libc/bionic/grp_pwd_file.cpp',
+  'libc/bionic/grp_pwd_file.h',
+  'libc/private/grp_pwd.h',
+  'libc/private/ErrnoRestorer.h',
+  'libc/private/ScopedFd.h',
+  'libc/platform/bionic/macros.h',
+  'libc/include/pwd.h',
+  'libc/include/grp.h',
+  'libc/include/sys/cdefs.h',
+  'libc/libc.map.txt'
+ ],source);
+ exportSources(coreSource,pins.aospSystemCore,['libcutils/include/private/android_filesystem_config.h'],path.join(output,'core'));
  exportSources(buildSource,catalog.find(x=>x.name==='build').revision,['tools/fs_config/fs_config_generator.py'],path.join(output,'build'));
  fs.mkdirSync(path.join(include,'private'),{recursive:true});fs.mkdirSync(path.join(include,'async_safe'),{recursive:true});
  const ids=execFileSync(python,[path.join(output,'build/tools/fs_config/fs_config_generator.py'),'aidarray',path.join(output,'core/libcutils/include/private/android_filesystem_config.h')],{encoding:'utf8'});
@@ -66,7 +77,8 @@ extern "C" {\n${declarations.map(x=>x.declaration).join('\n')}\n}
  // Darwin passwd/group layouts differ even where the function names match.
  fs.writeFileSync(path.join(output,'lookup.cpp'),'extern "C" int klj_database_name_id(const char *name,int group_lookup){\nif(group_lookup){auto *value=getgrnam(name);return value?static_cast<int>(value->gr_gid):-1;}\nauto *value=getpwnam(name);return value?static_cast<int>(value->pw_uid):-1;\n}\nextern "C" void *klj_database_lookup(const char *name){\n'+declarations.map(x=>'if(!strcmp(name,"'+x.name+'"))return reinterpret_cast<void*>(&klj_bionic_'+x.name+');').join('\n')+'\nreturn nullptr;\n}\n');
  const objects=['grp_pwd','grp_pwd_file','lookup'].map(name=>{const object=path.join(output,name+'.o');execFileSync('clang++',[...flags,'-c',path.join(output,name+'.cpp'),'-o',object],{stdio:'inherit'});return object;});
- const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'database',path.join(source,'libc/NOTICE'));
- addLicense(path.dirname(licenses),'database',path.join(output,'core/libcutils/NOTICE'));
- return {objects,licenses,functions:declarations.map(x=>x.name)};
+ return {
+  objects,
+  functions:declarations.map(x=>x.name)
+ };
 }

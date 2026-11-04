@@ -1,4 +1,3 @@
-import {addLicense,includeLicenses} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -41,22 +40,21 @@ export async function buildArm32({source,output,jdk,ndkHeaders,python,bionicSour
   run('cmake',['-S',root,'-B',output,'-DDYNARMIC_SOURCE='+source,'-DCMAKE_BUILD_TYPE=Release','-DCMAKE_OSX_ARCHITECTURES=arm64','-DJDK_ROOT='+(jdk||''),'-DARM32_IMPORTS_DIRECTORY='+(importsDirectory||''),'-DARM32_FORMAT_DIRECTORY='+formatDirectory,'-DARM32_SYSCALL_DIRECTORY='+syscallDirectory,
     ...['C','CXX','ASM'].map(language=>'-DCMAKE_'+language+'_FLAGS='+[process.env[language==='CXX'?'CXXFLAGS':language==='ASM'?'ASMFLAGS':'CFLAGS'],remap].filter(Boolean).join(' '))]);
   run('cmake',['--build',output,'--parallel','4']);
-  const licenses=path.join(output,'licenses');
-  includeLicenses(path.dirname(licenses),path.join(formatDirectory,'licenses'));
-  if(syscalls)includeLicenses(path.dirname(licenses),syscalls.licenses);
   let builtins;
   if(importsDirectory){
     if(!elfLinker)throw Error('ARM32 compiler runtime requires an ELF linker');
     const include=ndkHeaders||JSON.parse(fs.readFileSync(path.join(importsDirectory,'guest-input.json'),'utf8')).include;
     const archive=compilerRuntime||path.resolve(include,'../libclang_rt.builtins-arm-android.a');
-    builtins=buildCompilerRuntime({archive,notice:path.join(path.dirname(archive),'NOTICE.toolchain'),linker:elfLinker,aeabi:elf.aeabi,allocation:elf.allocation,portableFamilies:elf.portableFamilies,include,output:path.join(output,'compiler-runtime')});
-    includeLicenses(path.dirname(licenses),builtins.licenses);
+    builtins=buildCompilerRuntime({
+      archive,
+      linker:elfLinker,
+      aeabi:elf.aeabi,
+      allocation:elf.allocation,
+      portableFamilies:elf.portableFamilies,
+      include,
+      output:path.join(output,'compiler-runtime')
+    });
   }
-  if(importsDirectory&&fs.existsSync(path.join(importsDirectory,'licenses')))
-    includeLicenses(path.dirname(licenses),path.join(importsDirectory,'licenses'));
-
-  for(const [file,name]of[['LICENSE.txt','dynarmic.txt'],['README.md','dynarmic-dependencies.md'],['externals/fmt/LICENSE.rst','fmt.txt'],['externals/mcl/LICENSE','mcl.txt'],['externals/oaknut/LICENSE','oaknut.txt'],['externals/robin-map/LICENSE','robin-map.txt']])
-    addLicense(output,name.replace(/\.[^.]+$/,''),path.join(source,file));
   const identity={schemaVersion:1,...pin,library:components.bindings.jvm,jniIntegration:!!jdk,nativeIntegration:!!importsDirectory};
   fs.writeFileSync(path.join(output,'arm32-build.json'),JSON.stringify(identity,null,2)+'\n');
   return {...arm32BuildProducts(output),builtins:builtins?.library,identity,importsDirectory};

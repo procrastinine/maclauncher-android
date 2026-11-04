@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -11,7 +10,12 @@ function region(text,from,to,value){const a=text.indexOf(from),b=text.indexOf(to
 /** All portable functions from the upstream unit; only thread representation is Darwin-owned. */
 export function preparePthreadAttributes({bionicSource,build,pthreadSource,shimSource}){
  const directory=path.join(build,'pthread-attributes'),source=path.join(directory,'source');
- exportSources(bionicSource,pins.aospBionic,['libc/bionic/pthread_attr.cpp','libc/bionic/pthread_mutex.cpp','libc/include/pthread.h','libc/bionic/pthread_internal.h','libc/NOTICE'],source);
+ exportSources(bionicSource,pins.aospBionic,[
+  'libc/bionic/pthread_attr.cpp',
+  'libc/bionic/pthread_mutex.cpp',
+  'libc/include/pthread.h',
+  'libc/bionic/pthread_internal.h'
+ ],source);
  const file=path.join(source,'libc/bionic/pthread_attr.cpp');let text=fs.readFileSync(file,'utf8');
  const names=[...text.matchAll(/\nint (pthread_(?:attr_\w+|getattr_np))\(/g)].map(match=>match[1]);
  if(!names.length)throw Error('Missing original pthread attribute module');
@@ -78,6 +82,8 @@ export function preparePthreadAttributes({bionicSource,build,pthreadSource,shimS
  shim=replace(shim,marker,names.map(name=>'    E("'+name+'", klb_'+name+'),').join('\n')+'\n'+marker);
  shim=names.map(name=>'extern int klb_'+name+'();').join('\n')+'\n'+shim;
  fs.writeFileSync(shimSource,shim);
- const licenses=path.join(directory,'licenses');addLicense(path.dirname(licenses),'pthread-attributes',path.join(source,'libc/NOTICE'));
- return {object,licenses,functions:names};
+ return {
+  object,
+  functions:names
+ };
 }

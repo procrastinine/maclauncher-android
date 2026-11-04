@@ -14,8 +14,7 @@ export function buildImageExtractor({aim,output,cargo='cargo',minimumMacOS='13.0
   prepareSourceTree(source,temporary=>{
     fs.cpSync(path.join(aim,'tools/android-image-extract/src'),path.join(temporary,'src'),{recursive:true});
     const original=fs.readFileSync(path.join(aim,'tools/android-image-extract/Cargo.toml'),'utf8');
-    const manifest=original.replace('license.workspace = true','license = "Apache-2.0"')
-      .replace('sha2.workspace = true','sha2 = "0.10"');
+    const manifest=original.replace(/^.*\.workspace\s*=\s*true.*$/gm,line=>line.startsWith('sha2.')?'sha2 = "0.10"':'');
     if(manifest===original||manifest.includes('.workspace')) throw Error('The Android image reader manifest changed.');
     writeChanged(path.join(temporary,'Cargo.toml'),manifest);
     // Retain the original resolved dependency versions without building the

@@ -3,7 +3,6 @@
   "androidApi": 36,
   "artifact": "org.robolectric:android-all:16-robolectric-13921718",
   "url": "https://repo.maven.apache.org/maven2/org/robolectric/android-all/16-robolectric-13921718/android-all-16-robolectric-13921718.jar",
-  "license": "Apache-2.0",
   "implementation": "Uninstrumented AOSP Java framework; no Robolectric shadows or SDK stubs",
   "declarationSource": {
     "url": "https://android.googlesource.com/platform/frameworks/base",

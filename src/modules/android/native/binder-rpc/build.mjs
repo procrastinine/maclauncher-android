@@ -1,4 +1,3 @@
-import {addLicense,includeLicenses} from '../upstream/licenses.mjs';
 import {writeChanged,copyChanged,prepareSourceTree} from '../upstream/source-files.mjs';
 import {exportSources} from '../upstream/source-export.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
@@ -92,8 +91,8 @@ export function prepareBinderLogicalIdentity(sources){
 function prepareBinderRpc({nativeSource,systemCore,output,jni,services,keymap}){
   output=path.resolve(output);
   const source=path.join(output,'source');
-  exportSources(nativeSource,pins.aospNative,['libs/binder','headers/media_plugin','NOTICE'],path.join(source,'native'));
-  exportSources(systemCore,pins.aospSystemCore,jni?['libutils','libcutils','libsystem','include']:['libutils/binder','libutils/include','libutils/NOTICE'],path.join(source,'core'));
+  exportSources(nativeSource,pins.aospNative,['libs/binder', 'headers/media_plugin'],path.join(source,'native'));
+  exportSources(systemCore,pins.aospSystemCore,jni?['libutils','libcutils','libsystem','include']:['libutils/binder', 'libutils/include'],path.join(source,'core'));
   const binder=path.join(source,'native/libs/binder'),utils=path.join(source,'core/libutils/binder');
   const sources=[...publisherList(binder,'libbinder_common_defaults','srcs').map(file=>path.join(binder,file)),
     ...publisherList(utils,'libutils_binder_impl_defaults_nodeps','srcs').map(file=>path.join(utils,file))];
@@ -140,11 +139,6 @@ function prepareBinderRpc({nativeSource,systemCore,output,jni,services,keymap}){
   const identityLibrary=jni?.processLibrary;
   if(jni&&!identityLibrary)throw Error('Android Binder JNI requires the shared process identity owner');
   if(identityLibrary){flags.push('-DKLJ_BINDER_DESCRIPTOR_OWNER=1');prepareBinderLogicalIdentity(sources);}
-  const licenses=path.join(output,'licenses');
-  addLicense(path.dirname(licenses),'binder-rpc',path.join(source,'native/NOTICE'));
-  addLicense(path.dirname(licenses),'binder-rpc',path.join(source,'core/libutils/NOTICE'));
-  if(jni)for(const [directory,name]of[['framework','aosp-framework'],['nativehelper','aosp-libnativehelper'],['libbase','aosp-libbase'],['bionic/libc','aosp-bionic'],['core/libcutils','aosp-libcutils']])
-    addLicense(path.dirname(licenses),'binder-rpc',path.join(source,directory,'NOTICE'));
   const compiled=new Set(sources.map(file=>path.basename(file).replace(/-darwin(?=\.cpp$)/,'')));
   const moduleNames=jni?['libbinder_common_defaults','libbinder_android_defaults','libbinder_kernel_defaults','libbinder']:['libbinder_common_defaults'];
   const definitions=parseBlueprint(fs.readFileSync(path.join(binder,'Android.bp'),'utf8'),{file:'libs/binder/Android.bp'}).modules;
@@ -184,8 +178,6 @@ export function buildBinderRpc({nativeSource,systemCore,output,jni,services,ashm
   if(jni?.processLibrary)run('install_name_tool',['-change','@rpath/libklepton-jvm.dylib','@loader_path/libklepton-jvm.dylib',publication]);
   run('codesign',['--force','--sign','-',publication]);
   copyChanged(publication,library);
-  includeLicenses(output,path.join(prepared,'licenses'));
-  if(jni)includeLicenses(output,path.join(output,'ashmem-codec/licenses'));
   return {library,flags:plan.flags,sources:plan.sources,output:prepared};
 }
 

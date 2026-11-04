@@ -1,14 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
-test('licence text is an ordinary copied and hashed payload file',async t=>{
- const {sourceInventory,productInventory,snapshotSources}=await import('../src/modules/android/native/build-sources.mjs');
- const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'android-license-identity-'));t.after(()=>fs.rmSync(temporary,{recursive:true,force:true}));const root=path.join(temporary,'input');fs.mkdirSync(root);fs.writeFileSync(path.join(temporary,'profile.js'),'module.exports={};');
- fs.mkdirSync(path.join(root,'licenses'));fs.writeFileSync(path.join(root,'licenses/LICENSE'),'First text');fs.writeFileSync(path.join(root,'unit.c'),'source');
- const before=sourceInventory(root);assert.deepEqual(before.map(row=>row.path),['licenses/LICENSE','unit.c']);assert.deepEqual(productInventory(root).map(row=>row.path),['licenses/LICENSE','unit.c']);
- const destination=path.join(temporary,'capture');snapshotSources(root,destination);assert.equal(fs.readFileSync(path.join(destination,'native/licenses/LICENSE'),'utf8'),'First text');
- fs.rmSync(destination,{recursive:true,force:true});fs.writeFileSync(path.join(root,'licenses/LICENSE'),'Changed text');assert.notDeepEqual(sourceInventory(root),before);
- fs.writeFileSync(path.join(root,'unit.c'),'changed source');assert.notDeepEqual(sourceInventory(root),before);
-});
 test('Android compilation uses one complete fixed source tree and identity detects added sources',async t=>{
   const {sourceInventory,sourceIdentity,snapshotSources}=await import('../src/modules/android/native/build-sources.mjs');
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-build-source-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));

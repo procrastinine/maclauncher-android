@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {prepareSourceTree,copyChanged,writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,7 +19,7 @@ export function buildAlarm({frameworkSource,binder,pollable,processLibrary,outpu
   const source=path.join(output,'source');
   const module='apex/jobscheduler/service/jni';
   const units=prepareSourceTree(source,source=>{
-    exportSources(frameworkSource,revision,[module,'NOTICE'],source);
+    exportSources(frameworkSource,revision,[module],source);
     const files=readModuleList(path.join(source,module),'libalarm_jni','srcs');
     const file=path.join(source,unit);let text=fs.readFileSync(file,'utf8');
     // These Linux/platform utility headers have no used declarations in this
@@ -46,7 +45,8 @@ export function buildAlarm({frameworkSource,binder,pollable,processLibrary,outpu
   for(const name of ['libandroid-binder-rpc.dylib','libklepton-jvm.dylib'])execFileSync('install_name_tool',['-change','@rpath/'+name,'@loader_path/'+name,publication],{stdio:'inherit'});
   execFileSync('codesign',['--force','--sign','-',publication],{stdio:'inherit'});
   copyChanged(publication,library);
-  const licenses=path.join(output,'licenses');
-  addLicense(path.dirname(licenses),'alarm',path.join(source,'NOTICE'));
-  return {library,source,licenses};
+  return {
+    library,
+    source
+  };
 }

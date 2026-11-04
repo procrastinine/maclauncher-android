@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,7 +14,12 @@ function replace(text,before,after){if(text.split(before).length!==2)throw Error
  * shared helper ELF. Its dependencies cross the existing typed libc boundary. */
 export function prepareArm32JumpSources({bionicSource,output}){
   const source=path.join(output,'source');
-  const files=['libc/arch-arm/bionic/setjmp.S','libc/bionic/setjmp_cookie.cpp','libc/private/bionic_asm.h','libc/private/bionic_asm_arm.h','libc/NOTICE'];
+  const files=[
+    'libc/arch-arm/bionic/setjmp.S',
+    'libc/bionic/setjmp_cookie.cpp',
+    'libc/private/bionic_asm.h',
+    'libc/private/bionic_asm_arm.h'
+  ];
   exportSources(bionicSource,pins.aospBionic,files,source);
   const boundary=path.join(output,'cookie.h');
   fs.writeFileSync(boundary,`#pragma once
@@ -49,7 +53,7 @@ export function prepareNonlocalJump({bionicSource,klepton,build}){
   const output=path.join(build,'nonlocal-jump'),source=path.join(output,'source');
   const flags=[...baseFlags,...nativePathFlags({source,build})];
   const units=['libc/arch-arm64/bionic/setjmp.S','libc/bionic/setjmp_cookie.cpp'];
-  exportSources(bionicSource,pins.aospBionic,[...units,'libc/private/bionic_constants.h','libc/include/setjmp.h','libc/NOTICE'],source);
+  exportSources(bionicSource,pins.aospBionic,[...units, 'libc/private/bionic_constants.h', 'libc/include/setjmp.h'],source);
   let assembly=fs.readFileSync(path.join(source,units[0]),'utf8');
   const names=[...new Set([...assembly.matchAll(/^(?:ENTRY_WEAK_FOR_NATIVE_BRIDGE|ALIAS_SYMBOL_WEAK_FOR_NATIVE_BRIDGE)\((\w+)/gm)].map(match=>match[1]))];
   const tsd=fs.readFileSync(path.join(klepton,'runtime/kl_x18.h'),'utf8').match(/^#define KLX_TSD_SLOT (\d+)$/m)?.[1];
@@ -103,7 +107,9 @@ export function prepareNonlocalJump({bionicSource,klepton,build}){
   const lookup=path.join(output,'lookup.c');
   fs.writeFileSync(lookup,'#include <string.h>\n#include <stddef.h>\n'+names.map(name=>`extern void klj_jump_${name}(void);`).join('\n')+'\nvoid *klj_nonlocal_jump_lookup(const char *name){\n'+names.map(name=>` if(!strcmp(name,"${name}"))return (void *)&klj_jump_${name};`).join('\n')+'\n return NULL;\n}\n');
   const object=path.join(output,'lookup.o');execFileSync('clang',[...flags,'-c',lookup,'-o',object],{stdio:'inherit'});objects.push(object);
-  const licenses=path.join(output,'licenses');
-  addLicense(path.dirname(licenses),'nonlocal-jump',path.join(source,'libc/NOTICE'));
-  return {output,objects,licenses,names};
+  return {
+    output,
+    objects,
+    names
+  };
 }

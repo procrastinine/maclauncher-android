@@ -22,7 +22,7 @@ function method(text,signature){
 export function prepareKeyMapParcel({framework,native,pins,generated}){
   const input=source(native,pins.aospNative,'libs/input/KeyCharacterMap.cpp');
   const jni=source(framework,pins.aospFramework,'core/jni/android_view_KeyCharacterMap.cpp');
-  const license=input.slice(0,input.indexOf('*/')+2);
+  const preamble=input.slice(0,input.indexOf('*/')+2);
   const bodies=[
     method(input,'KeyCharacterMap::KeyCharacterMap(const std::string& filename)'),
     method(input,'std::unique_ptr<KeyCharacterMap> KeyCharacterMap::readFromParcel(Parcel* parcel)'),
@@ -32,7 +32,7 @@ export function prepareKeyMapParcel({framework,native,pins,generated}){
   ];
   const output=path.join(generated,'KeyCharacterMapParcel.cpp');
   fs.mkdirSync(generated,{recursive:true});
-  fs.writeFileSync(output,`${license}
+  fs.writeFileSync(output,`${preamble}
 // Original pinned native bodies, with the complete existing KeyCharacterMap
 // layout. Parcel operations bind to this library's real Binder implementation.
 #include "hotspot-jni.h"

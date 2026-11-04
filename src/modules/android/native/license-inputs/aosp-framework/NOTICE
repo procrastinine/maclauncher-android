@@ -1,7 +1,0 @@
-Android framework compatibility classes
-Copyright (C) 2006, 2008, 2010, 2012, 2016, 2021 The Android Open Source Project
-
-This product includes the selected Android framework adaptations listed in
-source.json under the Apache License, Version 2.0. Each source retains its
-applicable copyright notice. The full Java framework binary is described
-separately in the aosp-framework-base notices.

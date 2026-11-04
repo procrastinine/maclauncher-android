@@ -25,10 +25,13 @@ export function prepareInputKeymap({source,sdl,output}){
  const after=dump(adapted,['-F'+path.dirname(sdl)]);
  if(before.length!==after.length)throw Error('SDL physical key table length changed');
  for(let i=0;i<before.length;i++)if(before[i]>0&&before[i]<256&&before[i]!==after[i])throw Error('SDL3 changed a USB keyboard scancode at Linux key '+i);
- const license=text.slice(0,text.indexOf('*/')+2),header=path.join(output,'input-keymap.h');
- fs.writeFileSync(header,license+'\n/* Adapted for the supplied SDL3 scancode ABI. */\n#pragma once\nstatic const unsigned short klj_linux_scancodes[] = {\n'+after.join(',')+'\n};\n');
+ const preamble=text.slice(0,text.indexOf('*/')+2),header=path.join(output,'input-keymap.h');
+ fs.writeFileSync(header,preamble+'\n/* Adapted for the supplied SDL3 scancode ABI. */\n#pragma once\nstatic const unsigned short klj_linux_scancodes[] = {\n'+after.join(',')+'\n};\n');
  const revision=execFileSync('git',['-C',source,'rev-parse','HEAD'],{encoding:'utf8'}).trim();
  const identity={repository:'https://github.com/libsdl-org/SDL',revision,table:'src/events/scancodes_linux.h',sha256:crypto.createHash('sha256').update(text).digest('hex'),sdl3ScancodesSHA256:crypto.createHash('sha256').update(declarations).digest('hex'),unavailableSdl3Scancodes:[...missing].sort()};
  fs.writeFileSync(path.join(output,'source.json'),JSON.stringify(identity,null,2)+'\n');
- return {header,identity,license:path.join(source,'LICENSE.txt')};
+ return {
+  header,
+  identity
+ };
 }

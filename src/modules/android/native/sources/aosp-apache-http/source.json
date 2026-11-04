@@ -2,7 +2,6 @@
   "repository": "https://android.googlesource.com/platform/external/apache-http",
   "revision": "818f4b36e61315f2ae27fa05cf6b5b293f349c8c",
   "module": "org.apache.http.legacy",
-  "license": "Apache-2.0",
   "sourceDirectories": [
     "src",
     "android/src"

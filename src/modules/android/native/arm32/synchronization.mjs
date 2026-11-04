@@ -18,8 +18,12 @@ export function prepareArm32Synchronization({bionicSource,output}){
   const headers=['bionic_constants.h','bionic_fortify.h','bionic_futex.h',
     'bionic_lock.h','bionic_systrace.h','bionic_time_conversions.h']
     .map(name=>'libc/private/'+name);
-  const files=[...units,...headers,'libc/platform/bionic/macros.h',
-    'libc/async_safe/include/async_safe/log.h','libc/NOTICE'];
+  const files=[
+    ...units,
+    ...headers,
+    'libc/platform/bionic/macros.h',
+    'libc/async_safe/include/async_safe/log.h'
+  ];
   prepareSourceTree(source,temporary=>{
     exportSources(bionicSource,pins.aospBionic,files,temporary);
     for(const relative of units){

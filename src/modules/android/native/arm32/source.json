@@ -1,7 +1,6 @@
 {
   "url": "https://github.com/lioncash/dynarmic",
   "revision": "a41c380246d3d9f9874f0f792d234dc0cc17c180",
-  "license": "0BSD",
   "hostArchitecture": "arm64",
   "guestArchitecture": "armv7-a",
   "minimumMacOS": "13.0"

@@ -5,21 +5,18 @@
     {
       "file": "smali-dexlib2-3.0.10.jar",
       "url": "https://dl.google.com/dl/android/maven2/com/android/tools/smali/smali-dexlib2/3.0.10/smali-dexlib2-3.0.10.jar",
-      "license": "BSD-3-Clause",
       "size": 1200356,
       "sha256": "688dee6a46962a4dd1774b64be926534b0b6504bfd5d5c9f89c0f5af284f50c1"
     },
     {
       "file": "guava-31.1-android.jar",
       "url": "https://repo.maven.apache.org/maven2/com/google/guava/guava/31.1-android/guava-31.1-android.jar",
-      "license": "Apache-2.0",
       "size": 2785359,
       "sha256": "32ac2ed709d96d278b5d2e3e5cea178fa4939939c525fb647532f013308db309"
     },
     {
       "file": "jsr305-3.0.2.jar",
       "url": "https://repo.maven.apache.org/maven2/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar",
-      "license": "Apache-2.0",
       "size": 19936,
       "sha256": "766ad2a0783f2687962c8ad74ceecc38a28b9f72a2d085ee438b7813e928d0c7"
     }

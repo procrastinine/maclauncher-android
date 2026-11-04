@@ -1,4 +1,4 @@
-import {addLicense} from '../upstream/licenses.mjs';
+import {addLicenses} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -12,7 +12,6 @@ const nativeRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..')
 /** Export pinned input trees before applying host adaptations in the build area. */
 export function prepareKeyStoreSources({checkouts={},output}) {
   const sources={};
-  const licenses=path.join(output,'licenses');
 
   for(const record of catalog){
     const checkout=checkouts[record.name]||path.resolve(nativeRoot,'../../../external',record.checkout);
@@ -22,12 +21,11 @@ export function prepareKeyStoreSources({checkouts={},output}) {
         .trim().split('\n').filter(file=>record.filePatterns.some(pattern=>path.matchesGlob(file,pattern)))
       :record.trees;
     prepareSourceTree(destination,temporary=>exportSources(checkout,record.revision,trees,temporary));
-    sources[record.name]=destination;
-    // Preserve licenses supplied with the exact exported source closure.
-    for(const relative of fs.globSync(['**/NOTICE','**/NOTICE.*','**/LICENSE','**/LICENSE.*','**/COPYING','**/COPYING.*'],{cwd:destination})){
-      const file=path.join(destination,relative);
-      addLicense(output,record.name,file);
-    }
+    addLicenses(output,record.name,checkout);
+ sources[record.name]=destination;
   }
-  return {sources,licenses,catalog};
+  return {
+    sources,
+    catalog
+  };
 }

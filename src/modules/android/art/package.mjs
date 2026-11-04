@@ -1,4 +1,3 @@
-import {includeLicenses} from '../native/upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -54,7 +53,6 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
       try{
         fs.mkdirSync(to,{recursive:true,mode:0o755});
         for(const name of fs.readdirSync(actual).sort()){
-          if(name==='licenses'){includeLicenses(stage,path.join(actual,name));continue;}
           copy(path.join(actual,name),path.join(to,name),owner);
         }
       }finally{activeDirectories.delete(actual);}
@@ -67,7 +65,6 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
     // Original in-tree aliases are materialized as regular files for the same
     // immutable package verifier used by other Android runtime downloads.
     for(const name of fs.readdirSync(supplierRoot).sort())if(name!==supplier.components.image&&name!=='runtime.json'){
-      if(name==='licenses'){includeLicenses(stage,path.join(supplierRoot,name));continue;}
       // A producer may supply its Cargo output as halRoot. Only the runtime
       // services and shared libraries belong in the downloaded adapter.
       if(name===supplier.components.halRoot){
@@ -78,7 +75,6 @@ export function packageArtAdapter({supplierRoot,commonRoot,commonDeclaration,ext
     copy(extractor,path.join(stage,'art/host/android-image-extract'),path.dirname(extractor));
     copy(sourceArchive,path.join(stage,'source.tar.gz'),path.dirname(sourceArchive));
     copy(path.join(commonRoot,'native/SDL3.framework'),path.join(stage,'native/SDL3.framework'),commonRoot);
-    includeLicenses(stage,path.join(commonRoot,'licenses'));
     supplier.components={...supplier.components,imageExtractor:'host/android-image-extract'};
     metadata.validatePublicMetadata(supplier);
     fs.writeFileSync(path.join(stage,'art/runtime.json'),JSON.stringify(supplier,null,2)+'\n');

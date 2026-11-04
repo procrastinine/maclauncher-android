@@ -1,19 +1,12 @@
+import {addLicenses} from '../native/upstream/licenses.mjs';
 import {optionalFiles} from '../native/upstream/source-files.mjs';
-import {addLicense,includeLicenses} from '../native/upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {buildPrecise} from '../native/arm64/precise-build.mjs';
 import {nativePathFlags,nativeRustPathEnvironment,publishNativeBinary} from '../native/upstream/native-paths.mjs';
-
-/** Include the supplier's original licence texts with the runner. */
-export function stageArtRunnerLicenses({aim,cpuLicenses,output}){
- includeLicenses(output,cpuLicenses);
- for(const name of ['LICENSE','NOTICE','LICENSING.md','THIRD_PARTY_NOTICES.md','licensing/OPENJDK.md','licensing/rust-dependencies.txt'])addLicense(output,'AIM',path.join(aim,name));
- for(const file of optionalFiles(path.join(aim,'licensing/third-party')))addLicense(output,'AIM/'+path.basename(file),file);
- return path.join(output,'licenses');
-}
+export {};
 
 /** Build a supplied, prepared AIM tree using its original Cargo workspace.
  * A buildPrecise result can reuse existing static CPU archives. Only the runner
@@ -53,6 +46,12 @@ export function buildArtRunner({aim,output,unicorn,precise,work,target,cargo='ca
  const lockHolder=path.join(output,'host/aim-lock-holder'),ptyHolder=path.join(output,'host/aim-pty-holder');
  publishNativeBinary(path.join(target,'release/aim-lock-holder'),lockHolder);
  publishNativeBinary(path.join(target,'release/aim-pty-holder'),ptyHolder);
- const runnerLicenses=stageArtRunnerLicenses({aim,cpuLicenses:cpu.licenses,output});
- return {linuxRun,binder,lockHolder,ptyHolder,binderSenderIdentityVersion:1,runnerLicenses};
+ addLicenses(output,'AIM',aim);
+ return {
+  linuxRun,
+  binder,
+  lockHolder,
+  ptyHolder,
+  binderSenderIdentityVersion:1
+ };
 }

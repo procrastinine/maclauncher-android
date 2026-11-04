@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {prepareSourceTree,writeChanged} from '../upstream/source-files.mjs';
 import {includeDependencies} from '../upstream/source-includes.mjs';
 import fs from 'node:fs';
@@ -70,7 +69,11 @@ export function buildPollableDescriptors({checkout,output,ninja=process.env.NINJ
   });
   configureCmake({source,build,ninja,args:['-DBUILD_TESTING=OFF','-DBUILD_SHARED_LIBS=OFF','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_OSX_ARCHITECTURES=arm64','-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0']});
   execFileSync('cmake',['--build',build,'--target','maclauncher-descriptors','--parallel',String(jobs)],{stdio:'inherit'});
-  const licenses=path.join(output,'licenses');
-  for(const file of paths.filter(file=>/(^|\/)(LICENSE[^/]*|COPYING[^/]*)$/i.test(file))){addLicense(path.dirname(licenses),'pollable-fds',path.join(source,file));}
-  return {object,archive:path.join(build,'src/libepoll-shim.a'),include:path.join(build,'install-include'),licenses,source,build};
+  return {
+    object,
+    archive:path.join(build,'src/libepoll-shim.a'),
+    include:path.join(build,'install-include'),
+    source,
+    build
+  };
 }

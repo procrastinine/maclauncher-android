@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -7,7 +6,15 @@ import {execFileSync} from 'node:child_process';
 // Compiler-generated ARM ABI routines remain original ARM code. The common
 // image loader executes them through the CPU adapter; their libc calls reach
 // the same native owners as every other guest library.
-export function buildCompilerRuntime({archive,notice,linker,output,aeabi,include,allocation,portableFamilies=[]}){
+export function buildCompilerRuntime({
+  archive,
+  linker,
+  output,
+  aeabi,
+  include,
+  allocation,
+  portableFamilies=[]
+}){
   const ndk=JSON.parse(fs.readFileSync(new URL('./ndk-headers.json',import.meta.url))),pin=ndk.compilerRuntime;
   const input=fs.readFileSync(archive),sha=b=>crypto.createHash('sha256').update(b).digest('hex');
   if(input.length!==pin.bytes||sha(input)!==pin.sha256)throw Error('ARM compiler runtime differs from the pinned NDK artifact');
@@ -70,7 +77,8 @@ export function buildCompilerRuntime({archive,notice,linker,output,aeabi,include
     return file;
   });
   execFileSync(linker,['-flavor','gnu','-shared','--hash-style=both','--soname=libandroid-arm32-builtins.so',...objects,...versions,'--whole-archive',prepared,'--no-whole-archive','--no-as-needed',...dependencies,'-o',library],{stdio:'inherit'});
-  const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'compiler-rt',notice);
-  for(const family of portableFamilies)for(const file of family.licenses||[])addLicense(path.dirname(licenses),'compiler-rt',file);
-  return {library,licenses,exported};
+  return {
+    library,
+    exported
+  };
 }

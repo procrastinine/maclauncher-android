@@ -95,18 +95,6 @@
         "executionArchitecture": "x86_64"
       },
       {
-        "path": "temporal/fsr/FSR2-LICENSE.txt",
-        "sha256": "6a12d0fdb5410839473f80b5395cf9493e8c007f76faed9f3fa41ab2f273803e",
-        "size": 1165,
-        "mode": 420
-      },
-      {
-        "path": "temporal/fsr/FSR3-LICENSE.txt",
-        "sha256": "82cf74fc23885107c7f69249ac3f1dac55898ff68320eb2c753984cae6b2d78a",
-        "size": 1115,
-        "mode": 420
-      },
-      {
         "path": "temporal/fsr/fsr2-build.json",
         "sha256": "310763818e268228ec0a9362da4e5a362fc5e59a3f6a6a0121f10a898dffab6e",
         "size": 216,
@@ -3965,12 +3953,6 @@
         "mode": 420
       },
       {
-        "path": "temporal/fsr4/NOTICE.md",
-        "sha256": "8472265dca684b1bdddbded7ca0ad614633e1faaa30be6bdb885c5d94affc81b",
-        "size": 1914,
-        "mode": 420
-      },
-      {
         "path": "temporal/fsr4/build/fsr411_1080_di0_lm0_jm0_cs0_ae0_o1_fast_pc1_ca1/bindings.json",
         "sha256": "a2b1ab77c18c61dd39df96bacbea1a7cd3b9f6c6f5cc7a4cf8d38d28ed2dcdb0",
         "size": 18947,
@@ -5609,18 +5591,6 @@
         "mode": 420
       },
       {
-        "path": "temporal/fsr4/third_party/fsr411/LICENSE",
-        "sha256": "af61f617d758292a208c2c9e4c14a7b9058c9f96b60f7f73da965864799934c2",
-        "size": 1114,
-        "mode": 420
-      },
-      {
-        "path": "temporal/fsr4/third_party/fsr411/LICENSE.AMD.md",
-        "sha256": "cbb7f951235dd6e580c54619097265a69b6ef97e80f1953ca9bf52285413ac61",
-        "size": 1580,
-        "mode": 420
-      },
-      {
         "path": "temporal/fsr4/third_party/fsr411/initializers-ultraperformance.bin",
         "sha256": "3c42fc6eabfa9b5b1e489df0e9b2f58e3f9fa22048c584f6839bb27d32a0640e",
         "size": 131072,
@@ -5636,12 +5606,6 @@
         "path": "godot/provider.json",
         "sha256": "30ff3479e4f532a2bb36b5d4dd18b920cfbd69e4bc60b44fc2abc70f3be66a89",
         "size": 863,
-        "mode": 420
-      },
-      {
-        "path": "godot/GODOT-LICENSE.txt",
-        "sha256": "b0435e3b3e4e55238f05f4b306f30524a1b2e20147810d436eaa554fa6855c80",
-        "size": 1149,
         "mode": 420
       },
       {
@@ -5666,12 +5630,6 @@
         "path": "temporal/streamline/provider.json",
         "sha256": "f68610aa2ae35ad320a7a9d8f3123271a707d7622ae8ade68551b198eaa867a5",
         "size": 20481,
-        "mode": 420
-      },
-      {
-        "path": "temporal/streamline/Streamline-LICENSE.txt",
-        "sha256": "7b6f23e7d6f3ad6292f9308d2b42cdc3d82ae4e9b2abb55f230279d83bedd43d",
-        "size": 1591,
         "mode": 420
       },
       {
@@ -5702,72 +5660,6 @@
         "path": "temporal/dxmt/camera-bridge.json",
         "sha256": "147013364b05d9f89468ba9d3c595a49b9ab48e48d68981c0eb583704c04432f",
         "size": 1034,
-        "mode": 420
-      },
-      {
-        "path": "temporal/dxmt/LICENSE",
-        "sha256": "b87c35aef7b2cf14de854118ca55ce5c4b284c85b5f002421fb8d46d868c2d17",
-        "size": 782,
-        "mode": 420
-      },
-      {
-        "path": "temporal/dxmt/LICENSE.OLD",
-        "sha256": "3422f02eb18f1e598731b586832afab8b322badd61d45a4b95674ceec4b6108d",
-        "size": 1272,
-        "mode": 420
-      },
-      {
-        "path": "temporal/dxmt/COPYING.LIB",
-        "sha256": "e237fa56668030e928551ddd60f05df5fe957f75eab874bbd017e085ed722e7c",
-        "size": 26434,
-        "mode": 420
-      },
-      {
-        "path": "licenses/MacFX.txt",
-        "sha256": "813515ed588e6fa8be4f8f06277287b4123dfaa4c4318f78d2c12019af6f8180",
-        "size": 1532,
-        "mode": 420
-      },
-      {
-        "path": "licenses/THIRD_PARTY.md",
-        "sha256": "0172eccd2ed5778c275cc0df0b780778d2ab204e166845c35961305c6f829fda",
-        "size": 5836,
-        "mode": 420
-      },
-      {
-        "path": "licenses/ReShade.txt",
-        "sha256": "237ded5b8344f820113efab1e65e91e1f159d9202c5b4856606a0590d3ffdab0",
-        "size": 1481,
-        "mode": 420
-      },
-      {
-        "path": "licenses/MAKO.txt",
-        "sha256": "91153548d088305c2cccac87fa091c379b5e96d6ab86561afb1c0bc69a5cffea",
-        "size": 41787,
-        "mode": 420
-      },
-      {
-        "path": "licenses/FSR1.txt",
-        "sha256": "db089274ce766da70f5b7d791029c3486f9f9e27c8c79c652689603d3192e802",
-        "size": 1094,
-        "mode": 420
-      },
-      {
-        "path": "licenses/vkd3d.txt",
-        "sha256": "1f69abfaeee0131bba28ad72d87683a223743d8c9ee1da113fde10cb082f3c91",
-        "size": 786,
-        "mode": 420
-      },
-      {
-        "path": "licenses/SPIRV-Cross.txt",
-        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
-        "size": 11358,
-        "mode": 420
-      },
-      {
-        "path": "licenses/SPIRV-Headers.txt",
-        "sha256": "9b243f6f0bf44e295ff411a0f7b7642d1d0dff7cdc42507e9f7206f439e51b5a",
-        "size": 1309,
         "mode": 420
       },
       {
@@ -5829,121 +5721,6 @@
         "sha256": "eb2d697301e1189afc105353aff2742a1289449b5354eedc6252289c4ed47016",
         "size": 195071,
         "mode": 420
-      }
-    ],
-    "notices": [
-      {
-        "name": "ReShade macOS adapter",
-        "license": "BSD-3-Clause",
-        "path": "licenses/MacFX.txt"
-      },
-      {
-        "name": "ReShade",
-        "license": "BSD-3-Clause",
-        "path": "licenses/ReShade.txt",
-        "sourceUrl": "https://github.com/crosire/reshade"
-      },
-      {
-        "name": "vkd3d shader translator",
-        "license": "LGPL-2.1-or-later",
-        "path": "licenses/vkd3d.txt",
-        "sourceUrl": "https://codeberg.org/vkd3d/vkd3d"
-      },
-      {
-        "name": "MAKO model processing and frame pacing",
-        "license": "GPL-3.0-or-later",
-        "path": "licenses/MAKO.txt",
-        "sourceUrl": "https://github.com/eugeniosegala/MAKO"
-      },
-      {
-        "name": "AMD FidelityFX FSR1",
-        "license": "MIT",
-        "path": "licenses/FSR1.txt",
-        "sourceUrl": "https://github.com/GPUOpen-Effects/FidelityFX-FSR"
-      },
-      {
-        "name": "SPIRV-Cross",
-        "license": "Apache-2.0 OR MIT",
-        "path": "licenses/SPIRV-Cross.txt",
-        "sourceUrl": "https://github.com/KhronosGroup/SPIRV-Cross"
-      },
-      {
-        "name": "SPIRV-Headers",
-        "license": "MIT",
-        "path": "licenses/SPIRV-Headers.txt",
-        "sourceUrl": "https://github.com/KhronosGroup/SPIRV-Headers"
-      },
-      {
-        "name": "ReShade shader headers",
-        "license": "CC0-1.0",
-        "path": "include/ReShade.fxh",
-        "sourceUrl": "https://github.com/crosire/reshade-shaders"
-      },
-      {
-        "name": "AMD FidelityFX FSR2",
-        "license": "MIT",
-        "path": "temporal/fsr/FSR2-LICENSE.txt",
-        "sourceUrl": "https://github.com/GPUOpen-Effects/FidelityFX-FSR2"
-      },
-      {
-        "name": "AMD FidelityFX FSR3 upscaler",
-        "license": "MIT",
-        "path": "temporal/fsr/FSR3-LICENSE.txt",
-        "sourceUrl": "https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK"
-      },
-      {
-        "name": "FSR4 Metal provider",
-        "license": "MIT",
-        "path": "temporal/fsr4/NOTICE.md",
-        "sourceUrl": "https://github.com/UzenUPoZiTiV4ik/fsr4-native-macos"
-      },
-      {
-        "name": "FSR4 shader implementation",
-        "license": "MIT",
-        "path": "temporal/fsr4/third_party/fsr411/LICENSE",
-        "sourceUrl": "https://github.com/int3rrobang/fsr4-int8-reverse-engineering"
-      },
-      {
-        "name": "AMD FSR4 model and helpers",
-        "license": "MIT",
-        "path": "temporal/fsr4/third_party/fsr411/LICENSE.AMD.md",
-        "sourceUrl": "https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK"
-      },
-      {
-        "name": "Godot extension interface",
-        "license": "MIT",
-        "path": "godot/GODOT-LICENSE.txt",
-        "sourceUrl": "https://github.com/godotengine/godot"
-      },
-      {
-        "name": "NVIDIA Streamline interface",
-        "license": "MIT",
-        "path": "temporal/streamline/Streamline-LICENSE.txt",
-        "sourceUrl": "https://github.com/NVIDIA-RTX/Streamline"
-      },
-      {
-        "name": "DXMT camera integration",
-        "license": "LGPL-2.1-or-later",
-        "path": "temporal/dxmt/LICENSE",
-        "sourceUrl": "https://github.com/3Shain/dxmt"
-      },
-      {
-        "name": "DXMT Wine interfaces",
-        "license": "LGPL-2.1-or-later",
-        "path": "temporal/dxmt/COPYING.LIB",
-        "sourceUrl": "https://github.com/3Shain/dxmt"
-      },
-      {
-        "name": "DXMT third-party components",
-        "license": "LicenseRef-DXMT-Notices",
-        "path": "temporal/dxmt/LICENSE.OLD",
-        "sourceUrl": "https://github.com/3Shain/dxmt"
-      },
-      {
-        "name": "AMD FidelityFX CAS (SweetFX port)",
-        "license": "MIT",
-        "path": "effects/cas.fx",
-        "sourceUrl": "https://github.com/CeeJayDK/SweetFX/blob/93ddf39b357f5da534ed6d34ba4ec8cc7dcfa361/Shaders/SweetFX/CAS.fx"
       }
     ]
   }

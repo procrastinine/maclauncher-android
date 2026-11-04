@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync,spawnSync} from 'node:child_process';
@@ -79,10 +78,13 @@ export function prepareNativeMath({bionicSource,klepton,build,python,shim}){
     return `extern ${entry.kind==='VarDecl'?'char':'void'} klj_math_binding_${entry.name}${entry.kind==='VarDecl'?'':'(void)'} __asm__("_${symbol}");`;
   }).join('\n')+'\nvoid *klj_math_lookup(const char *name){\n'+bound.map(entry=>` if(!strcmp(name,"${entry.name}"))return (void *)&klj_math_binding_${entry.name};`).join('\n')+'\n return NULL;\n}\n');
   const object=path.join(output,'lookup.o');run('clang',[...cflags,'-c',lookup,'-o',object]);objects.push(object);
-  const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'native-math',path.join(libm,'NOTICE'));
   fs.writeFileSync(path.join(output,'exports.json'),JSON.stringify(entries,null,2)+'\n');
   if(shim)adaptNativeMathShim({shim,klepton,entries,output});
-  return {objects,licenses,entries,output};
+  return {
+    objects,
+    entries,
+    output
+  };
 }
 
 /** Move the implemented family out of sample-derived tables into its one owner. */

@@ -16,10 +16,27 @@ function replace(text,before,after){
  * Adapt only host ABI, the absent kernel transport, and actual JDK layouts. */
 export function prepareBinderJni({root,pins,source,output,binder,flags,sources,inputs,exportSources}){
   const framework=path.join(source,'framework'),helper=path.join(source,'nativehelper'),base=path.join(source,'libbase'),bionic=path.join(source,'bionic');
-  exportSources(inputs.framework,pins.aospFramework,['core/jni/android_os_Parcel.cpp','core/jni/android_os_Parcel.h','core/jni/android_util_Binder.cpp','core/jni/android_util_Binder.h','core/jni/android_util_CharsetUtils.cpp','core/jni/android_os_SharedMemory.cpp','core/jni/android_util_MemoryIntArray.cpp','core/jni/core_jni_helpers.h','core/jni/jni_wrappers.h','core/jni/include/android_runtime/AndroidRuntime.h','NOTICE'],framework);
-  exportSources(inputs.nativehelper,pins.aospLibnativehelper,['include','include_jni','include_platform','include_platform_header_only','header_only_include','NOTICE'],helper);
-  exportSources(inputs.libbase,pins.aospLibbase,['include','strings.cpp','stringprintf.cpp','posix_strerror_r.cpp','NOTICE'],base);
-  exportSources(inputs.bionic,pins.aospBionic,['libc/NOTICE'],bionic);
+  exportSources(inputs.framework,pins.aospFramework,[
+    'core/jni/android_os_Parcel.cpp',
+    'core/jni/android_os_Parcel.h',
+    'core/jni/android_util_Binder.cpp',
+    'core/jni/android_util_Binder.h',
+    'core/jni/android_util_CharsetUtils.cpp',
+    'core/jni/android_os_SharedMemory.cpp',
+    'core/jni/android_util_MemoryIntArray.cpp',
+    'core/jni/core_jni_helpers.h',
+    'core/jni/jni_wrappers.h',
+    'core/jni/include/android_runtime/AndroidRuntime.h'
+  ],framework);
+  exportSources(inputs.nativehelper,pins.aospLibnativehelper,[
+    'include',
+    'include_jni',
+    'include_platform',
+    'include_platform_header_only',
+    'header_only_include'
+  ],helper);
+  exportSources(inputs.libbase,pins.aospLibbase,['include', 'strings.cpp', 'stringprintf.cpp', 'posix_strerror_r.cpp'],base);
+  exportSources(inputs.bionic,pins.aospBionic,[],bionic);
   // Consume the Binder ABI's complete header dependency closure. Exporting the
   // whole Linux tree would fetch thousands of unrelated device headers.
   const kernelRoots=['libc/kernel/uapi','libc/kernel/uapi/asm-arm64','libc/kernel/android/uapi'];

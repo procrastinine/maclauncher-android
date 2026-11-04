@@ -1,14 +1,11 @@
 """Read original Khronos command length contracts without parsing C declarations."""
 import json
-import pathlib
 import sys
 import xml.etree.ElementTree as ET
 
 commands = {}
 aliases = {}
 registry = ET.parse(sys.argv[1]).getroot()
-if len(sys.argv) > 2:
-    pathlib.Path(sys.argv[2]).write_text(registry.findtext('comment').strip() + '\n')
 for command in registry.findall('./commands/command'):
     name = command.findtext('proto/name')
     if name:

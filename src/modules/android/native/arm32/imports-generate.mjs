@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,8 +8,11 @@ import {generateSignalAbi} from './signal-abi.mjs';
 import {mediaInterfaceCounts} from './media-lengths.mjs';
 
 const root=import.meta.dirname;
-export function readGraphicsLengths({python,registry,notice}){
-  return JSON.parse(execFileSync(python,[path.join(root,'registry-lengths.py'),registry,...(notice?[notice]:[])],{encoding:'utf8',maxBuffer:16*1024*1024}));
+export function readGraphicsLengths({
+  python,
+  registry
+}){
+  return JSON.parse(execFileSync(python,[path.join(root,'registry-lengths.py'),registry],{encoding:'utf8',maxBuffer:16*1024*1024}));
 }
 // Registry lengths describe element cardinality; the original Clang types
 // supply each ABI's element layout. Unspecified dynamic GL state remains with
@@ -182,7 +184,7 @@ export function emitDescriptors({guest,host,output,graphicsLengths={},mediaTags=
   // every interface still calls the same native implementation and resources.
   const interfaces=[],interfaceQueries=[],queryTypes=new Set();
   const aliases=new Map(),declaredInterfaces=[];
-  for(const [name,type] of Object.entries(guest.types))for(const alias of new Set([name,...type.aliases||[]])){
+  for(const [name,type] of Object.entries(guest.types))for(const alias of new Set([name,...(type.aliases || [])])){
     const match=/^(SL|XA)(.+)Itf$/.exec(alias);
     if(match&&type.kind==='Pointer'){
       aliases.set(match[1]+'_'+match[2].replaceAll('_','').toUpperCase(),name);
@@ -275,9 +277,10 @@ export function refreshDescriptors({output,include,python,graphicsRegistry,clang
     graphicsRegistry=previous.graphicsRegistry;
   }
   const guest=JSON.parse(fs.readFileSync(path.join(output,'guest-ast.json'))),host=JSON.parse(fs.readFileSync(path.join(output,'host-ast.json')));
-  const licenses=path.join(output,'licenses');
-  const graphicsLengths=graphicsRegistry?readGraphicsLengths({python,registry:graphicsRegistry,notice:path.join(output,'khronos-gl-registry-license.txt')}):{};
-  if(graphicsRegistry){addLicense(output,'Khronos GL registry',path.join(output,'khronos-gl-registry-license.txt'));fs.rmSync(path.join(output,'khronos-gl-registry-license.txt'),{force:true});}
+  const graphicsLengths=graphicsRegistry?readGraphicsLengths({
+    python,
+    registry:graphicsRegistry
+  }):{};
   const mediaTags=readMediaTags({include,guest,host,clang});
   const result=emitDescriptors({guest,host,output,graphicsLengths,mediaTags});
   writeChanged(file,JSON.stringify({include:path.resolve(include),python:python?path.resolve(python):null,graphicsRegistry:graphicsRegistry?path.resolve(graphicsRegistry):null},null,2)+'\n');
@@ -358,13 +361,8 @@ export async function generateImports({include,python,output,ownerHeaders=[],gra
     if(errors.length)throw Error('Clang could not read original Android declarations: '+JSON.stringify(errors));
   }
   writeChanged(path.join(output,'header-inventory.json'),JSON.stringify(inventory,null,2)+'\n');
-  const licenses=path.join(output,'licenses');
   refreshDescriptors({include,python,output,graphicsRegistry:graphicsRegistry||null,clang});
-  for(let ancestor=path.dirname(include);;ancestor=path.dirname(ancestor)){
-    const candidate=path.join(ancestor,'NOTICE');
-    if(fs.existsSync(candidate)){addLicense(path.dirname(licenses),'imports-generate',candidate);break;}
-    if(path.dirname(ancestor)===ancestor)break;
-  }
+
   return {output,guest:data.guest,host:data.host};
 }
 

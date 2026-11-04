@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -65,7 +64,7 @@ export function prepareSyscalls({bionicSource,include,python,importsDirectory,ou
   fs.mkdirSync(output,{recursive:true});
   preparePrctlConstants({bionicSource,output});
   const source=path.join(output,'source');
-  exportSources(bionicSource,pins.aospBionic,['libc/SYSCALLS.TXT','libc/tools/gensyscalls.py','libc/NOTICE'],source);
+  exportSources(bionicSource,pins.aospBionic,['libc/SYSCALLS.TXT', 'libc/tools/gensyscalls.py'],source);
   const rows=JSON.parse(execFileSync(python,[path.join(import.meta.dirname,'syscalls-parse.py'),path.join(source,'libc/tools/gensyscalls.py'),path.join(source,'libc/SYSCALLS.TXT')],{encoding:'utf8'}));
   const ast=JSON.parse(fs.readFileSync(path.join(importsDirectory,'guest-ast.json')));
   const extra=[['Futex','__NR_futex'],['FutexTime64','__NR_futex_time64'],['NoSys','ENOSYS'],['Fault','EFAULT'],['Invalid','EINVAL'],['Range','ERANGE'],['MaxIov','IOV_MAX']];
@@ -91,7 +90,8 @@ export function prepareSyscalls({bionicSource,include,python,importsDirectory,ou
   for(const row of outputRows)lines.push(`{${row.number},${JSON.stringify(row.name)},${JSON.stringify(row.service)},SyscallMode::${row.mode},${row.voidResult?'true':'false'},${row.registers.length},{${row.registers.map(([offset,words])=>`{${offset},${words}}`).join(',')}}},`);
   lines.push('};');writeChanged(path.join(output,'syscalls.inc'),lines.join('\n')+'\n');
   writeChanged(path.join(output,'syscalls.json'),JSON.stringify(outputRows,null,2)+'\n');
-  const licenses=path.join(output,'licenses');
-  addLicense(path.dirname(licenses),'syscall-sources',path.join(source,'libc/NOTICE'));
-  return {directory:output,licenses,entries:outputRows.length};
+  return {
+    directory:output,
+    entries:outputRows.length
+  };
 }

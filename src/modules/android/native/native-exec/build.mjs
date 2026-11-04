@@ -1,4 +1,3 @@
-import {addLicense} from '../upstream/licenses.mjs';
 import {writeChanged} from '../upstream/source-files.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,7 +10,11 @@ const pins=JSON.parse(fs.readFileSync(new URL('../source-pins.json',import.meta.
 export function prepareNativeExec({bionicSource,klepton,build,ninja,python}){
  build=path.resolve(build);const output=path.join(build,'native-exec'),source=path.join(output,'source');
  const units=['libc/bionic/exec.cpp','libc/bionic/__bionic_get_shell_path.cpp'];
- exportSources(bionicSource,pins.aospBionic,[...units,'libc/private/FdPath.h','libc/private/__bionic_get_shell_path.h','libc/NOTICE'],source);
+ exportSources(bionicSource,pins.aospBionic,[
+  ...units,
+  'libc/private/FdPath.h',
+  'libc/private/__bionic_get_shell_path.h'
+ ],source);
  const original=fs.readFileSync(path.join(source,units[0]),'utf8');
  const declarations=[...original.matchAll(/^int\s+(\w+)\s*(\([^;{]*\))\s*\{/gm)].map(m=>({name:m[1],signature:'int '+m[1]+m[2]+';'}));
  const names=[...declarations.map(d=>d.name),'execve'];
@@ -40,6 +43,10 @@ export function prepareNativeExec({bionicSource,klepton,build,ninja,python}){
  const symbol=name=>'klj_exec_'+name+(variadic.some(d=>d.name===name)?'_thunk':'');
  const lookup=path.join(output,'lookup.cpp');writeChanged(lookup,'#include <cstring>\n'+names.map(name=>`extern "C" void ${symbol(name)}(void);`).join('\n')+'\nextern "C" void *klj_exec_lookup(const char *name){\n'+names.map(name=>`if(!std::strcmp(name,"${name}"))return reinterpret_cast<void *>(&${symbol(name)});`).join('\n')+'\nreturn nullptr;\n}\n');
  objects.push(compile('bionic-exec-lookup.o',lookup));
- const licenses=path.join(output,'licenses');addLicense(path.dirname(licenses),'native-exec',path.join(source,'libc/NOTICE'));
- return {output,objects,names,licenses,thunks};
+ return {
+  output,
+  objects,
+  names,
+  thunks
+ };
 }
