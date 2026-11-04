@@ -147,7 +147,7 @@ mod tests {
         let file=File::open(&path).unwrap();super::super::insert(file.as_raw_fd(),Kind::Random);published(&file);assert!(matches!(readable(file.as_raw_fd()),Err(errno::EOPNOTSUPP)));close(file);
         let file=File::open(&path).unwrap();published(&file);
         let mut pin=super::super::pin_guest(file.as_raw_fd()).unwrap();
-        pin.fuse=Some(std::sync::Arc::new(super::super::super::fuse_client::Open{guest:"/unit/fuse".into(),route:crate::vfs::FuseRoute{session:root.join("no-broker-needed"),relative:String::new(),uid:0,gid:0,allow_other:false,default_permissions:false,read_only:true},node:1,fh:0,flags:0,open_flags:0,broker_owned:true,directory:false,offset:std::sync::Mutex::new(0)}));
+        pin.fuse=Some(std::sync::Arc::new(super::super::super::fuse_client::Open{guest:"/unit/fuse".into(),route:crate::vfs::FuseRoute{session:root.join("no-broker-needed"),relative:String::new(),uid:0,gid:0,allow_other:false,default_permissions:false,read_only:true},node:1,generation:0,fh:0,flags:0,open_flags:0,broker_owned:true,directory:false,offset:std::sync::Mutex::new(0)}));
         assert!(matches!(validate(pin),Err(errno::EOPNOTSUPP)));close(file);
         let file=File::open(&path).unwrap();
         let store=std::sync::Arc::new(aim_storage::fsverity::Store::new(&root.join("native-proofs"),&root.join("native-locks")).unwrap());
