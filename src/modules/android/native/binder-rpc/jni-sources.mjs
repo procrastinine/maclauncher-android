@@ -36,7 +36,6 @@ export function prepareBinderJni({root,pins,source,output,binder,flags,sources,i
     'header_only_include'
   ],helper);
   exportSources(inputs.libbase,pins.aospLibbase,['include', 'strings.cpp', 'stringprintf.cpp', 'posix_strerror_r.cpp'],base);
-  exportSources(inputs.bionic,pins.aospBionic,[],bionic);
   // Consume the Binder ABI's complete header dependency closure. Exporting the
   // whole Linux tree would fetch thousands of unrelated device headers.
   const kernelRoots=['libc/kernel/uapi','libc/kernel/uapi/asm-arm64','libc/kernel/android/uapi'];
