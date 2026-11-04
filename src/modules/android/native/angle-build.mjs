@@ -70,9 +70,6 @@ try{
     files.push({path:name,size:data.length,sha256:digest(data),architectures:['arm64'],minimumMacOS:'13.0'});
   }
 }finally{fs.rmSync(publication,{recursive:true,force:true});}
-if(backend==='metal-vulkan'){
-  suppliers.push(['VulkanMemoryAllocator']);
-}
 addLicenses(options.output,'ANGLE',source);
  const adaptations=['angle-source.mjs','angle-flip-source.mjs','angle-flip-source.json','angle-identity-source.mjs','angle-sync-source.mjs','angle-fence-completion.h','angle-current-source.mjs','angle-debug-source.mjs','angle-debug-callback.h','angle-blob-source.mjs','angle-blob-callback.h','angle-dither-source.mjs',...(backend==='metal-vulkan'?['angle-vulkan-source.mjs','angle-vulkan-image-source.mjs']:[])].map(file=>({file,sha256:digest(fs.readFileSync(path.join(root,file)))}));
 const internalShaders=fs.readFileSync(path.join(output,'obj/src/libANGLE/renderer/metal/angle_metal_backend.ninja'),'utf8').includes('-DANGLE_METAL_HAS_PREBUILT_INTERNAL_SHADERS')?'embedded-metallib':'runtime-source';
