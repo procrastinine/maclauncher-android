@@ -32,3 +32,16 @@ export function includeLicenses(root,directory){
   addLicense(root,row.slice(0,split),path.join(directory,file),file.replace(/\.txt$/,''));
  }}catch(error){console.log(`::warning::No licence texts from ${directory}: ${error.message}`);}
 }
+
+/** Add the licence texts at the top of a source directory, including the files of a LICENSES folder. */
+export function addLicenses(root,component,directory){
+ let names=[];
+ try{names=fs.readdirSync(directory).filter(name=>/^(licen[cs]e|copying|notice|copyright)/i.test(name));}
+ catch(error){console.log(`::warning::No licence texts in ${directory}: ${error.message}`);}
+ for(const name of names){
+  const file=path.join(directory,name);
+  let inner=[];try{if(fs.statSync(file).isDirectory())inner=fs.readdirSync(file);}catch{}
+  if(inner.length)for(const each of inner)addLicense(root,component,path.join(file,each));
+  else addLicense(root,component,file);
+ }
+}
