@@ -42,6 +42,11 @@ extern "C" fn disarm(token:u64)->i64{let _errno=NativeErrno::save();ARMED.with(|
 /// Claimed before original clone ID allocation/publication. A borrowed
 /// canonical lease remains owned by its real Java/Mach thread.
 pub(super) struct CloneClaim{value:Arc<Ticket>,prior:u32}
+impl Drop for CloneClaim{fn drop(&mut self){
+ // Current upstream clone can fail after allocation (for example cgroup admission).
+ // A successful capture has already advanced the phase and keeps its Boot.
+ let _=self.value.phase.compare_exchange(CLAIMED,self.prior,Ordering::AcqRel,Ordering::Acquire);
+}}
 pub(super) fn claim_clone()->Result<Option<CloneClaim>,i64>{
  let token=ARMED.with(|armed|armed.replace(0));if token==0{return Ok(None);}
  let value=ticket(token)?;let prior=value.phase.load(Ordering::Acquire);
@@ -57,7 +62,7 @@ pub(super) fn failed_clone(claim:Option<&CloneClaim>){if let Some(claim)=claim{c
 /// Called at the original clone's final host-thread choice. No TLS layout,
 /// child registers, ptid/ctid or native identity are synthesized or overwritten.
 pub(super) unsafe fn capture(boot:*mut Boot,flags:u64,claim:Option<CloneClaim>)->Option<i64>{
- let claim=claim?;let value=claim.value;assert_eq!(claim.prior,RESERVED);
+ let claim=claim?;let value=claim.value.clone();assert_eq!(claim.prior,RESERVED);
  assert_eq!(flags&(CLONE_VM|CLONE_SIGHAND|CLONE_THREAD|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID),CLONE_VM|CLONE_SIGHAND|CLONE_THREAD|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID);
  assert_eq!(value.phase.load(Ordering::Acquire),CLAIMED);let boot=unsafe{Box::from_raw(boot)};assert_ne!(boot.tp,0);let tid=boot.thread.tid;
  if let Some(expected)=value.borrowed_tid{assert_eq!(expected,tid);}
@@ -127,3 +132,21 @@ fn run(value:&Arc<Ticket>,request:&mut Call,stopping:bool,reject_activation:bool
 }
 
 extern "C" fn reject_partial_entry(token:u64)->i64{let _errno=NativeErrno::save();let value=match own(token){Ok(value)=>value,Err(error)=>return error};if !matches!(value.phase.load(Ordering::Acquire),PREPARED|DORMANT)||!context::current_ctx().is_null(){return errno(crate::errno::EBUSY);}let mut call=Call{function:0,argument:0,result:0};let outcome=run(&value,&mut call,false,true);let restoration=context::take_foreign_restore_error();if restoration!=0{restoration}else{outcome.err().unwrap_or(errno(crate::errno::EIO))}}
+
+#[cfg(test)]
+mod admission_tests{
+ use super::*;
+ #[test]
+ fn failed_clone_claim_leaves_the_real_ticket_retryable(){
+  let mut token=0;assert_eq!(unsafe{reserve(&mut token)},0);
+  let value=ticket(token).unwrap();
+  for _ in 0..2{
+   ARMED.with(|armed|armed.set(token));
+   let claim=claim_clone().unwrap().unwrap();
+   assert_eq!(value.phase.load(Ordering::Acquire),CLAIMED);
+   // Same unwind as an upstream clone error before the capture boundary.
+   drop(claim);assert_eq!(value.phase.load(Ordering::Acquire),RESERVED);
+  }
+  assert_eq!(retire(token),0);assert!(ticket(token).is_err());
+ }
+}
