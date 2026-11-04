@@ -202,6 +202,12 @@ source. `buildArt` accepts this component through its optional `runner` input
 and collects available top-level licence texts through the shared collector.
 Missing or unreadable licence sources emit a warning.
 
+ART Java compilation uses the original Android core declaration image. The
+complete `android.system` and `dalvik.system` package declarations from the
+framework archive patch `java.base` during compilation, preserving access to
+hidden sibling classes such as `SocketTagger`. These declarations remain in
+the compiler workspace.
+
 ## Native runtime behavior
 
 The ART loader keeps the initial argument table and writable stack below the
