@@ -55,7 +55,7 @@ test('complete Linux ABI socket boundary preserves real connect and SCM transfer
  }
  if(fs.existsSync(core))args.push('-L','native='+temporary,'-l','static=x18_core');
  run(native.rustc,args);
- const result=run(executable,[path.join(temporary,'runtime')],{timeout:15000,cwd:temporary,env:{...process.env,TMPDIR:'.'}});
+ const result=run(executable,[path.join(temporary,'runtime')],{timeout:15000,cwd:temporary});
  assert.match(result.stdout,/stream connect: EINPROGRESS -> 0 -> EISCONN; blocking retry; payload survives/);
  assert.match(result.stdout,/inherited socket: actual SCM_RIGHTS transfer survives sender close; allocated socket retains receipt/);
  t.diagnostic(result.stdout.trim());

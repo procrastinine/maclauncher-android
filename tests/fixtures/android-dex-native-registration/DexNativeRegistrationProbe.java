@@ -16,8 +16,9 @@ public final class DexNativeRegistrationProbe {
   System.load(runtime.resolve("native/libklepton-jvm.dylib").toString());
   System.load(runtime.resolve("native/libnativebinding.dylib").toString());
   HostProcessIdentity.initializeIds();
-  HostFilesystem.installNativeMappings(List.of(),data);
+  System.load(args[5]);
   JvmNativeMemory.configure(runtime.resolve("native/libandroid_runtime.dylib"));JvmNativeMemory.initialize();
+  HostFilesystem.installNativeMappings(List.of(),data);
   if(!baseline)System.load(args[3]);
   var loader=HostDexFiles.application(jar,List.of(),data,DexNativeRegistrationProbe.class.getClassLoader());
   Field pathField=BaseDexClassLoader.class.getDeclaredField("pathList");pathField.setAccessible(true);

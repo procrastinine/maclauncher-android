@@ -24,7 +24,7 @@ static void *(*symbol)(void *,const char *);
 static void *provider,*guest;
 static pthread_mutex_t lock=PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t changed=PTHREAD_COND_INITIALIZER;
-static unsigned arrived;
+static unsigned arrived,checked;
 static int loaded;
 static int *addresses[3];
 static intptr_t tp_offset;
@@ -63,6 +63,10 @@ static void *worker(void *opaque){
     assert(pointer()==tp&&((uintptr_t *)tp)[5]==guard);
     check(index,90+(int)index);
     assert(!pthread_setspecific(late_key,(void *)(uintptr_t)(index+1)));
+    // All three allocations must still be live when their addresses are compared.
+    pthread_mutex_lock(&lock);++checked;pthread_cond_broadcast(&changed);
+    while(checked<3)pthread_cond_wait(&changed,&lock);
+    pthread_mutex_unlock(&lock);
     return NULL;
 }
 int main(int argc,char **argv){
