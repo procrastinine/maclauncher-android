@@ -9,6 +9,13 @@ int klj_thread_id(void);
  * owner retires adopted and lazily registered leases after kernel death. */
 int klj_thread_id_adopt(int);
 int klj_thread_id_reserve(void);
+/* Hold an owned reserved or adopted TID. A pending RAII owner holds before
+ * publishing its clone, then keeps that hold through adoption or tracer wait.
+ * Dropping the last pending hold cancels its lease. Physical resources retire
+ * at Mach death; the last hold releases the ID only after that death.
+ * Both operations return the ID, or -1 with errno. Holds may be nested. */
+int klj_thread_id_hold(int);
+int klj_thread_id_unhold(int);
 /* Optional executor context belongs to this retained physical thread. It is
  * retired only after kernel thread death, including later POSIX destructors. */
 void *klj_thread_memory_context(void);

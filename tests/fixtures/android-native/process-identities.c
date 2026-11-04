@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <pthread.h>
+#include <mach/notify.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,6 +39,149 @@ static void *run(void *value){
     while(!atomic_load(&leave))usleep(1000);
     return NULL;
 }
+/* A trace status retains an ID, not its physical thread or executor state.
+ * Condition variables control guest exit; a Mach dead-name notification
+ * establishes physical retirement independently of pthread_join. */
+typedef struct {
+    int reserved,actual,ready,leave;
+    pthread_mutex_t mutex;
+    pthread_cond_t changed;
+    _Atomic int callbacks,retired;
+} HeldWorker;
+static pthread_key_t held_key;
+static void held_retire(void *value){
+    HeldWorker *worker=value;
+    assert(atomic_fetch_add(&worker->retired,1)==0);
+}
+static void held_late(void *value){
+    HeldWorker *worker=value;
+    assert(klj_thread_id()==worker->actual);
+    assert(klj_thread_memory_context()==worker);
+    assert(!atomic_load(&worker->retired));
+    inspect(worker->actual,2,klj_process_id(),getpid());
+    atomic_fetch_add(&worker->callbacks,1);
+}
+static void *held_run(void *value){
+    HeldWorker *worker=value;
+    worker->actual=klj_thread_id_adopt(worker->reserved);
+    assert(worker->actual==worker->reserved);
+    assert(!klj_thread_memory_adopt(worker,held_retire));
+    assert(!pthread_setspecific(held_key,worker));
+    assert(!_tlv_atexit(held_late,worker));
+    assert(!pthread_mutex_lock(&worker->mutex));
+    worker->ready=1;
+    assert(!pthread_cond_signal(&worker->changed));
+    while(!worker->leave)assert(!pthread_cond_wait(&worker->changed,&worker->mutex));
+    assert(!pthread_mutex_unlock(&worker->mutex));
+    return NULL;
+}
+static pthread_t held_start(HeldWorker *worker){
+    worker->reserved=klj_thread_id_reserve();assert(worker->reserved>0);
+    pthread_t thread;assert(!pthread_create(&thread,NULL,held_run,worker));
+    assert(!pthread_mutex_lock(&worker->mutex));
+    while(!worker->ready)assert(!pthread_cond_wait(&worker->changed,&worker->mutex));
+    assert(!pthread_mutex_unlock(&worker->mutex));
+    assert(worker->actual==worker->reserved);
+    return thread;
+}
+static void held_finish(HeldWorker *worker,pthread_t thread){
+    /* Keep a separate test-owned right and subscribe before releasing the
+     * worker. pthread_join can finish before its Mach thread actually dies. */
+    mach_port_t task=mach_task_self(),notice=MACH_PORT_NULL,previous=MACH_PORT_NULL;
+    thread_t physical=klj_thread_acquire(worker->actual);assert(physical!=MACH_PORT_NULL);
+    assert(mach_port_allocate(task,MACH_PORT_RIGHT_RECEIVE,&notice)==KERN_SUCCESS);
+    assert(mach_port_request_notification(task,physical,MACH_NOTIFY_DEAD_NAME,0,
+        notice,MACH_MSG_TYPE_MAKE_SEND_ONCE,&previous)==KERN_SUCCESS);
+    assert(previous==MACH_PORT_NULL);
+    assert(!pthread_mutex_lock(&worker->mutex));
+    worker->leave=1;
+    assert(!pthread_cond_signal(&worker->changed));
+    assert(!pthread_mutex_unlock(&worker->mutex));
+    assert(!pthread_join(thread,NULL));
+    assert(atomic_load(&worker->callbacks)==2);
+    struct {mach_dead_name_notification_t message;mach_msg_max_trailer_t trailer;} death={0};
+    assert(mach_msg(&death.message.not_header,MACH_RCV_MSG|MACH_RCV_TIMEOUT,0,
+        sizeof death,notice,5000,MACH_PORT_NULL)==MACH_MSG_SUCCESS);
+    assert(death.message.not_header.msgh_id==MACH_NOTIFY_DEAD_NAME);
+    assert(death.message.not_port==physical);
+    /* Dead-name delivery adds a reference to not_port. Release that and the
+     * acquired test right, leaving the native owner's own right for its reap. */
+    assert(mach_port_deallocate(task,death.message.not_port)==KERN_SUCCESS);
+    assert(mach_port_deallocate(task,physical)==KERN_SUCCESS);
+    assert(mach_port_mod_refs(task,notice,MACH_PORT_RIGHT_RECEIVE,-1)==KERN_SUCCESS);
+    /* This collects the dead Mach target. Retention must not retain its
+     * executor context or expose a physically dead scheduling target. */
+    errno=0;assert(klj_thread_acquire(worker->actual)==MACH_PORT_NULL&&errno==ESRCH);
+    assert(!klj_thread_priority_target(worker->actual));
+    assert(atomic_load(&worker->retired)==1);
+}
+static void held_destroy(HeldWorker *worker){
+    assert(!pthread_cond_destroy(&worker->changed));
+    assert(!pthread_mutex_destroy(&worker->mutex));
+}
+static void assert_not_reused(int retained){
+    int other=klj_thread_id_allocate();assert(other>0&&other!=retained);
+    klj_thread_id_release(other);
+}
+static void held_query(int id,int pid){
+    pid_t host;int kind,process;
+    assert(!klj_process_id_query(id,&host,&kind,&process));
+    assert(host==getpid()&&kind==2&&process==pid);
+}
+static void trace_retention(int pid){
+    assert(!pthread_key_create(&held_key,held_late));
+    HeldWorker traced={.mutex=PTHREAD_MUTEX_INITIALIZER,.changed=PTHREAD_COND_INITIALIZER};
+    pthread_t thread=held_start(&traced);int id=traced.actual;
+    assert(klj_thread_id_hold(id)==id);
+    assert(klj_thread_id_hold(id)==id);
+    inspect(id,2,pid,getpid());
+    held_finish(&traced,thread);
+    inspect(id,2,pid,getpid());
+    held_query(id,pid);
+    assert_not_reused(id);
+    assert(klj_thread_id_unhold(id)==id);
+    inspect(id,2,pid,getpid());
+    held_query(id,pid);
+    assert_not_reused(id);
+    /* A fork must not inherit authority to consume its parent's trace hold.
+     * The child can still observe that lease through the shared owner. */
+    pid_t child=fork();assert(child>=0);
+    if(!child){
+        assert(klj_process_id()!=pid);
+        errno=0;assert(klj_thread_id_unhold(id)<0&&errno==ESRCH);
+        inspect(id,2,pid,getppid());
+        assert_not_reused(id);
+        _exit(0);
+    }
+    int status;assert(waitpid(child,&status,0)==child&&WIFEXITED(status)&&WEXITSTATUS(status)==0);
+    inspect(id,2,pid,getpid());
+    assert_not_reused(id);
+    assert(klj_thread_id_unhold(id)==id);
+    pid_t host;int kind,process;
+    errno=0;assert(klj_process_id_query(id,&host,&kind,&process)<0&&errno==ESRCH);
+    errno=0;assert(klj_thread_id_unhold(id)<0&&errno==ESRCH);
+    int reused=klj_thread_id_allocate();assert(reused==id);klj_thread_id_release(reused);
+    assert(atomic_load(&traced.retired)==1);
+    held_destroy(&traced);
+
+    /* Consuming a wait status before physical death cannot retire a live
+     * thread. Its later POSIX and TLV callbacks still observe the same ID. */
+    HeldWorker early={.mutex=PTHREAD_MUTEX_INITIALIZER,.changed=PTHREAD_COND_INITIALIZER};
+    thread=held_start(&early);id=early.actual;
+    assert(klj_thread_id_hold(id)==id);
+    assert(klj_thread_id_unhold(id)==id);
+    inspect(id,2,pid,getpid());
+    thread_t live=klj_thread_acquire(id);assert(live!=MACH_PORT_NULL);
+    assert(mach_port_deallocate(mach_task_self(),live)==KERN_SUCCESS);
+    assert(!atomic_load(&early.retired));
+    assert_not_reused(id);
+    held_finish(&early,thread);
+    errno=0;assert(klj_process_id_query(id,&host,&kind,&process)<0&&errno==ESRCH);
+    reused=klj_thread_id_allocate();assert(reused==id);klj_thread_id_release(reused);
+    held_destroy(&early);
+    assert(!pthread_key_delete(held_key));
+    puts("PASS trace holds retain only IDs through physical retirement, counted wait release, exact TID reuse, early wait TLS identity and fork isolation");
+}
 int main(int argc,char **argv){
     assert(argc==2);directory=argv[1];
     int pid=klj_process_ids_configure(directory);assert(pid>=2&&pid<=65535);
@@ -68,6 +212,7 @@ int main(int argc,char **argv){
         pid_t host;int kind,process;
         assert(klj_process_id_query(workers[i].actual,&host,&kind,&process)<0&&errno==ESRCH);
     }
+    trace_retention(pid);
     int messages[2],ack[2];assert(!pipe(messages)&&!pipe(ack));
     pid_t child=fork();assert(child>=0);
     if(!child){

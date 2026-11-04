@@ -14,6 +14,8 @@ typedef struct identity {
     struct identity *next;
     int id;
     thread_t port;
+    size_t holds;
+    int pending;
     void *memory_context;
     void (*retire_memory)(void *);
     int schedule_valid,guest_policy,guest_priority,host_policy,host_priority;
@@ -26,19 +28,32 @@ static _Thread_local identity *current;
 static _Thread_local void *fork_memory;
 static _Thread_local void (*fork_retire_memory)(void *);
 
+static void retire_memory(identity *entry){
+    void *context=entry->memory_context;
+    void (*retire)(void *)=entry->retire_memory;
+    entry->memory_context=NULL;entry->retire_memory=NULL;
+    if(retire)retire(context);
+}
 static void reap_locked(void){
     /* A pthread-key callback is not physical retirement: another destructor
      * can still enter guest code afterward. Keep the exact lease through all
      * TLS/JNI cleanup and release it only after this retained Mach thread has
      * become a dead kernel object. The same owner operations collect it. */
     for(identity **p=&identities;*p;){
-        identity *entry=*p;mach_port_type_t type=0;
-        kern_return_t result=mach_port_type(mach_task_self(),entry->port,&type);
-        if(result==KERN_SUCCESS&&!(type&MACH_PORT_TYPE_DEAD_NAME)){p=&entry->next;continue;}
+        identity *entry=*p;
+        if(entry->port){
+            mach_port_type_t type=0;
+            kern_return_t result=mach_port_type(mach_task_self(),entry->port,&type);
+            if(result==KERN_SUCCESS&&!(type&MACH_PORT_TYPE_DEAD_NAME)){p=&entry->next;continue;}
+            mach_port_deallocate(mach_task_self(),entry->port);
+            entry->port=MACH_PORT_NULL;
+        }
+        /* Tracer waits retain only the existing logical lease. Physical
+         * resources retire at Mach death, regardless of when wait occurs. */
+        if(entry->holds){retire_memory(entry);p=&entry->next;continue;}
         *p=entry->next;
-        mach_port_deallocate(mach_task_self(),entry->port);
         klj_thread_id_release(entry->id);
-        if(entry->retire_memory)entry->retire_memory(entry->memory_context);
+        retire_memory(entry);
         free(entry);
     }
 }
@@ -83,21 +98,25 @@ int klj_thread_id_adopt(int id){
     if(host!=getpid()||process!=klj_process_id()||(kind!=2&&id!=process)){errno=EPERM;return -1;}
     pthread_once(&once,initialize);
     if(key_error){errno=key_error;return -1;}
-    identity *entry=calloc(1,sizeof(*entry));
-    if(!entry)return -1;
-    entry->port=mach_thread_self();
-    entry->id=id;
+    thread_t port=mach_thread_self();
     pthread_mutex_lock(&lock);
     reap_locked();
-    int code=0;
-    for(identity *p=identities;p;p=p->next)if(p->id==id){code=EALREADY;break;}
+    int code=0;identity *entry=NULL;
+    for(identity *p=identities;p;p=p->next)if(p->id==id){entry=p;break;}
+    if(entry&&!entry->pending)code=EALREADY;
+    if(!entry){
+        entry=calloc(1,sizeof(*entry));
+        if(!entry)code=ENOMEM;
+        else{entry->id=id;entry->next=identities;identities=entry;}
+    }
     if(!code){
+        entry->port=port;entry->pending=0;
         entry->memory_context=fork_memory;entry->retire_memory=fork_retire_memory;
         fork_memory=NULL;fork_retire_memory=NULL;
-        entry->next=identities;identities=entry;current=entry;
+        current=entry;
     }
     pthread_mutex_unlock(&lock);
-    if(code){mach_port_deallocate(mach_task_self(),entry->port);free(entry);errno=code;return -1;}
+    if(code){mach_port_deallocate(mach_task_self(),port);errno=code;return -1;}
     return entry->id;
 }
 int klj_thread_id(void){
@@ -120,6 +139,48 @@ int klj_thread_id_reserve(void){
     pthread_mutex_lock(&lock);reap_locked();pthread_mutex_unlock(&lock);
     return klj_thread_id_allocate();
 }
+static int change_hold(int id,int acquire){
+    pthread_once(&once,initialize);
+    if(key_error){errno=key_error;return -1;}
+    pthread_mutex_lock(&lock);reap_locked();
+    int result=-1,error=ESRCH,found=0;
+    for(identity *entry=identities;entry;entry=entry->next)if(entry->id==id){
+        found=1;
+        if(acquire){
+            if(entry->holds==(size_t)-1){error=EOVERFLOW;break;}
+            entry->holds++;
+        }else{
+            if(!entry->holds){error=EINVAL;break;}
+            entry->holds--;
+        }
+        result=id;
+        /* An early wait cannot retire a live thread. A last hold dropped
+         * after physical death releases the ID without another event. */
+        if(!acquire)reap_locked();
+        break;
+    }
+    if(acquire&&!found){
+        /* born_traced can publish a clone before its pthread adopts it.
+         * The existing identity list also owns that pending lease: no new
+         * namespace or reservation table is needed. */
+        pid_t host;int kind,process;
+        if(klj_process_id_query(id,&host,&kind,&process))error=errno;
+        else if(host!=getpid()||kind!=2||process!=klj_process_id())error=EPERM;
+        else{
+            identity *entry=calloc(1,sizeof(*entry));
+            if(!entry)error=ENOMEM;
+            else{
+                entry->id=id;entry->pending=1;entry->holds=1;
+                entry->next=identities;identities=entry;result=id;
+            }
+        }
+    }
+    pthread_mutex_unlock(&lock);
+    if(result<0)errno=error;
+    return result;
+}
+int klj_thread_id_hold(int id){return change_hold(id,1);}
+int klj_thread_id_unhold(int id){return change_hold(id,0);}
 void *klj_thread_memory_context(void){return current?current->memory_context:NULL;}
 int klj_thread_memory_adopt_prepared(void *context,void (*retire)(void *),int (*prepare)(void *)){
     if(!current&&klj_thread_id()<0)return -1;
@@ -139,7 +200,7 @@ thread_t klj_thread_acquire(int id){
     pthread_mutex_lock(&lock);
     reap_locked();
     thread_t result=MACH_PORT_NULL;
-    for(identity *p=identities;p;p=p->next)if(p->id==id){
+    for(identity *p=identities;p;p=p->next)if(p->id==id&&p->port){
         if(mach_port_mod_refs(mach_task_self(),p->port,MACH_PORT_RIGHT_SEND,1)==KERN_SUCCESS)result=p->port;
         break;
     }
@@ -151,7 +212,7 @@ thread_t klj_thread_acquire(int id){
 int klj_thread_priority_target(int id){
     if(id==0)return 1;
     pthread_mutex_lock(&lock);reap_locked();int found=0;
-    for(identity *p=identities;p;p=p->next)if(p->id==id){found=1;break;}
+    for(identity *p=identities;p;p=p->next)if(p->id==id&&p->port){found=1;break;}
     pthread_mutex_unlock(&lock);return found;
 }
 static int scheduling_error(kern_return_t code){

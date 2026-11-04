@@ -42,7 +42,7 @@ static DESCRIPTORS:Descriptors=Descriptors{
 };
 struct Api {
  directory:CString,process:Current,thread:Current,reserve:Current,adopt:Adopt,
- release:Release,owner:Owner,from_host:Adopt,child:Adopt,child_host:Adopt,retain_child:Adopt,reap_child:Adopt,
+ release:Release,hold:Adopt,unhold:Adopt,owner:Owner,from_host:Adopt,child:Adopt,child_host:Adopt,retain_child:Adopt,reap_child:Adopt,
  getpgid:Adopt,getsid:Adopt,setpgid:Pair,setsid:Current,
  get_dumpable:Current,set_dumpable:Adopt,dumpable_of:Adopt,
 }
@@ -71,6 +71,8 @@ pub unsafe fn install(handle:*mut c_void)->Result<(),String>{
   reserve:unsafe{std::mem::transmute(address(handle,c"klj_thread_id_reserve")?)},
   adopt:unsafe{std::mem::transmute(address(handle,c"klj_thread_id_adopt")?)},
   release:unsafe{std::mem::transmute(address(handle,c"klj_thread_id_release")?)},
+  hold:unsafe{std::mem::transmute(address(handle,c"klj_thread_id_hold")?)},
+  unhold:unsafe{std::mem::transmute(address(handle,c"klj_thread_id_unhold")?)},
   owner:unsafe{std::mem::transmute(address(handle,c"klj_process_id_query")?)},
   from_host:unsafe{std::mem::transmute(address(handle,c"klj_process_id_from_host")?)},
   child:unsafe{std::mem::transmute(address(handle,c"klj_process_child_id")?)},
@@ -96,6 +98,8 @@ pub fn thread()->Option<Result<i32,i64>>{API.get().map(|api|checked(unsafe{(api.
 pub fn reserve()->Option<Result<i32,i64>>{API.get().map(|api|checked(unsafe{(api.reserve)()}))}
 pub fn adopt(id:i32)->Result<(),i64>{if let Some(api)=API.get(){checked(unsafe{(api.adopt)(id)})?;}Ok(())}
 pub fn release(id:i32){if let Some(api)=API.get(){unsafe{(api.release)(id)};}}
+pub fn hold(id:i32)->Result<(),i64>{if let Some(api)=API.get(){checked(unsafe{(api.hold)(id)})?;}Ok(())}
+pub fn unhold(id:i32)->Result<(),i64>{if let Some(api)=API.get(){checked(unsafe{(api.unhold)(id)})?;}Ok(())}
 pub fn from_host(host:i32)->Option<Result<i32,i64>>{
  API.get().map(|api|if host==0{Ok(0)}else{
   let child=unsafe{(api.child)(host)};

@@ -250,7 +250,7 @@
              .into_iter()
 --- a/crates/aim-linux-abi/src/sys/pidns/tids.rs
 +++ b/crates/aim-linux-abi/src/sys/pidns/tids.rs
-@@ -202,25 +202,52 @@
+@@ -202,25 +202,54 @@
  
  pub(in crate::sys) struct Reservation {
      pub tid: i32,
@@ -261,16 +261,16 @@
 +enum Lease {
 +    Shared(PathBuf, ProcessIdentity),
 +    Local,
-+    Native { adopted: bool },
++    Native { adopted: bool, held: bool },
 +}
 +impl Reservation {
 +    pub(in crate::sys) fn adopt(&mut self) -> Result<(), crate::errno::Errno> {
-+        if let Lease::Native { adopted } = &mut self.lease {
++        if let Lease::Native { adopted, .. } = &mut self.lease {
 +            if !*adopted {
 +                crate::process_identity::adopt(self.tid)
 +                    .map_err(|error| (-error) as crate::errno::Errno)?;
 +                // Physical ownership survives guest exit and late TLS/JNI cleanup.
-+                // Keeping this reservation does not extend the native lease.
++                // The reservation's logical hold lasts through tracer reap.
 +                *adopted = true;
 +            }
 +        }
@@ -283,9 +283,11 @@
 -            if let Some(Namespace::Process(local)) = OWN.get() {
 -                local.lock().unwrap().used.remove(&self.tid);
 +        let (dir, owner) = match &self.lease {
-+            Lease::Native { adopted } => {
-+                if !*adopted {
-+                    crate::process_identity::release(self.tid);
++            Lease::Native { held, .. } => {
++                if *held {
++                    if let Err(error) = crate::process_identity::unhold(self.tid) {
++                        crate::diag!("release task id {} wait hold: errno {}", self.tid, -error);
++                    }
 +                }
 +                return;
              }
@@ -311,22 +313,56 @@
                      },
                  );
              }
-@@ -233,6 +260,14 @@
+@@ -228,11 +257,48 @@
+         };
+         if let Err(error) = release() {
+             crate::diag!("release task id {}: {error}", self.tid);
++        }
++    }
++}
++
++/// Retain a traced task's ID until its wait status is consumed. Borrowing a
++/// native task's lease never transfers its physical teardown ownership.
++pub(in crate::sys) fn retain_for_wait(
++    tid: i32,
++    reservation: Option<Reservation>,
++) -> Result<Option<Reservation>, crate::errno::Errno> {
++    let mut reservation = match reservation {
++        Some(reservation) => reservation,
++        None if crate::process_identity::enabled() => Reservation {
++            tid,
++            lease: Lease::Native { adopted: true, held: false },
++        },
++        None => return Ok(None),
++    };
++    if let Lease::Native { held, .. } = &mut reservation.lease {
++        if !*held {
++            crate::process_identity::hold(tid)
++                .map_err(|error| (-error) as crate::errno::Errno)?;
++            *held = true;
+         }
+     }
++    Ok(Some(reservation))
  }
  
  pub(in crate::sys) fn allocate() -> Result<Reservation, crate::errno::Errno> {
 +    if let Some(result) = crate::process_identity::reserve() {
-+        return result
-+            .map(|tid| Reservation {
-+                tid,
-+                lease: Lease::Native { adopted: false },
-+            })
-+            .map_err(|error| (-error) as crate::errno::Errno);
++        let tid = result.map_err(|error| (-error) as crate::errno::Errno)?;
++        if let Err(error) = crate::process_identity::hold(tid) {
++            crate::process_identity::release(tid);
++            return Err((-error) as crate::errno::Errno);
++        }
++        // Hold before publication: exit_group may retain a traced clone
++        // before its pthread has adopted the reserved native identity.
++        return Ok(Reservation {
++            tid,
++            lease: Lease::Native { adopted: false, held: true },
++        });
 +    }
      let allocate = || -> io::Result<Reservation> {
          initialize()?;
          let owner = ProcessIdentity::running_strict(unsafe { libc::getpid() })?;
-@@ -243,12 +278,19 @@
+@@ -243,12 +309,19 @@
              ),
              Namespace::Process(local) => (local.lock().unwrap().allocate(PID_MAX)?, None),
          };
@@ -347,7 +383,7 @@
      if OWN.get().is_none() {
          let namespace = match super::super::cred::by_pid_dir() {
              Some(dir) => {
-@@ -265,6 +307,9 @@
+@@ -265,6 +338,9 @@
  }
  
  pub(in crate::sys) fn owner(tid: i32) -> Option<i32> {
@@ -357,7 +393,7 @@
      if tid < FIRST {
          return Some(tid);
      }
-@@ -325,8 +370,7 @@
+@@ -325,8 +401,7 @@
              .unwrap();
          Reservation {
              tid,
@@ -367,7 +403,7 @@
          }
      }
  
-@@ -446,8 +490,7 @@
+@@ -446,8 +521,7 @@
          };
          let last = Reservation {
              tid,
@@ -1368,3 +1404,40 @@
      for (_, root) in hierarchies() {
          if snapshot(&root).threads.iter().any(|(t, ..)| other(*t)) {
              let _ = transact(&root, |m| {
+--- a/crates/aim-linux-abi/src/sys/ptrace/tracee.rs
++++ b/crates/aim-linux-abi/src/sys/ptrace/tracee.rs
+@@ -228,6 +228,8 @@
+ ) {
+     let mut g = lock();
+     if let Some(t) = g.detach(tid) {
++        let reservation = crate::sys::pidns::tids::retain_for_wait(tid, reservation)
++            .expect("traced thread identity wait hold");
+         g.ended.insert(
+             tid,
+             Ended {
+@@ -238,6 +240,9 @@
+         );
+     } else if let Some(ended) = g.ended.get_mut(&tid) {
+         // exit_group may have queued this thread's end first.
++        // Acquire the replacement before dropping its existing wait hold.
++        let reservation = crate::sys::pidns::tids::retain_for_wait(tid, reservation)
++            .expect("traced thread identity wait hold");
+         ended._reservation = reservation;
+     }
+ }
+@@ -253,12 +258,14 @@
+     let tids: Vec<i32> = g.traced.keys().copied().collect();
+     for tid in tids {
+         if let Some(t) = g.detach(tid) {
++            let reservation = crate::sys::pidns::tids::retain_for_wait(tid, None)
++                .expect("traced process identity wait hold");
+             g.ended.insert(
+                 tid,
+                 Ended {
+                     tracer: t.tracer,
+                     status,
+-                    _reservation: None,
++                    _reservation: reservation,
+                 },
+             );
+         }
