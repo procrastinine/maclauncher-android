@@ -20,7 +20,7 @@ export const optionalInputs=['ndk-headers','blueprint-parser','blueprint-parser-
 /** The snapshot builder and compiler consume the same pinned supplier catalog. */
 export function sourceOptions(root){
   const suppliers={
-    'zlib-source':'android-angle-deps/third_party-zlib','aim-source':'aim-native-memory','libvpx-source':'libvpx',
+    'zlib-source':'android-angle-deps/third_party-zlib','aim-source':'aim-custom','libvpx-source':'libvpx',
     'epoll-shim-source':'epoll-shim','inotify-source':'libinotify-kqueue','dynarmic-source':'dynarmic','framework-source':'aosp-framework','native-source':'aosp-native','libbase-source':'aosp-libbase',
     'fmt-source':'aosp-fmt','apache-http-source':'aosp-apache-http','statsd-source':'aosp-statsd','system-core-source':'aosp-system-core',
     'nativehelper-source':'aosp-libnativehelper','bionic-source':'aosp-bionic','compiler-rt-source':'aosp-compiler-rt','av-source':'aosp-av',

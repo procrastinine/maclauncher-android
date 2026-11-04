@@ -1,7 +1,7 @@
 [submodule "aim"]
 	path = src/external/aim-custom
 	url = https://github.com/hahnlee/aim
-	maclauncher-revision = 9b5068fa8185d3f51f1862fe7c54d88d51f09ec8
+	maclauncher-revision = 0309a89af09727b215063843bd7f5ef0a1e422b2
 	maclauncher-role = source
 
 [submodule "android-angle"]
@@ -392,7 +392,7 @@
 [submodule "dex2jvm"]
 	path = src/external/dex2jvm
 	url = https://github.com/kksimp/dex2jvm
-	maclauncher-revision = b563cf8ee837348efa13c71797387345c9f3de5c
+	maclauncher-revision = d2a3539ddb20f73a300aa3d280582c41ba687b66
 	maclauncher-role = source
 
 [submodule "dynarmic"]
@@ -428,7 +428,7 @@
 [submodule "libvpx"]
 	path = src/external/libvpx
 	url = https://github.com/webmproject/libvpx
-	maclauncher-revision = 8c9ef99ff058c2059395cab9637dc52ca223a520
+	maclauncher-revision = 6df3ec34557879fff673706f4a1d9fbd0f3a6f0e
 	maclauncher-role = source
 
 [submodule "ninja"]
@@ -605,8 +605,3 @@
 	maclauncher-revision = 549bb629f8325dc9f5221bb16a3de908a753c304
 	maclauncher-role = source
 
-[submodule "aim-native-memory"]
-	path = src/external/aim-native-memory
-	url = https://github.com/hahnlee/aim
-	maclauncher-revision = 3136fe473714ec5cf8ad34323313174761d95139
-	maclauncher-role = source

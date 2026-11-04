@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "ninja": "3441b633c2fe2c494e958780ba0f4227b1327634",
   "klepton": "1fe7e6caf6bb8bc90c1a5e61d5b9bfc6e110fa32",
-  "aim": "3136fe473714ec5cf8ad34323313174761d95139",
-  "dex2jvm": "b563cf8ee837348efa13c71797387345c9f3de5c",
+  "aim": "0309a89af09727b215063843bd7f5ef0a1e422b2",
+  "dex2jvm": "d2a3539ddb20f73a300aa3d280582c41ba687b66",
   "javaMajor": 21,
   "frameworkBaseVersion": 1,
   "arm32Version": 1,
@@ -73,5 +73,5 @@
   "epollShim": "18159584bb3d17e601b9315a7398ace018251bdc",
   "keyboardTouchVersion": 1,
   "angleVulkanVersion": 1,
-  "libvpx": "8c9ef99ff058c2059395cab9637dc52ca223a520"
+  "libvpx": "6df3ec34557879fff673706f4a1d9fbd0f3a6f0e"
 }
