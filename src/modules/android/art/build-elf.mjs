@@ -19,9 +19,7 @@ export function buildArtElfs({aim,fetched,sdk,work,jdk,python,jobs=4,cargo='carg
  let environment={...process.env,...env,ANDROID_SDK_ROOT:fs.realpathSync(sdk)};
  if(jdk){
   if(!path.isAbsolute(jdk)||!fs.existsSync(path.join(jdk,'bin/javac')))throw Error('ART jdk requires an absolute JDK home.');
-  const file=path.join(aim,'crates/aim-build/src/tools.rs'),original=fs.readFileSync(file,'utf8'),marker='pub fn jdk() -> Result<PathBuf, String> {',injected=marker+'\n    if let Some(directory) = std::env::var_os("JAVA_HOME") {\n        let directory = PathBuf::from(directory);\n        if directory.join("bin/javac").is_file() { return Ok(directory); }\n        return Err("JAVA_HOME does not contain a JDK".into());\n    }';
-  if(original.split(marker).length!==2)throw Error('Original ART Java tool boundary changed.');
-  writeChanged(file,original.includes(injected)?original:original.replace(marker,injected));environment.JAVA_HOME=fs.realpathSync(jdk);
+  environment.JAVA_HOME=fs.realpathSync(jdk);
  }
  if(python){if(!path.isAbsolute(python))throw Error('ART python requires an absolute executable.');environment.PATH=path.dirname(python)+path.delimiter+(environment.PATH||'');}
  work=path.resolve(work);fs.mkdirSync(work,{recursive:true});
