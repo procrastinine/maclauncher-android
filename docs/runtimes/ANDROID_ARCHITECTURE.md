@@ -275,7 +275,7 @@ bitmap and alarm implementations alongside their macOS bindings.
 Platform adaptations connect Android operations to the owning Mac resource.
 They retain the original API and portable code around that operation. Component
 source builds and incremental caches are separate from whole Android product
-builds. Upstream source inventories document suppliers and licenses; they are
+builds. Upstream source inventories document suppliers; they are
 not application class or method eligibility lists.
 
 The ART loader retains original ELF bytes and program headers. When read-only
@@ -1349,9 +1349,8 @@ The supplier manifest records relative component paths and the Android image
 identity. The Android payload contract `artExecutionVersion: 1` selects a supplied
 ART entry; the declaration is independent of the JVM's conversion contracts.
 The runner producer builds `linux-run`, `aim-binderd`, `aim-lock-holder` and
-`aim-pty-holder` from the same prepared source. Its notice directory combines
-the supplied CPU notices with AIM's original license, copyright notice, license
-exceptions and third-party documents from that pinned source. The `lockHolder` and `ptyHolder`
+`aim-pty-holder` from the same prepared source. The shared collector includes
+available top-level licence texts from that source. The `lockHolder` and `ptyHolder`
 components map to their corresponding paths beside `host/linux-run`, following
 AIM's original host-node dependency declaration in `crates/aim-build/src/cargo.rs`.
 Original Linux lock and terminal operations start those native owners through

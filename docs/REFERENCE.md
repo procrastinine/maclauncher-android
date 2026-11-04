@@ -37,8 +37,7 @@ into its fixed source snapshot; source files remain unchanged during a build.
 are read-only inputs; adaptations are applied to owned build projections.
 
 The root LICENSE covers MacLauncher-owned code. Upstream source fragments and
-build inputs retain their original licenses, recorded in source headers,
-packaged licence texts. The repository does not relicense upstream
+build inputs retain their original licenses in source headers and packaged texts. The repository does not relicense upstream
 components. Source Gitlinks and metadata can be checked without initializing
 checkouts; initialized checkouts are also checked for exact HEAD identity and
 tracked changes. The source check performs no downloads.
@@ -67,7 +66,7 @@ provider APK is extracted unchanged from
 `system/priv-app/SettingsProvider/SettingsProvider.apk` in the Android system image
 identified by the latter catalog. The build consumes the separately supplied
 APK; a Google-enabled system image is not a build or runtime prerequisite. The
-producer stages this Apache-licensed component under `platform/` and its licence under `licenses/`;
+producer stages this component under `platform/`;
 no complete image or Google package is included in the platform component
 collection. The APK is a binary build input and is not committed to this source
 repository.
@@ -129,10 +128,9 @@ Android graphics library beside the original image.
 `assembleArtSupplier` accepts `includeImage: false` with a verified
 `originalImage` identity for packaging an adapter from existing components.
 The image remains separately acquired; it is neither copied nor read during
-that assembly. Licence texts from the common runtime and each supplier merge into one
-flat `licenses/` directory. `licenses/components.txt` maps each component to its text;
-texts whose bytes differ only in whitespace share one file. These are ordinary
-payload files covered by the package inventory and archive digest.
+that assembly. The shared collector stores available texts in `licenses/`, with
+component associations in `licenses/components.txt`. Packaging copies these
+files with their component directories as ordinary inventory members.
 
 `prepareAimSource` accepts an explicit `glesHeaders` checkout alongside its AIM
 and Klepton inputs. Header bytes and the original Git revision are verified
@@ -190,7 +188,7 @@ selects the pinned original ARM32 NDK headers. `nativeBridgeSources.arm32Sources
 selects the ARM32 source-record directory that records its consumed Bionic
 units; the ordinary producer reuses `nativeBridge.arm32.sources`. `sourceCheckouts` supplies
 `libffi`, `dynarmic`, `aosp-bionic` and `aosp-art`. The source archive retains the
-selected original headers, their case-sensitive variants, NDK notices and
+selected original headers, their case-sensitive variants and
 compiler-runtime artifact identity. Android system images, complete SDK/NDK
 installations and compiler products are supplied separately.
 

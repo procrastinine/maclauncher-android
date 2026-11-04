@@ -231,14 +231,14 @@ decoder and private native data declarations. Omitting native declaration inputs
 only the CPU and optional JNI component.
 
 The header artifact is pinned in `ndk-headers.json`, including the full selected
-tree hash and original notice. The developer header acquisition command is:
+tree hash. The developer header acquisition command is:
 
 ```sh
 node src/modules/android/native/arm32/acquire-headers.mjs build/android-ndk-headers
 ```
 
 `--ndk-headers` selects that artifact’s `include` directory. Acquisition downloads
-original headers, notices, the 223 KiB ARM compiler-rt archive and 58 KiB of
+original headers, the 223 KiB ARM compiler-rt archive and 58 KiB of
 original native link metadata, without an NDK compiler. The link-only libraries
 record ELF dependencies on the existing Android and logging providers; they
 are not runtime implementations or packaged application libraries. Original

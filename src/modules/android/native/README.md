@@ -180,8 +180,8 @@ a loader error rather than exposing an unrelated address.
 The framework binary input directory also contains the recorded original
 SettingsProvider APK. The producer verifies its checksum and manifest, includes
 the unchanged APK and resources under `platform/packages/`, and emits the
-original package metadata in `platform/packages.json`. Its Apache license notice
-and separate source/image identities accompany the component. The image's other
+original package metadata in `platform/packages.json`. Separate source and image
+identities accompany the component. The image's other
 packages are not part of this platform component collection.
 Native ARM64 GLES imports, dynamic symbols and procedure lookups adapt spilled
 arguments from Android's eight-byte stack slots to Darwin's natural alignment.
@@ -248,7 +248,6 @@ node src/modules/android/native/build.mjs \
   --ndk-headers /path/to/android/ndk/sysroot/usr/include \
   --sndfile-headers /path/to/libsndfile/include \
   --codecs /path/to/portable/codecs \
-  --codec-licenses /path/to/portable/codec/licenses \
   --angle /path/to/recorded/ANGLE/libraries \
   --gles-headers src/external/krkrsdl2/external/krkrz/external/angle \
   --framework /path/to/verified/framework/artifact/directory \
