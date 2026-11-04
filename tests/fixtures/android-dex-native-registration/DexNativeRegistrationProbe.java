@@ -16,6 +16,8 @@ public final class DexNativeRegistrationProbe {
   System.load(runtime.resolve("native/libklepton-jvm.dylib").toString());
   System.load(runtime.resolve("native/libnativebinding.dylib").toString());
   HostProcessIdentity.initializeIds();
+  HostFilesystem.installNativeMappings(List.of(),data);
+  JvmNativeMemory.configure(runtime.resolve("native/libandroid_runtime.dylib"));JvmNativeMemory.initialize();
   if(!baseline)System.load(args[3]);
   var loader=HostDexFiles.application(jar,List.of(),data,DexNativeRegistrationProbe.class.getClassLoader());
   Field pathField=BaseDexClassLoader.class.getDeclaredField("pathList");pathField.setAccessible(true);
@@ -23,6 +25,8 @@ public final class DexNativeRegistrationProbe {
   Object element=((Object[])elementsField.get(path))[0];Field fileField=element.getClass().getDeclaredField("dexFile");fileField.setAccessible(true);
   DexFile dex=(DexFile)fileField.get(element);
   Set<String> original=names(dex);check(original.containsAll(Set.of("owned.Rebinder","fixture.Value")),"Actual prepared DEX enumeration");
+  HostContext.hostPackage("owned.dex.registration","1",1);
+  HostContext.hostApplicationInfo(false,jar.toString(),data.toString(),data.toString(),28);
   Path nativeRoot=Path.of(args[4]);
   GuestNativeLoader.configure(runtime.resolve("native/libklepton-jvm.dylib").toString(),nativeRoot.toString(),jar.toString(),loader);
   Class<?> rebinder=loader.loadClass("owned.Rebinder");

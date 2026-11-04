@@ -1,3 +1,4 @@
+#include "startup.h"
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -21,6 +22,7 @@ static void read_execute_only(void *pointer){
 }
 int main(int argc,char **argv){
  assert(argc==4);void *core=dlopen(argv[1],RTLD_NOW|RTLD_GLOBAL);if(!core){puts(dlerror());return 2;}
+ configure_startup(core,argc,argv);
  int (*configure)(const char *)=dlsym(core,"klj_process_ids_configure");assert(configure&&configure(getenv("KL_ANDROID_ID_DIRECTORY"))>0);
  void (*enter)(void)=dlsym(core,"kl_thread_init");void *(*pointer)(void)=dlsym(core,"klj_guest_thread_pointer");assert(enter&&pointer);enter();
  void *(*load)(const char *)=dlsym(core,"kl_load"),*(*symbol)(void *,const char *)=dlsym(core,"kl_sym");
@@ -73,11 +75,11 @@ int main(int argc,char **argv){
  uint64_t stats[32];errno=0;
  assert(patch_x18(code,sizeof x18_words,pools,2,stats,&context)<0&&errno==ERANGE);
  assert(!memcmp(code,x18_words,sizeof x18_words)&&!pools[0].used&&!pools[1].used);
- // A reachable but genuinely unsupported original x18 site remains a strict
+ // A reachable but genuinely unsupported original return through x18 remains a strict
  // transactional refusal; an earlier supported site must not be committed.
  KljInlinePool near={map+0x0820c000,page,0,0};
  memset(near.base,0xa5,page);
- uint32_t unsupported[]={0xaa0003f2,0xd63f0240,0xd65f03c0};memcpy(code,unsupported,sizeof unsupported);errno=0;
+ uint32_t unsupported[]={0xaa0003f2,0xd65f0240,0xd65f03c0};memcpy(code,unsupported,sizeof unsupported);errno=0;
  assert(patch_x18(code,sizeof unsupported,&near,1,stats,&context)<0&&errno==ENOEXEC);
  assert(!memcmp(code,unsupported,sizeof unsupported)&&!near.used);
  for(size_t n=0;n<page;n++)assert(((const uint8_t *)near.base)[n]==0xa5);

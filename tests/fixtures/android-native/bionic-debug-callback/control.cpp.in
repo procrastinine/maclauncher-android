@@ -40,7 +40,7 @@ static void query(unsigned name,void **out){if(!out||!gl::current)return;auto &d
 static void nothing(){}
 static void*resolve(const char*name){if(!strcmp(name,"glDebugMessageCallback")||!strcmp(name,"glDebugMessageCallbackKHR"))return(void*)install;if(!strcmp(name,"glGetPointerv")||!strcmp(name,"glGetPointervKHR"))return(void*)query;return(void*)nothing;}
 static void error(unsigned){assert(false);}
-template<class A>static void dispatch(unsigned target,A &a){auto b=klj_bionic_egl_bindings();assert(b&&b->count==1192&&b->targets[target-1].argument_size==sizeof(A));KljBionicNdkPacket p={sizeof p,KLJ_BIONIC_NDK_ABI,target,(uintptr_t)&a,sizeof a,0xabc,0,-1};assert(!klj_bionic_egl_dispatch(nullptr,&p));}
+template<class A>static void dispatch(unsigned target,A &a){auto b=klj_bionic_egl_bindings();assert(b&&b->count==BINDING_COUNT&&b->targets[target-1].argument_size==sizeof(A));KljBionicNdkPacket p={sizeof p,KLJ_BIONIC_NDK_ABI,target,(uintptr_t)&a,sizeof a,0xabc,0,-1};assert(!klj_bionic_egl_dispatch(nullptr,&p));}
 struct Callback {KljAngleDebugCallback callback;const void*user;};
 struct Pointer {unsigned name;void **output;};
 struct Procedure {const char*name;void(*result)();};

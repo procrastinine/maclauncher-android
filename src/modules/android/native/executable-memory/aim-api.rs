@@ -181,7 +181,7 @@ pub unsafe extern "C" fn klj_guest_signal_frame_prepare(
     let info=unsafe { &*linux_siginfo.cast::<super::sigframe::Siginfo>() };
     let delivery=super::sigframe::Delivery { info,act:&action,uc_mask:mask,esr:machine.esr as u64,
         fault_address:machine.far,default_restorer:0 };
-    let entry=unsafe { super::sigframe::setup_on_stack(&cpu,&delivery,&alt,top) };
+    let entry=match unsafe { super::sigframe::setup_on_stack(&cpu,&delivery,&alt,top) } {Ok(entry)=>entry,Err(error)=>return -(error as i64)};
     unsafe { output.write(SignalFrame {frame:entry.sp as *mut _,info:entry.x1 as *mut _,context:entry.x2 as *mut _}); }
     0
 }
@@ -192,7 +192,7 @@ pub unsafe extern "C" fn klj_guest_signal_frame_restore(
 ) -> i64 {
     let _errno=NativeErrno::save();
     if frame.is_null() || ucontext.is_null() { return -(crate::errno::EINVAL as i64); }
-    if let Some((cpu,mask,_))=unsafe { super::sigframe::restore(frame as u64) } {
+    if let Some((cpu,mask,_))=unsafe { super::sigframe::restore_native(frame as u64) } {
         cpu.to_mc(unsafe { super::sigframe::mcontext(ucontext) });
         if !returned_mask.is_null() { unsafe { returned_mask.write(mask); } }
         0

@@ -45,7 +45,7 @@ struct KlA64Precise {
         for(auto at=mappings.begin();at!=mappings.end();){auto &m=**at;KlA64Mapping current{};
             if(!enabled||!revalidate||revalidate(config.owner,m.view.address,m.view.length,&current)||!cacheable(current)||
                current.address!=m.view.address||current.length!=m.view.length||current.host!=m.view.host||current.permissions!=m.view.permissions||current.flags!=m.view.flags){
-                if(!unmap(m.view))return false;at=mappings.erase(at);continue;
+                return retire_all();
             }
             ++counters.revalidated;
             // Executable source bytes belong to a newly acquired original

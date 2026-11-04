@@ -1,3 +1,4 @@
+#include "startup.h"
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -8,6 +9,7 @@
 int main(int argc,char **argv){
  assert(argc==4);size_t page=getpagesize();assert(page==16384);
  void *core=dlopen(argv[1],RTLD_NOW|RTLD_GLOBAL);if(!core){fprintf(stderr,"%s\n",dlerror());return 2;}
+ configure_startup(core,argc,argv);
  int (*configure)(const char *)=dlsym(core,"klj_process_ids_configure");assert(configure&&configure(argv[3])>0);
  void *(*load)(const char *)=dlsym(core,"kl_load_recursive"),*(*symbol)(void *,const char *)=dlsym(core,"kl_sym"),*(*base_of)(void *)=dlsym(core,"kl_base");
  size_t (*span_of)(void *)=dlsym(core,"kl_span");void (*unload)(void *)=dlsym(core,"kl_unload");

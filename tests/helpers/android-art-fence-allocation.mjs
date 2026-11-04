@@ -37,10 +37,11 @@ pub mod vulkan{pub fn selected()->bool{false}pub fn fence(_:usize)->Result<std::
 unsafe extern "C" fn current()->usize{1}
 unsafe extern "C" fn create(_:usize,_:u32,_:*const isize)->usize{if FAIL_SYNC.load(Ordering::Relaxed){0}else{1}}
 unsafe extern "C" fn destroy(_:usize,_:usize)->u32{1}
+unsafe extern "C" fn wait(_:usize,_:usize,_:i32)->u32{1}
 unsafe extern "C" fn flush(){}
 unsafe extern "C" fn error()->u32{EGL_ERROR.load(Ordering::Relaxed)as u32}
 pub mod present{
- pub unsafe fn entry<T:Copy>(name:&std::ffi::CStr)->Option<T>{let ptr=match name.to_bytes(){b"eglGetCurrentContext"=>crate::current as *const (),b"eglCreateSync"=>crate::create as *const (),b"eglDestroySync"=>crate::destroy as *const (),b"glFlush"=>crate::flush as *const (),b"eglGetError"=>crate::error as *const (),_=>return None};Some(unsafe{std::mem::transmute_copy(&ptr)})}
+ pub unsafe fn entry<T:Copy>(name:&std::ffi::CStr)->Option<T>{let ptr=match name.to_bytes(){b"eglGetCurrentContext"=>crate::current as *const (),b"eglCreateSync"=>crate::create as *const (),b"eglDestroySync"=>crate::destroy as *const (),b"eglWaitSync"=>crate::wait as *const (),b"eglGetCurrentDisplay"=>crate::current as *const (),b"glFlush"=>crate::flush as *const (),b"eglGetError"=>crate::error as *const (),_=>return None};Some(unsafe{std::mem::transmute_copy(&ptr)})}
 }
 `;
 const guestSupport=String.raw`
@@ -75,7 +76,7 @@ fn main(){
 fs.mkdirSync(outputRoot,{recursive:true});const results=[];
 for(const [name,hostSource,guestSource]of [['baseline',originalHost,originalGuest],['fixed',adapter.adaptNativeFenceAllocationErrors(originalHost),adapter.adaptGuestFenceAllocationErrors(originalGuest)]]){
  const input=path.join(outputRoot,name+'.rs'),binary=path.join(outputRoot,name);
- const host=hostSource.replace(/^\/\/!.*$/gm,'');
+ const host=hostSource.replace(method(hostSource,'pub fn wait('),'').replace(/^\/\/!.*$/gm,'');
  const guest=method(guestSource,'fn create_native(').replace('fn create_native(','pub fn create_native(');
  fs.writeFileSync(input,support+'\nmod host{\n'+host+'\n}\n'+guestSupport+guest+'\n}\n'+main);
  execFileSync(process.env.RUSTC||'rustc',['--edition=2024',input,'-o',binary],{stdio:'inherit'});

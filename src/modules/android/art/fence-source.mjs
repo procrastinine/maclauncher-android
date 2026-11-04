@@ -13,6 +13,8 @@ export function adaptNativeFenceAllocationErrors(source) {
     '    flush: unsafe extern "C" fn(),\n    get_error: unsafe extern "C" fn() -> u32,');
   replace('                flush: entry(c"glFlush")?,',
     '                flush: entry(c"glFlush")?,\n                get_error: entry(c"eglGetError")?,');
+  const at = source.indexOf('pub fn fence('), prefix = source.slice(0, at);
+  source = source.slice(at);
   replace('    if event.is_null() {\n        return Err(EINVAL);\n    }',
     '    if event.is_null() {\n        return Err(ENOMEM);\n    }');
   replace('    if sync == 0 {\n        // SAFETY: our reference from newSharedEvent.',
@@ -24,7 +26,7 @@ export function adaptNativeFenceAllocationErrors(source) {
   replace('    if sync == 0 {', '    observation.detach();\n    if sync == 0 {');
   replace('    let file = unsafe { aim_sync_file::metal::fence(event, 1) };',
     '    let file = observation.fence();');
-  return source;
+  return prefix + source;
 }
 
 export function adaptGuestFenceAllocationErrors(source) {
@@ -88,10 +90,8 @@ export function adaptGuestFenceWaitErrors(source) {
     '        EGL_SYNC_STATUS => if poll(fd, 0)? { EGL_SIGNALED } else { EGL_UNSIGNALED },\n        _ => return Ok(None),\n    }))');
   replace('        None => fail(EGL_BAD_ATTRIBUTE, EGL_FALSE),\n        Some(_) if value.is_null() => fail(EGL_BAD_PARAMETER, EGL_FALSE),\n        Some(v) => {',
     '        Err(error) => fail(error, EGL_FALSE),\n        Ok(None) => fail(EGL_BAD_ATTRIBUTE, EGL_FALSE),\n        Ok(Some(_)) if value.is_null() => fail(EGL_BAD_PARAMETER, EGL_FALSE),\n        Ok(Some(v)) => {', 2);
-  for (const type of ['EGLint', 'EGLBoolean']) {
-    replace('        Some(fd) => poll(fd, FOREVER) as ' + type + ',',
-      '        Some(fd) => match poll(fd, FOREVER) {\n            Ok(done) => done as ' + type + ',\n            Err(error) => fail(error, EGL_FALSE as ' + type + '),\n        },');
-  }
+  replace('    // SAFETY: a query of this thread\'s current context.\n    if unsafe { host::eglGetCurrentContext() }.is_null()',
+    '    // Report a failed sync_file without queuing a GPU dependency.\n    if let Err(error) = poll(fd, 0) { return fail(error, EGL_FALSE); }\n    // SAFETY: a query of this thread\'s current context.\n    if unsafe { host::eglGetCurrentContext() }.is_null()');
   replace('        return if poll(fd, timeout) {\n            EGL_CONDITION_SATISFIED\n        } else {\n            EGL_TIMEOUT_EXPIRED\n        };',
     '        return match poll(fd, timeout) {\n            Ok(true) => EGL_CONDITION_SATISFIED,\n            Ok(false) => EGL_TIMEOUT_EXPIRED,\n            Err(error) => fail(error, EGL_FALSE as EGLint),\n        };');
   return source;

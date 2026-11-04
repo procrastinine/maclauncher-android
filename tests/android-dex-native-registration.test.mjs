@@ -12,9 +12,9 @@ test('Original DexFile JNI declarations allow guest replacement and ordinary unr
  const root=fileURLToPath(new URL('../src/modules/android/native/',import.meta.url)),fixture=fileURLToPath(new URL('./fixtures/android-dex-native-registration/',import.meta.url));
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'android-dex-registration-'));t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
  const cp=['android-host.jar','android-framework.jar'].map(name=>path.resolve(runtime,name)).join(path.delimiter);
- const asm=JSON.parse(fs.readFileSync(path.join(root,'asm-binary.json'))).files.map(row=>path.join(root,'tools',row.path)).join(path.delimiter);
+ const asm=JSON.parse(fs.readFileSync(path.join(root,'asm-binary.json'))).files.map(row=>path.join(process.env.ANDROID_TOOL_INPUTS||path.join(root,'tools'),row.path)).join(path.delimiter);
  const clean={...process.env};for(const key of Object.keys(clean))if(/^(DYLD_|KL_|JAVA_TOOL_OPTIONS$|JDK_JAVA_OPTIONS$|_JAVA_OPTIONS$|CLASSPATH$)/.test(key))delete clean[key];
- fs.mkdirSync(directory+'/ids',{mode:0o700});clean.KL_ANDROID_ID_DIRECTORY=directory+'/ids';
+ fs.mkdirSync(directory+'/ids',{mode:0o700});clean.KL_ANDROID_ID_DIRECTORY=directory+'/ids';clean.KL_ANDROID_NATIVE_STARTUP_ENVIRONMENT='1:';
  const run=(program,args)=>{const r=spawnSync(program,args,{encoding:'utf8',env:clean,timeout:30000,maxBuffer:2**20});assert.ifError(r.error);assert.equal(r.status,0,r.stdout+r.stderr);return r;};
  const java=path.join(home,'bin/java'),javac=path.join(home,'bin/javac');
  run(javac,['--release','21','-cp',asm,'-d',directory+'/tool',path.join(root,'framework/NativeBindings.java'),fixture+'/Declarations.java']);

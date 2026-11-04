@@ -18,8 +18,10 @@ test('Bionic GL debug callbacks retain original context lifetime and Skia interf
  let source=fs.readFileSync(path.join(__dirname,'fixtures/android-native/bionic-debug-callback/control.cpp.in'),'utf8');
  source=source.replace('/* ANGLE_OWNER */',owner).replace('/* ANGLE_DESTRUCTOR */',debug.match(/Debug::~Debug\(\) \{[^\n]*\}/)[0]).replace('/* ANGLE_SETTER */',extract('void Debug::setCallback(')).replace('/* ANGLE_EXPORT */',debug.slice(debug.lastIndexOf('\nextern "C" __attribute__'))).replace('/* SKIA_DEBUG_VALIDATION */',validation.slice(begin,end));
  fs.writeFileSync(path.join(out,'control.cpp'),source);run(process.execPath,[path.join(bionic,'egl/generate.mjs'),ast,out]);
- const declarations=JSON.parse(fs.readFileSync(path.join(out,'declarations.json')));assert.equal(declarations.functions.length,1192);
- fs.writeFileSync(path.join(out,'indices.h'),declarations.functions.map((f,i)=>`#define IDX_${f.name} ${i+1}`).join('\n')+'\n');
+ const declarations=JSON.parse(fs.readFileSync(path.join(out,'declarations.json')));const expected=new Set([...Object.keys(JSON.parse(fs.readFileSync(ast)).functions),...declarations.angleDeclarations.functions].filter(name=>/^(egl|gl)[A-Z]/.test(name)));
+ for(const {name}of declarations.functions)assert.ok(expected.delete(name),name+' must have an original NDK or ANGLE declaration');
+ assert.equal(expected.size,0,'The complete original EGL/GLES and ANGLE extension family remains present');
+ fs.writeFileSync(path.join(out,'indices.h'),'#define BINDING_COUNT '+declarations.functions.length+'\n'+declarations.functions.map((f,i)=>`#define IDX_${f.name} ${i+1}`).join('\n')+'\n');
  const flags=['-O1','-Wno-nullability-completeness',...[out,native,bionic,path.join(bionic,'egl'),path.join(bionic,'ndk'),path.join(bionic,'egl/include'),path.join(bionic,'ndk/include'),path.join(jdk,'include'),path.join(jdk,'include/darwin')].map(p=>'-I'+p)];
  run('xcrun',['clang',...flags,'-c',path.join(out,'egl-host-generated.c'),'-o',path.join(out,'egl.o')]);
  run('xcrun',['clang++','-std=c++20',...flags,path.join(out,'control.cpp'),path.join(out,'egl.o'),'-o',path.join(out,'control')]);

@@ -74,10 +74,10 @@ test('ART source export preserves locked AOSP while omitting unused tests and un
  for(const [name,bytes]of Object.entries(runtime))write('aosp/art/runtime/'+name,bytes);
  fs.symlinkSync('runtime.cc',path.join(root,'aosp/art/runtime/original-link.h'));
  const header='original bionic declaration\n';write('aosp/bionic/libc/include/header.h',header);write('aosp/unselected-note.json','unselected data');
- const lock='AOSP_TAG=android-16.0.0_r1\nSOURCE_TREES=(\n "platform/art|runtime|'+treeHash+'"\n)\nSOURCE_FILES=(\n "platform/bionic|libc/include/header.h|'+hash(header)+'"\n)\n';
+ let lock='AOSP_TAG=android-16.0.0_r1\nSOURCE_TREES=(\n "platform/art|runtime|'+treeHash+'"\n)\nSOURCE_FILES=(\n "platform/bionic|libc/include/header.h|'+hash(header)+'"\n)\n';
  const plugin='original JVMTI source\n';write('aosp/art/openjdkjvmti/plugin.cc',plugin);
  const pluginHash=hash(hash(plugin)+'  ./plugin.cc\n');
- write('src/modules/android/art/adapters/art-android-sources.lock',lock.replace('SOURCE_TREES=(\n','SOURCE_TREES=(\n "platform/art|openjdkjvmti|'+pluginHash+'"\n'));
+ lock=lock.replace('SOURCE_TREES=(\n','SOURCE_TREES=(\n "platform/art|openjdkjvmti|'+pluginHash+'"\n');
 
  const projects=[];
  for(const [id,contents]of Object.entries({aim:{'patches/art-android/sources.lock':lock,'src/original.rs':'original Rust\n'},klepton:{'runtime/original.c':'original host source\n'},'android-gles-headers':{'include/EGL/egl.h':'original header\n','scripts/gl.xml':'original registry\n'},unicorn:{'src/original.c':'original CPU source\n'},'aosp-native':{'libs/binder/Parcel.cpp':'original Binder source\n'}})){

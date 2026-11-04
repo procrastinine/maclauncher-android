@@ -1,3 +1,4 @@
+#include "startup.h"
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -35,6 +36,7 @@ static void state_check(void *code,long expected){
 int main(int argc,char **argv){
  assert(argc==3||argc==4);int baseline=argc==4;
  void *core=dlopen(argv[1],RTLD_NOW|RTLD_GLOBAL);if(!core){puts(dlerror());return 2;}
+ configure_startup(core,argc,argv);
  int (*configure)(const char *)=dlsym(core,"klj_process_ids_configure");assert(configure&&configure(getenv("KL_ANDROID_ID_DIRECTORY"))>0);
  void (*enter)(void)=dlsym(core,"kl_thread_init");void *(*tp)(void)=dlsym(core,"klj_guest_thread_pointer");assert(enter&&tp);enter();
  void *(*load)(const char *)=dlsym(core,"kl_load_recursive"),*(*symbol)(void *,const char *)=dlsym(core,"kl_sym");
@@ -54,9 +56,9 @@ int main(int argc,char **argv){
  memcpy(first,inline_state_begin,state_size);memcpy(middle,publication_tp_begin,tp_size);memcpy(last,inline_state_begin,state_size);
  if(baseline){errno=0;int result=protect((void *)start,size,PROT_READ|PROT_EXEC);fprintf(stderr,"BASELINE large code publication result=%d errno=%d\n",result,errno);return result?1:0;}
  KljImagePoolLease before[16],after[16];size_t count=leases(start,size,before,16);assert(count&&count<=16);
- // A valid first body followed by an unsupported original x18 call must fail
+ // A valid first body followed by an unsupported original return through x18 must fail
  // before any requested mapping, source instruction or gap reservation changes.
- const uint32_t refused[]={0xa9bf7bfdu,0x910003fdu,0xaa0003f2u,0xd63f0240u,0xa8c17bfdu,0xd65f03c0u};
+ const uint32_t refused[]={0xa9bf7bfdu,0x910003fdu,0xaa0003f2u,0xd65f0240u,0xa8c17bfdu,0xd65f03c0u};
  memcpy(last,refused,sizeof refused);errno=0;
  assert(protect((void *)start,size,PROT_READ|PROT_EXEC)<0&&errno==ENOEXEC);
  assert(!memcmp(first,inline_state_begin,state_size)&&!memcmp(middle,publication_tp_begin,tp_size)&&!memcmp(last,refused,sizeof refused));

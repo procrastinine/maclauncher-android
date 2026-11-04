@@ -43,7 +43,7 @@ function binaryXml(tree, utf8 = true, resourceIds = null) {
     if (resourceIds) attrs.sort(([a],[b])=>(a.startsWith(':')?0:resourceIds[a]||0)-(b.startsWith(':')?0:resourceIds[b]||0));
     ext.writeUInt32LE(item.namespace ? index(item.namespace) : NONE); ext.writeUInt32LE(index(item.name), 4); ext.writeUInt16LE(20, 8); ext.writeUInt16LE(20, 10); ext.writeUInt16LE(attrs.length, 12);
     const data = attrs.map(([key, value]) => { const a = Buffer.alloc(20); a.writeUInt32LE(key.startsWith(":") ? NONE : index(ANDROID));
-      a.writeUInt32LE(index(key.replace(/^:/, "")), 4); a.writeUInt32LE(NONE, 8); a.writeUInt16LE(8, 12);
+      a.writeUInt32LE(index(key.replace(/^:/, "")), 4); a.writeUInt32LE(typeof value === "string" ? index(value) : NONE, 8); a.writeUInt16LE(8, 12);
       a[15] = typeof value === "object" ? value.type : typeof value === "string" ? 3 : typeof value === "boolean" ? 0x12 : 0x10;
       a.writeUInt32LE(typeof value === "object" ? value.data : typeof value === "string" ? index(value) : typeof value === "boolean" ? Number(value) : value, 16); return a;
     });

@@ -62,6 +62,12 @@ pub fn total() -> u64 { guest_budget::configured_total(sysctl::<u64>(c"hw.memsiz
     let mut len = std::mem::size_of::<u64>();
     // SAFETY: a u64 out-parameter of its size.
     unsafe {
-        libc::sysctlbyname(c"hw.memsize".as_ptr(), (&mut bytes as *mut u64).cast(), &mut len, std::ptr::null_mut(), 0)
+        libc::sysctlbyname(
+            c"hw.memsize".as_ptr(),
+            (&mut bytes as *mut u64).cast(),
+            &mut len,
+            std::ptr::null_mut(),
+            0,
+        )
     };`,`    let bytes = aim_host_memory::total();`]]);
 }

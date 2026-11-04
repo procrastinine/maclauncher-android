@@ -19,9 +19,9 @@ export function adaptTranslator(source) {
 
 /** Every converter entry point shares the exact same post-conversion JVM boundary. */
 export function adaptConverter(source) {
-  const before="        return cw.toByteArray();";
+  const before="        byte[] bytes = cw.toByteArray();";
   if(source.split(before).length!==2)throw new Error("The pinned converter class-output boundary changed.");
-  return source.replace(before,"        return new maclauncher.android.portability.PortableCalls(false).normalize(cw.toByteArray());");
+  return source.replace(before,"        byte[] bytes = new maclauncher.android.portability.PortableCalls(false).normalize(cw.toByteArray());");
 }
 
 /** ART resolves a constructor reference up the superclass chain even when the

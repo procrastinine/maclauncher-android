@@ -437,7 +437,7 @@
         "framework/DescriptorPortability.java",
         "framework/FilesystemPortability.java",
         "framework/NioPortability.java",
-        "framework/PortableCalls.java"
+        "portability/PortableCalls.java"
       ],
       "nativeSources": [
         "file-events/build.mjs",
@@ -632,7 +632,7 @@
   ],
   "portability": {
     "definition": "sources/robolectric-portability/source.json",
-    "normalizer": "framework/PortableCalls.java",
+    "normalizer": "portability/PortableCalls.java",
     "scope": "Exact JVM/libcore call signatures are normalized across all framework classes; native method bodies and unmapped calls retain AOSP behavior.",
     "pathNormalizer": "framework/FilesystemPortability.java"
   }

@@ -1,3 +1,4 @@
+#include "startup.h"
 #include <assert.h>
 #include <dlfcn.h>
 #include <locale.h>
@@ -5,6 +6,7 @@
 int main(int argc,char **argv){
  assert(argc==4);void *core=dlopen(argv[1],RTLD_NOW|RTLD_GLOBAL);
  if(!core){fprintf(stderr,"%s\n",dlerror());return 2;}
+ configure_startup(core,argc,argv);
  int (*configure)(const char *)=dlsym(core,"klj_process_ids_configure");
  void (*set_path)(const char *)=dlsym(core,"kl_set_library_path");
  void *(*open_image)(const char *,int)=dlsym(core,"klb_dlopen");

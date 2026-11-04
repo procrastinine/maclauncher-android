@@ -139,13 +139,34 @@ fn read_publication_snapshot(lo:u64,n:u64,tmp:*mut libc::c_void)->i64 {
  const context='const UC: u64 =';
  if(frame.split(context).length!==2)throw Error('AIM signal-context offset changed');
  frame=frame.replace(context,'pub const UC: u64 =');
- const placement='    let record = (sp - 16) & !15;';
+ const placement='    let record = sp.checked_sub(16).ok_or(crate::errno::EFAULT)? & !15;';
  if(frame.split(placement).length!==2)throw Error('AIM signal-frame placement changed');
- frame=frame.replace(placement,`    unsafe { setup_on_stack(cpu, d, &saved_alt, sp) }
+ // Original guest copies retain their pager/handler owner. The co-resident
+ // executor supplies native stack storage and must not install AIM handlers.
+ frame=frame.replace(placement,`    unsafe { setup_frame(cpu, d, &saved_alt, sp, super::user_memory::write_exact) }
 }
 
-pub unsafe fn setup_on_stack(cpu: &Cpu, d: &Delivery, saved_alt: &AltStack, sp: u64) -> Entry {
+pub unsafe fn setup_on_stack(cpu: &Cpu, d: &Delivery, saved_alt: &AltStack, sp: u64) -> Result<Entry, i32> {
+    unsafe { setup_frame(cpu,d,saved_alt,sp,|address,bytes|{
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(),address as *mut u8,bytes.len());Ok(())
+    }) }
+}
+unsafe fn setup_frame(cpu:&Cpu,d:&Delivery,saved_alt:&AltStack,sp:u64,
+    write:impl Fn(u64,&[u8])->Result<(),i32>)->Result<Entry,i32> {
 ${placement}`);
+ const write='    super::user_memory::write_exact(f, &bytes)?;';
+ if(frame.split(write).length!==2)throw Error('AIM signal-frame copy boundary changed');
+ frame=frame.replace(write,'    write(f, &bytes)?;');
+ const read='    let bytes = super::user_memory::read_exact(f, FRAME_SIZE as usize).ok()?;';
+ if(frame.split(read).length!==2)throw Error('AIM signal-frame snapshot boundary changed');
+ frame=frame.replace(read,`${read}
+    unsafe { restore_bytes(&bytes) }
+}
+pub unsafe fn restore_native(f:u64)->Option<(Cpu,u64,AltStack)>{
+    if f&15!=0{return None;}
+    unsafe{restore_bytes(std::slice::from_raw_parts(f as *const u8,FRAME_SIZE as usize))}
+}
+unsafe fn restore_bytes(bytes:&[u8])->Option<(Cpu,u64,AltStack)>{`);
  frame+=`
 // Native disposition chaining keeps the caller's Linux ucontext in place.
 // The original layout constants and FPSIMD record walker remain authoritative.

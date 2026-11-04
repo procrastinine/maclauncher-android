@@ -11,7 +11,6 @@ struct NativeFenceInfo {
 }
 const _: () = assert!(size_of::<NativeFenceInfo>() == 56);
 const SYNC_IOC_FILE_INFO: libc::c_ulong = 0xc038_3e04;
-const EGL_BAD_ALLOC: EGLint = 0x3003;
 
 /// Readiness retires a fence, but only its original status establishes success.
 /// Inspect without consuming its record or changing the borrowed descriptor.

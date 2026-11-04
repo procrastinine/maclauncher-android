@@ -48,7 +48,7 @@ export function prepareAimSource({source,output,klepton,glesHeaders,mutableCode=
  prepareSourceTree(output,temporary=>{
   exportSources(source,supplier.sources.aim.commit,['.'],temporary);
   prepareArtCompilerPaths(temporary,{source});
-  for(const name of ['aim-hostcall.patch','aim-platform.patch','aim-opened-path.patch','aim-display-modes.patch','aim-identities.patch','aim-process-liveness.patch','aim-create-mode.patch','aim-stream-sockets.patch'])
+  for(const name of ['aim-hostcall.patch','aim-platform.patch','aim-opened-path.patch','aim-display-modes.patch','aim-identities.patch','aim-process-liveness.patch','aim-create-mode.patch'])
    execFileSync('git',['apply','--unsafe-paths',path.join(root,'adapters',name)],{cwd:temporary,stdio:'inherit',env:{...process.env,GIT_CEILING_DIRECTORIES:path.dirname(temporary)}});
   copyChanged(path.join(root,'native/opened-path.rs'),path.join(temporary,'crates/aim-linux-abi/src/sys/opened-path.rs'));
   prepareOpenedOrigins(temporary);

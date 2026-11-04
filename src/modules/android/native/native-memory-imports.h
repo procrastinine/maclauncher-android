@@ -12,6 +12,8 @@
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
 #include "signal-critical.h"
+extern void *kl_upstream_shim_lookup(const char *);
+extern int kl_errno_to_linux(int);
 
 /* Bionic preserves errno and deliberately does not submit POSIX DONTNEED:
  * Linux MADV_DONTNEED discards private modifications, unlike POSIX advice. */
