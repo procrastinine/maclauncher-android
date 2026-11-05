@@ -98,13 +98,7 @@ export function prepareHostSource({aim,output}){
  const resolved=preserve?fs.readFileSync(previousLock):lock;
  prepareSourceTree(output,temporary=>{
   for(const name of ['bootstrap.rs','compositor-host.rs'])copyChanged(path.join(root,'native',name),path.join(temporary,'src',name));
-  // Source modules are upstream property/classpath implementations, not copies
-  // maintained in the adapter. Paths are relative to this build workspace.
-  for(const name of ['bootstrap.rs','compositor-host.rs']){
-   const file=path.join(temporary,'src',name);let text=fs.readFileSync(file,'utf8');
-   text=text.replaceAll('../../upstream/',path.relative(path.join(output,'src'),aim).split(path.sep).join('/')+'/');writeChanged(file,text);
-  }
-  const dependencies=['aim-android-init','aim-host-display','aim-hostcall','aim-sync-file','aim-binder-host','aim-storage'];
+  const dependencies=['aim-android-init','aim-android-image','aim-guest-init','aim-host-display','aim-hostcall','aim-sync-file','aim-binder-host','aim-storage'];
   const cargo=['[package]','name = "maclauncher-art-host"','version = "0.1.0"','edition = "2024"','publish = false','[workspace]','[dependencies]','libc = "0.2"'];
   for(const name of dependencies)cargo.push(name+' = { path = '+JSON.stringify(path.relative(output,path.join(aim,'crates',name)).split(path.sep).join('/'))+' }');
   for(const [name,file]of [['android-art-properties','bootstrap.rs'],['android-art-presenter','compositor-host.rs']])cargo.push('[[bin]]','name = '+JSON.stringify(name),'path = '+JSON.stringify('src/'+file));

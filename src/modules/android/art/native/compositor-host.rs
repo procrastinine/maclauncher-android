@@ -1,7 +1,7 @@
 //! Native display transport for the Android ART execution backend. Original SurfaceFlinger and the original AIM
 //! composer own composition; the existing Mac session/presenter owns its output.
 use std::{collections::HashMap,ffi::{CString,c_void},io,os::fd::{AsFd,AsRawFd,IntoRawFd,OwnedFd},os::unix::net::{UnixListener,UnixStream},sync::{Arc,Mutex,mpsc,atomic::{AtomicBool,AtomicU64,Ordering}},time::Duration};
-#[path="../../upstream/crates/aim-guest-init/src/unixsock.rs"] mod unixsock;
+use aim_host_display::unixsock;
 use aim_host_display::wire::{self,Request};
 use aim_hostcall::display;
 use aim_sync_file::{State,Writer};

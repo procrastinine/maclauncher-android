@@ -4,6 +4,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {packageArtAdapter} from '../src/modules/android/art/package.mjs';
+import {prepareHostSource} from '../src/modules/android/art/source.mjs';
+
+test('ART host helpers use declared upstream crates instead of embedded source paths',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-host-inputs-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const aim=path.join(root,'aim'),output=path.join(root,'host');fs.mkdirSync(aim);fs.writeFileSync(path.join(aim,'Cargo.lock'),'');prepareHostSource({aim,output});
+ const manifest=fs.readFileSync(path.join(output,'Cargo.toml'),'utf8'),dependencies=new Map([...manifest.matchAll(/^([\w-]+) = \{ path = (".*") \}$/gm)].map(row=>[row[1].replaceAll('-','_'),path.resolve(output,JSON.parse(row[2]))]));
+ for(const row of manifest.matchAll(/^path = (".*\.rs")$/gm)){
+  const source=fs.readFileSync(path.join(output,JSON.parse(row[1])),'utf8');assert.doesNotMatch(source,/#\[path\s*=/,'Upstream source movement must not leave private file includes in a host crate');
+  for(const [,name]of source.matchAll(/\b(aim_\w+)::/g))assert.equal(dependencies.get(name),path.join(aim,'crates',name.replaceAll('_','-')),'Each upstream API has its existing crate owner');
+ }
+});
 
 test('standalone ART packaging checks producer identity without creating a stage',t=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-package-inputs-'));

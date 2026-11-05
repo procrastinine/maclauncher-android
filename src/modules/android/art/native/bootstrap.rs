@@ -1,14 +1,7 @@
-#[path="../../upstream/crates/aim-guest-init/src/paths.rs"] mod paths;
-use aim_storage::guest_inode;
-#[path="../../upstream/crates/aim-guest-init/src/apex.rs"] mod apex;
-#[path="../../upstream/crates/aim-guest-init/src/props.rs"] mod props;
-#[path="../../upstream/crates/aim-guest-init/src/propsvc.rs"] mod propsvc;
-#[path="../../upstream/crates/aim-guest-init/src/futex.rs"] mod futex;
-#[path="../../upstream/crates/aim-guest-init/src/unixsock.rs"] mod unixsock;
-#[path="../../upstream/crates/aim-guest-init/src/identity.rs"] mod identity;
+use aim_guest_init::{paths,apex,props,propsvc,identity};
 use std::{fs,io,os::{fd::AsRawFd,unix::fs::{MetadataExt,OpenOptionsExt,PermissionsExt}},path::{Path,PathBuf}};
 use aim_android_init::{image::ImageRoot,props::{PropertyService,load::{create_serialized_property_info,property_init,PropertyInitOptions}}};
-#[path="../../upstream/crates/aim-android-image/src/classpath.rs"] mod classpath;
+use aim_android_image::classpath;
 
 // These are the same published generations and kernel record locks used by
 // prepared-cache.js. Native inode metadata is part of installation, so its
