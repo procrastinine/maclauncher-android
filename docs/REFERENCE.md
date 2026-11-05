@@ -222,3 +222,6 @@ handle scope; missing symbols retain the normal `dlerror` result.
 Internet stream sockets retain Linux connection retry results across interrupted
 and nonblocking connects. Inherited sockets without a socket inode receipt
 travel as their original descriptor; allocated sockets retain receipt validation.
+
+The JVM native boundary uses a 65,536-slot Bionic semaphore table. Slot zero
+represents an uninitialized semaphore; released slots are reused.

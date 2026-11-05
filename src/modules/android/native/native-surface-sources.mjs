@@ -37,6 +37,8 @@ export function prepareNativeSurfaceSources(klepton,build){
  audio=replace(audio,'if (g_mic_open) { pthread_mutex_unlock(&g_mic_lock); return 0; }',
    'if (g_mic_open) { pthread_mutex_unlock(&g_mic_lock); return -1; }');
  let pthread=fs.readFileSync(path.join(klepton,'runtime/libc/kl_pthread.c'),'utf8');
+ // Klepton PR #19: keep enough simultaneously live Bionic semaphores.
+ pthread=replace(pthread,'#define KL_MAX_SEMS 1024','#define KL_MAX_SEMS 65536');
  pthread=prepareMutexOwnership(pthread);
  pthread=replace(pthread,'static void tsd_thread_exit(void *p) {\n    kl_tsd_slot *s = p;',
    'static void tsd_thread_exit(void *p) {\n    // A later Darwin TSD pass can clear the borrowed guest TP key. Restore\n    // the same retained native context before invoking original destructors.\n    kl_thread_init();\n    kl_tsd_slot *s = p;');
