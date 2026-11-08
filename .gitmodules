@@ -609,3 +609,4 @@
 [submodule "sources/maclauncher"]
 	path = sources/maclauncher
 	url = https://github.com/procrastinine/maclauncher.git
+	maclauncher-role = shared-source

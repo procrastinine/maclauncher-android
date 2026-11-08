@@ -93,3 +93,10 @@ a game need neither this source checkout nor any compiler tools.
 Shared source helpers and graphics declarations come from the exact `sources/maclauncher` Gitlink. Initialize that submodule before running the Node suite or source producers. Android runtime tests and fixtures live in this repository.
 
 Explicit ART supplier reassembly accepts a flat `inputs.licenses` directory with its component index and licence texts. The directory retains its identity and content when the supplier moves.
+
+Source checks read the shared helpers at the `sources/maclauncher` Gitlink. Initialize that exact source owner before checking imports:
+
+```sh
+git submodule update --init --depth 1 -- sources/maclauncher
+npm run check
+```
