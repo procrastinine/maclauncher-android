@@ -65,7 +65,7 @@ test('ART source export preserves locked AOSP while omitting unused tests and un
  const write=(name,text)=>{const file=path.join(root,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,text);return file;};
  const original=path.resolve(import.meta.dirname,'..');
  for(const name of ['src/modules/android/art/source-archive.mjs','src/modules/android/art/source-hwui.mjs','src/modules/android/native/hwui/inputs.mjs','src/modules/android/native/hwui/sources.json','src/modules/android/native/hwui/Cargo.lock','src/modules/android/native/build-sources.mjs','src/modules/android/native/upstream/source-export.mjs','src/modules/android/native/upstream/source-files.mjs','src/modules/shared/runtime/runtime-content.js'])write(name,fs.readFileSync(path.join(original,name)));
- for(const name of ['README.md','package.json','.gitmodules','tools/build.mjs','tools/build-art.mjs','tools/check-sources.mjs','src/modules/android/profile.js','src/modules/android/apk.js','src/modules/android/binary-manifest.js','src/modules/nitroplus/runtime/portable-media.json'])write(name,'original production input\n');
+ for(const name of ['README.md','package.json','.gitmodules','tools/build.mjs','tools/build-art.mjs','tools/check-sources.mjs','src/modules/android/profile.js','src/modules/android/apk.js','src/modules/android/binary-manifest.js'])write(name,'original production input\n');
  write('package.json','{}\n');
  write('src/modules/android/native/original.c','owned implementation\n');write('src/modules/android/native/original_test.c','unused test\n');write('integration-notes.json','unrelated local build notes\n');
  const {createHash}=await import('node:crypto'),hash=bytes=>createHash('sha256').update(bytes).digest('hex');
