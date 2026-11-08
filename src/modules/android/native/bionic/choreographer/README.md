@@ -1,20 +1,22 @@
 # Native Choreographer transport
 
-The complete 14-function Android NDK Choreographer API uses the existing native
-Looper and display clock. Original declarations are retained in
-include/android/choreographer.h; generate.mjs reads the normal compiler AST.
-The historical C empty-parameter declaration of AChoreographer_getInstance is
-emitted with its documented void argument list.
+All 14 functions of Android's NDK Choreographer API use the existing native
+Looper and display clock. The original declarations are kept in
+include/android/choreographer.h, and generate.mjs reads the normal compiler AST.
+AChoreographer_getInstance, historically declared in C with an empty parameter
+list, is emitted with its documented void argument list.
 
-Frame, frame64, vsync and refresh callbacks retain their original calling thread,
-arguments and application userdata. The display owner embeds a copied execution
-descriptor in each frame or refresh registration; cancellation and thread
-retirement release it with that native entry. Refresh identity uses the callback
-function and userdata, independently of the registration callsite.
+Frame, frame64, vsync and refresh callbacks keep their original calling thread,
+arguments and application userdata. The display implementation embeds a copied
+execution descriptor in each frame or refresh registration, and cancellation or
+thread shutdown releases it with that native entry. A refresh callback is
+identified by its function and userdata, independently of where it was
+registered.
 
-Callback entry reads the actual JavaVM environment without attaching a thread and
-uses the authenticated image caller. Vsync callback data remains borrowed for the
-duration of that callback; all six data getters route to the same native owner.
-The transport allocates no separate per-frame holder and preserves public void
-scheduling return values. Host and guest validate the complete argument layout
-before installation. The guest DSO is libmaclauncher-choreographer.so.
+Callback entry reads the actual JavaVM environment without attaching a thread
+and uses the authenticated image caller. Vsync callback data is borrowed for the
+duration of the callback, and all six data getters go to the same native
+implementation. The transport allocates no separate per-frame holder and keeps
+the public void return values of the scheduling functions. Host and guest both
+validate the complete argument layout before installation. The guest DSO is
+libmaclauncher-choreographer.so.

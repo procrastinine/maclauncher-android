@@ -1,10 +1,13 @@
 # Android native host
 
-The [architecture reference](../../../../docs/runtimes/ANDROID_ARCHITECTURE.md)
-describes execution, platform boundaries, resource ownership and host policy.
-The JVM backend combines Java 21, the complete Android 16 Java framework,
-dex2jvm and pinned Klepton native code. ARM32 libraries use Dynarmic and the same
-platform services as ARM64.
+MacLauncher's Android native host runs Android applications. Its JVM backend
+combines Java 21, the complete Android 16 Java framework, dex2jvm and Klepton
+native code. ARM32 libraries run on Dynarmic and use the same platform
+services as ARM64. The
+[Android runtime architecture](../../../../docs/runtimes/ANDROID_ARCHITECTURE.md)
+describes execution, platform boundaries, resource ownership and host policy,
+and [Android native code](../../../../docs/runtimes/ANDROID_NATIVE_CODE.md)
+covers native library loading and instruction adaptation.
 
 ## Source layout
 
@@ -15,214 +18,274 @@ platform services as ARM64.
 | `nativebinding.c`, `loader-*.c`, `nativeabi.*`, `ndk-jni` | Native loading, original JNI declarations and Android/Darwin calling conventions |
 | `arm32` | ARM/Thumb execution, ELF32 records, AAPCS32 and JNI width conversion |
 | `bionic-provider.*`, `bionic-provider-guest.c` | Synchronous original Bionic linker operations through the existing guest callback |
-| `binder-rpc`, `activity-thread`, `keystore` | Shared Binder transport, application lifecycle and profile service implementations |
+| `binder-rpc`, `activity-thread`, `keystore` | Shared Binder transport, application lifecycle and profile services (Android system services shared by all applications) |
 | `native-*.mm`, `window*`, `presentation.mm`, `clock` | AppKit, input, display, surfaces and frame scheduling |
 | `gles-guest-abi.*` | Original GLES declaration types and AAPCS64-to-Darwin stack adapters |
 | `media-foundation`, `audio*`, `video*` | Original media-format algorithms and native playback/device operations |
 | `libcore`, `conscrypt`, `process-abi`, `native-clock` | Original portable libraries and precise Darwin ABI adaptation |
 | `file-events`, `pollable-fds` | Shared file-descriptor lifetime, polling, counters, timers and directory state |
-| `fonts`, `system-config.mjs` | Pinned Android fonts and platform configuration |
+| `fonts`, `system-config.mjs` | Android fonts and platform configuration |
 | `upstream` | Source export, original Blueprint parsing, compiler inputs and incremental reuse utilities |
 
 The `native-regex` component supplies `regcomp`, `regexec`, `regerror` and
-`regfree` from Bionic's complete NetBSD regex implementation. It preserves
-Android's public records, basic and extended expressions, capture offsets,
-backreferences and `REG_GNU` syntax. Character classification and locale values
-use the existing native libc owners; allocation retains the physical heap.
+`regfree` from Bionic's complete NetBSD regex implementation. It keeps Android's
+public records, basic and extended expressions, capture offsets, backreferences
+and `REG_GNU` syntax. Character classification and locale values come from the
+existing native libc implementation, and allocation uses the physical heap.
 
-Each source catalog records original repository and revision identities. Original
-checkouts remain unchanged; owned adaptations are applied to exported compiler
-inputs. The complete supplied framework retains its class and method surface.
-Both VM entries publish Android's original process font map before application
-UI construction; an existing map retains its Typeface objects and backing memory.
-Presentation cleanup uses the shared task owner across Activity navigation and
-configuration relaunches. It retires the current Activity stack on its owner thread
-before releasing view roots, display callbacks and the native output.
-SurfaceControl transaction completion follows the existing output's consumed
-frame. ART output requires observed presentation API 1 and submits without a
-presentation target, retaining the source timestamp, producer token and display
-retirement callback through configured frame generation. Native output uses
-the common presenter's observed display retirement;
-dropped or merely encoded images do not report completion. TransactionStats
-retains the original latch timestamp API and an empty present fence when no
-Android fence descriptor is exported by that output.
-The original Apache HTTP and StatsD modules are compiled from their complete
-published source groups against that framework.
-Publisher JNI families are enumerated from the supplied native library and kept
-whenever their final framework classes retain native declarations. The build does
-not select registrations by package or class-name conventions.
+## Sources and framework assembly
 
-Android native libraries receive a JNI environment facade while real Java objects
-remain owned by the JVM. Android and Darwin argument layouts are selected from
-the calling code's registered image. Per-thread JNI state and attachments retire
-at the corresponding thread exit boundary, including host-created callbacks.
+Each source catalog records the original repository and the exact revision.
+Original checkouts stay unchanged, and MacLauncher's adaptations are applied to
+the exported compiler inputs. The complete supplied framework keeps its class
+and method surface, and the original Apache HTTP and StatsD modules are compiled
+from their complete published source groups against that framework. The JNI
+registration families that the supplied native library publishes are enumerated
+from it and kept whenever their final framework classes still have native
+declarations; the build does not
+select registrations by package or class-name conventions.
+
+The framework binary input directory also contains the recorded original
+SettingsProvider APK. The build verifies its checksum and manifest, includes
+the unchanged APK and resources under `platform/packages/`, and writes the
+original package metadata to `platform/packages.json`. The component records its source and the system image it came from
+separately. The image's
+other packages are not part of this platform component collection.
+
+DEX array-data payloads keep their primitive element type and raw values. When
+an ordinary method's translation exceeds the JVM bytecode limit, conversion can
+move its array stores into size-limited private static helpers. The original
+method keeps its declaration, array allocation, store order, exception handlers
+and monitor ownership, and null and bounds failures keep the element writes that
+preceded them. Methods that fit keep their ordinary bytecode.
+
+## Framework integration
+
+Both VM entries publish Android's original process font map before the
+application UI is built; an existing map keeps its Typeface objects and backing
+memory.
+
+Presentation cleanup uses the shared task manager across Activity navigation and
+configuration relaunches. It shuts down the current Activity stack on the
+manager's thread before releasing view roots, display callbacks and the native
+output.
+
+SurfaceControl transaction completion follows the frame that the existing output
+consumed. ART output requires observed presentation API 1 and submits frames
+without a presentation target, keeping the source timestamp, producer token and
+display retirement callback through configured frame generation. Native output
+uses the common presenter's observed display retirement, and dropped or merely
+encoded images do not report completion. TransactionStats keeps the original
+latch timestamp API and an empty present fence when that output exports no
+Android fence descriptor.
+
+Package labels and icons come from the original parser and resource renderer in
+a headless metadata process, whose batch and idle lifetime is separate from game
+activities. Cache keys include the package content, locale and metadata format.
+Game processes use a private application bundle with the selected JDK, package
+name and rendered icon, and headless profile services use accessory application
+behavior.
+
+## Native loading and JNI
+
+Android native libraries receive a JNI environment facade, while the real Java
+objects stay owned by the JVM. Android or Darwin argument layouts are chosen from
+the calling code's registered image. Per-thread JNI state and attachments are
+released when the corresponding thread exits, including callbacks that the host
+created. Native library state and class references keep their library's load
+lifetime.
+
+The selected Java VM image comes before the JVM process adapter in the native
+preload list. The adapter interposes the Invocation API directly and keeps
+shutdown hooks, VM-death notifications and an existing exit callback before
+process shutdown. Original dyld symbol scopes, dependency search, interposed
+providers and lookup errors are unchanged. If the VM image is missing, native
+process initialization stops.
+
 The Bionic linker component runs `dlopen`, `dlsym` and `dlclose` on an already
 initialized Bionic thread through the existing host-call callback. The caller
-retains the callback frame, linker namespace and thread lifetime. Handles and
-symbol addresses remain with the original ELF linker. Its flags use Android's
-`RTLD_*` values; Darwin loader flags have different numeric values.
-The Bionic graphics carrier preserves the complete original native-window API
-family. Java Surface conversion, native reference counts, geometry and EGL
-producers share the same host-owned window; opaque host handles never enter the
-image Android Surface implementation. The window owner supports identity buffer
-transforms and the default unknown dataspace. Other buffer transforms, display
-refresh selection and native Parcel transfer return Android native errors.
-Clearing a refresh preference retains the system default, and preallocation is
-a best-effort hint. Pending JNI exceptions and borrowed Parcel ownership remain
-with the caller.
-Raw ARM64 imports search images marked `DF_1_GLOBAL` and the requesting
-image's retained `DT_NEEDED` closure. Explicit `RTLD_GLOBAL` controls dynamic
-symbol visibility separately; reopening an existing image retains its original
-flags. Named handles traverse dependencies in breadth-first order. Default and
-next lookups retain the native caller and original target-SDK compatibility.
-The application target is fixed before native image publication. Raw ARM64
-lookup uses each mapped image as its local root; format adapters retain the
-roots assigned by their group loader.
+keeps the callback frame, linker namespace and thread lifetime, and handles and
+symbol addresses stay with the original ELF linker. The component's flags use
+Android's `RTLD_*` values, which differ numerically from Darwin's loader flags.
 
-The selected Java VM image precedes the JVM process adapter in the native
-preload closure. The adapter interposes the Invocation API directly, retaining
-shutdown hooks, VM-death notifications and an existing exit callback before
-process retirement. Original dyld symbol scopes, dependency search, interposed
-providers and lookup errors remain unchanged. A missing VM image stops native
-process initialization.
-Private futexes retain exact waiter selection and requeue ownership while Darwin
-kernel address waits handle sleeping and waking outside native metadata locks.
-Short metadata critical sections defer asynchronous signals through the original
-POSIX mask; synchronous faults retain their execution-domain handler, and waits
-restore the calling thread's mask.
-Own-process native diagnostics can copy a bounded snapshot of private futex
-waiters from that same queue. The snapshot retains the original address,
-operation, expected value, timeout and pthread owner, including address changes
-from requeue. It never reads the guest futex word or waits for the metadata lock.
-Metal synchronization requires an allocated event and command buffer before
-creating a queued sync. Allocation failure returns `EGL_BAD_ALLOC`; it does not
-publish a native fence backed only by a queue serial. ART carries that allocation
-error through its host-call boundary without changing it to a context mismatch.
-Imported shared events that do not enqueue a signal retain their original
-synchronization behavior. The ART native-fence producer observes its actual
-Metal command buffer. Failed completion retires the original sync-file writer
-with an I/O error; successful completion remains owned by the shared-event
-listener. Guest native-fence client waits, server waits and status queries inspect
-the original sync-file status after descriptor readiness. Negative status returns
-an EGL error; successful fences and timeouts keep their existing results.
-Descriptor duplication, waits and closure retain the original ABI.
-The C EGL presenter reports typed EGL errors without creating Java exceptions.
-Allocation failure returns `EGL_BAD_ALLOC`; a failed GPU completion returns
-`EGL_CONTEXT_LOST`. JNI presenter entrypoints keep their Java exception contract
-and preserve an exception already pending on the calling thread. Surface teardown
-releases terminally completed work and retains dependencies while GPU work is
-still in flight.
-Failed context bindings restore their prior context and surfaces before
-returning the original EGL error. If a device failure also prevents restoration,
-that context is marked lost before later GL calls.
+Raw ARM64 imports search images marked `DF_1_GLOBAL` and the requesting image's
+retained `DT_NEEDED` dependencies, recursively. Explicit `RTLD_GLOBAL` controls dynamic symbol
+visibility separately, and reopening an existing image keeps its original flags.
+Named handles traverse dependencies in breadth-first order. Default and next
+lookups keep the native caller and the original target-SDK compatibility, and
+the application target is fixed before native images are published. Raw ARM64
+lookup uses each mapped image as its own local root, while format adapters keep
+the roots that their group loader assigned.
 
-DEX array-data payloads retain their primitive element type and raw values.
-When an ordinary method translation exceeds the JVM bytecode limit, conversion
-can move its array stores into bounded private static helpers. The original
-method keeps its declaration, array allocation, store order, exception handlers
-and monitor ownership. Null and bounds failures preserve preceding element
-writes. Methods that fit retain their ordinary bytecode.
-
-Native library state and class references retain their library's load lifetime.
-JVM `Process.getTotalMemory` and `getFreeMemory` share the existing native
-memory owner with `ActivityManager` and `Bridge.memoryInfo`: the configured
-`KL_MEM_TOTAL_MB` guest budget is capped by physical memory, and available bytes
-follow the owner's live process headroom. `/proc/meminfo` reports that budget in
-kB and its existing process-footprint accounting; these APIs do not expose a
-separate host-wide RAM or free-page estimate. ART retains original Bionic
-`sysinfo`, `sysconf` and file APIs while AIM's existing memory owner applies the
-same 6144 MiB default, configured MiB conversion and physical-memory cap. ART
-available memory follows actual process footprint and native headroom, bounded
-by that budget. Linux kernel/cache categories without guest accounting report
-zero; actual macOS memory-pressure notifications retain their original watcher.
-Native ABI metadata lookup retains the calling library's class-loader namespace.
+Native ABI metadata lookup keeps the calling library's class-loader namespace.
 The configured application ABI selects ELF dependencies and system library paths
-before native constructors run. ARM32 and ARM64 imports retain the same platform
-service providers and per-library class-loader ownership.
+before native constructors run, and ARM32 and ARM64 imports use the same
+platform service providers and per-library class-loader ownership. Native load
+diagnostics keep the registry's rejection reason, while guest `dlerror` strings
+keep their bounded Android form.
+
+## ARM64 code adaptation and TLS
+
 Large ARM64 ELF images reserve instruction veneers at both ends of their mapping
-and use original gaps between load segments for sites outside both branch
+and use the original gaps between load segments for sites outside both branch
 windows. TP, Linux SVC and original x18 bodies share one placement transaction,
-using the original decoder and unmodified instruction neighborhoods. Every entry,
-return and relocated conditional branch is checked before instructions change.
-Original segment bytes retain their addresses; packed veneer pages contain no
-writable original segment, and used pools finish read-only and executable.
-Layouts without sufficient reachable storage report a loader error.
-Later executable publication uses a private snapshot of the complete requested
-range, including protected pages. Newly decoded instructions share the same
-placement planner and may use unused reserved ELF gaps within that range.
-Preflight completes before one final mapping replacement; a refused publication
-keeps the original bytes and permissions. Published instruction bodies retain
-their storage until the corresponding code mapping retires.
-Original typed data remains unchanged and is accounted separately from uncertain
-TP candidates, which retain strict load refusal. Complete paired stack-canary
-sequences can establish executable continuations using matching SP or FP slots;
-fixed FP slots can retain TP across register reuse and dynamic SP allocation.
-Guard comparisons retain both original values through bounded intervening
-calculations. A rooted aligned prologue that preserves LR and its callee-saved
-TP register can establish its own exact TP/canary-load prefix before an opaque
-continuation; that continuation receives no evidence from the prefix.
-Opaque prefixes and mismatched canary slots supply no such evidence. Native
-load diagnostics retain the registry's rejection reason while guest `dlerror`
-strings keep their bounded Android form.
-ART's optional `MACLAUNCHER_ART_ABORT_CONTEXT=1` diagnostic records up to 16
-self-directed abort requests at their original syscall boundary, including a
-bounded frame-pointer walk. It preserves signal delivery and distinguishes an
-abort request from a fatal signal. Output uses the existing diagnostics owner
-without allocating, resolving symbols or waiting for a stream reader.
+which uses the original decoder and unmodified instruction neighborhoods. Every
+entry, return and relocated conditional branch is checked before any instruction
+changes. Original segment bytes keep their addresses, packed veneer pages contain
+no writable original segment, and used pools end up read-only and executable.
+Layouts without enough reachable storage report a loader error.
+
+Later executable publication works on a private snapshot of the complete
+requested range, including protected pages. Newly decoded instructions use the
+same placement planner and can use unused reserved ELF gaps within that range.
+All checks finish before one final mapping replacement, and a refused
+publication keeps the original bytes and permissions. Published instruction
+bodies keep their storage until the corresponding code mapping is removed.
+
+Original typed data stays unchanged and is counted separately from uncertain TP
+candidates, which still cause the load to be refused. Complete paired
+stack-canary sequences can establish executable continuations through matching
+SP or FP slots, and fixed FP slots can hold TP across register reuse and dynamic
+SP allocation. Guard comparisons keep both original values through a limited
+number of intervening calculations. A rooted, aligned prologue that preserves LR
+and its callee-saved TP register can establish its own exact TP and canary-load
+prefix before an opaque continuation, and that continuation gains no evidence
+from the prefix. Opaque prefixes and mismatched canary slots supply no such
+evidence.
+
 ARM64 ELF TLS supports `PT_TLS`, `DTPMOD64`, `DTPREL64`, `TPREL64` and `TLSDESC`
-while preserving the real Android thread pointer and original Bionic slots.
+while keeping the real Android thread pointer and the original Bionic slots.
 Initial-exec and dynamic references share the same per-thread address. A private
 demand-zero reserve provides one MiB of fixed TLS layout with alignment up to
-64 KiB; module offsets remain reserved after unloading. New modules initialize
-existing physical threads before native entry points become available. Modules
-beyond that layout retain dynamic TLS; an initial-exec reference to one reports
-a loader error rather than exposing an unrelated address.
-The framework binary input directory also contains the recorded original
-SettingsProvider APK. The producer verifies its checksum and manifest, includes
-the unchanged APK and resources under `platform/packages/`, and emits the
-original package metadata in `platform/packages.json`. Separate source and image
-identities accompany the component. The image's other
-packages are not part of this platform component collection.
+64 KiB, and module offsets stay reserved after unloading. New modules initialize
+existing physical threads before their native entry points become available.
+Modules that do not fit that layout use dynamic TLS, and an initial-exec
+reference to one of them reports a loader error instead of exposing an unrelated
+address.
+
+## Graphics
+
+A generated guest library, the Bionic graphics carrier, forwards native-window
+calls to the host and keeps the complete original native-window API family. Java Surface conversion, native reference counts, geometry and EGL
+producers share the same host-owned window, and opaque host handles never enter
+the image's Android Surface implementation. The window supports identity buffer
+transforms and the default unknown dataspace. Other buffer transforms, display
+refresh selection and native Parcel transfer return Android native errors.
+Clearing a refresh preference keeps the system default, and preallocation is a
+best-effort hint. Pending JNI exceptions and borrowed Parcel ownership stay with
+the caller.
+
 Native ARM64 GLES imports, dynamic symbols and procedure lookups adapt spilled
 arguments from Android's eight-byte stack slots to Darwin's natural alignment.
-The complete pinned GLES headers supply the function types. Signatures with
-matching layouts retain the original provider pointer; AOSP JNI and ARM32's
-typed native bridge use Darwin entry points directly.
-OpenSL ES and OpenMAX AL interface queries use the complete original IID/type
-catalog, including local-library results and application-owned copies of UUIDs.
-Their tagged source and sink locators and formats use the original NDK record
-layouts and compiler-evaluated discriminators, including Android extensions.
-Descriptor-transfer receipts belong to their individual handoffs. Once a data
-socket is adopted, a retired receipt pipe does not retire the independent parent
-authority stream; data connections retain their own peer-failure handling.
-Native Android permission queries use the profile service's original Binder
-interface and the same package grants and explicit device-access policies as Java
-clients. Native service UIDs receive only their original platform configuration's
-assigned permissions; those assignments do not grant application UIDs access to
-protected devices or services.
-Native audio permissions use Android's original permission provider and service
-notifications. Package changes and permission updates share the existing profile
-catalog; the original audio synchronization barrier waits for pending updates.
+The complete GLES headers supply the function types. Signatures with
+matching layouts keep the original provider pointer, and AOSP JNI and ARM32's
+typed native bridge call the Darwin entry points directly.
 
-Package labels and icons use the original parser and resource renderer in a
-headless metadata process. Its batch and idle lifetime is separate from game
-activities. Cache keys retain package content, locale and metadata format. Game
-processes use a private application bundle with the selected JDK, package name
-and rendered icon; headless profile services use accessory application behavior.
+### EGL synchronization and errors
+
+Metal synchronization needs an allocated event and command buffer before a
+queued sync is created. Allocation failure returns `EGL_BAD_ALLOC` instead of
+publishing a native fence backed only by a queue serial, and ART passes that
+allocation error through its host-call boundary without turning it into a
+context mismatch. Imported shared events that do not enqueue a signal keep their
+original synchronization behavior.
+
+The ART native-fence producer observes its actual Metal command buffer. A failed
+completion finishes the original sync-file writer with an I/O error, and
+successful completion is handled by the shared-event listener. Guest
+native-fence client waits, server waits and status queries read the original
+sync-file status once the descriptor is ready. A negative status returns an EGL
+error, while successful fences and timeouts keep their existing results.
+Descriptor duplication, waits and closing keep the original ABI.
+
+The C EGL presenter reports typed EGL errors without creating Java exceptions.
+Allocation failure returns `EGL_BAD_ALLOC`, and a failed GPU completion returns
+`EGL_CONTEXT_LOST`. JNI presenter entry points keep their Java exception
+contract and preserve an exception already pending on the calling thread.
+Surface teardown releases work that has finished and keeps dependencies while
+GPU work is still in flight.
+
+A failed context binding restores the previous context and surfaces before
+returning the original EGL error. If a device failure also prevents that
+restoration, the context is marked lost before later GL calls.
+
+## OpenSL ES and OpenMAX AL
+
+OpenSL ES and OpenMAX AL interface queries use the complete original IID and
+type catalog, including local-library results and application-owned copies of
+UUIDs. Their tagged source and sink locators and formats use the original NDK
+record layouts and compiler-evaluated discriminators, including Android
+extensions.
+
+## Memory reporting
+
+JVM `Process.getTotalMemory` and `getFreeMemory` use the same native memory
+accounting as `ActivityManager` and `Bridge.memoryInfo`. The configured
+`KL_MEM_TOTAL_MB` guest budget is capped by physical memory, and available bytes
+follow the live process headroom. `/proc/meminfo` reports that budget in kB
+together with the existing process-footprint accounting. These APIs do not
+expose a separate host-wide RAM or free-page estimate.
+
+ART keeps the original Bionic `sysinfo`, `sysconf` and file APIs, while AIM's
+existing memory accounting applies the same 6144 MiB default, configured MiB
+conversion and physical-memory cap. ART available memory follows the actual
+process footprint and native headroom, limited by that budget. Linux kernel and
+cache categories without guest accounting report zero, and actual macOS
+memory-pressure notifications keep their original watcher.
+
+## Synchronization and diagnostics
+
+Private futexes keep exact waiter selection and requeue ownership, while Darwin
+kernel address waits handle sleeping and waking outside native metadata locks.
+Short critical sections on that metadata defer asynchronous signals through the
+original POSIX mask. Synchronous faults keep their execution-domain handler, and
+waits restore the calling thread's mask.
+
+Native diagnostics in the same process can copy a size-limited snapshot of
+private futex waiters from that queue. The snapshot keeps the original address,
+operation, expected value, timeout and pthread owner, including address changes
+from requeue. It never reads the guest futex word or waits for the metadata
+lock.
+
+ART's optional `MACLAUNCHER_ART_ABORT_CONTEXT=1` diagnostic records up to 16
+abort requests that a process directs at itself, at their original syscall
+boundary, including a limited frame-pointer walk. Signal delivery is unchanged,
+and the record distinguishes an abort request from a fatal signal. Output goes
+through the existing diagnostics channel without allocating, resolving symbols
+or waiting for a stream reader.
+
+## Services and permissions
+
+Each descriptor handoff has its own receipt pipe, on which the receiver
+acknowledges the transferred descriptors. Once a data socket is adopted, closing
+its receipt pipe does not close the independent parent process-authority stream, and data connections keep their own peer-failure
+handling.
+
+Native Android permission queries use the profile service's original Binder
+interface and the same package grants and explicit device-access policies as
+Java clients. Native service UIDs receive only the permissions that their
+original platform configuration assigns, and those assignments never grant
+application UIDs access to protected devices or services.
+
+Native audio permissions use Android's original permission provider and service
+notifications. Package changes and permission updates share the existing
+package catalog of the profile services, and the original audio synchronization barrier waits for
+pending updates.
 
 ## Developer build
 
-The build accepts supplied executable framework and native artifacts alongside
-pinned source inputs. Installed runtime packages run without an Android SDK
-or native compiler. Developer prerequisites include a JDK 21, the official SDL3
-framework, Vulkan and NDK headers, portable codec libraries, AIDL and aconfig,
-a Rust toolchain, Ninja, CMake and a project Python environment.
+A developer build takes supplied executable framework and native artifacts
+together with source inputs at their recorded revisions, while installed runtime
+packages run without an Android SDK or native compiler. Developer prerequisites are JDK 21, the official SDL3
+framework, Vulkan and NDK headers, portable codec libraries, AIDL and aconfig, a
+Rust toolchain, Ninja, CMake and a project Python environment.
 
 Default source locations come from `build-options.mjs`, the font and KeyStore
-catalogs, and the NDK graphics source catalog. Explicit `--<name>-source` arguments
-select equivalent pinned source stores. The original Blueprint parser executable
-and its source identity describe declaration syntax and source-group evaluation;
-the normal build does not evaluate an Android product graph.
+catalogs and the NDK graphics source catalog. Explicit `--<name>-source`
+arguments select equivalent source checkouts at the same revisions. The original
+Blueprint parser executable, together with its recorded source revision, defines
+the declaration syntax and source-group evaluation; the normal build does not evaluate an Android product
+graph.
 
 ```sh
 node src/modules/android/native/build.mjs \
@@ -256,75 +319,95 @@ node src/modules/android/native/build.mjs \
   --output /path/to/new/build
 ```
 
-`--build-work` selects a persistent compiler workspace. The build snapshots owned
-inputs before compilation and reuses unchanged Java modules, native objects and
-supplier outputs. Conversion caches depend on DEX inputs, converter options and
-the framework hierarchy, rather than unrelated native source changes. Missing
-upstream Git objects and Cargo dependencies can be acquired during developer
-setup; cached inputs permit offline compilation.
+`--build-work` selects a persistent compiler workspace. The build snapshots
+MacLauncher's inputs before compiling and reuses unchanged Java modules, native
+objects and supplier outputs. Conversion caches depend only on DEX inputs,
+converter options and the framework hierarchy, so unrelated native source
+changes do not invalidate them. Missing upstream Git objects and Cargo
+dependencies can be downloaded during developer setup, and cached inputs allow
+offline compilation.
 
-KeyMint source exports and generated AIDL files preserve unchanged content; Clang
-dependency files reuse C++ objects, and static archives update only when their
-object inputs change. Generated JNI and host callback declarations retain their
-native compiler timestamps when Java implementations change; removed declarations
-are retired during publication. Framework transformation reuse follows the compiled
-native binding declarations, while host Java implementations are rebuilt separately.
-ARM32 packed-relocation and Linux UAPI declarations use the same content-preserving
-publication.
+### Incremental reuse
+
+KeyMint source exports and generated AIDL files keep unchanged content, Clang
+dependency files let C++ objects be reused, and static archives update only when
+their object inputs change. Generated JNI and host callback declarations keep
+their native compiler timestamps when Java implementations change, and removed
+declarations are deleted during publication. Framework transformation reuse
+follows the compiled native binding declarations, while host Java
+implementations are rebuilt separately. ARM32 packed-relocation and Linux UAPI
+declarations use the same content-preserving publication.
 
 Compiler prefix maps remove checkout and toolchain paths from delivered objects.
-They cover the source, build and referenced input roots, so changing an unrelated
-runtime provider does not invalidate native objects. Clang dependency files retain
-ownership of header dependencies.
-Native delivery copies retain relocatable install names, strip compiler debug
-records and receive signatures independently from cached development products.
-Changed signed binaries replace the destination atomically with a new file,
-so running mappings and open readers retain the previous binary. Identical bytes
-and executable permissions preserve the destination and its modification time.
-Published permissions exclude set-user-ID, set-group-ID and sticky bits.
-Staging applies the same debug-record removal and signing to verified ANGLE
-copies while preserving the supplied Android framework library byte for byte.
-Licence texts live in the flat `licenses/` directory, with component associations in `licenses/components.txt`. Source records retain pinned identities. A build emits its complete
-product inventory, source identity and runtime profile for atomic staging.
+They cover the source, build and referenced input roots, so changing an
+unrelated runtime provider does not invalidate native objects. Clang dependency
+files track header dependencies.
 
-The native ANGLE build retains upstream's embedded internal Metal shader library.
-Its original GN actions use Apple's `metal` and `metallib` tools through `xcrun`;
-the separate Metal toolchain and standard `TOOLCHAINS` selection are supported.
-The resulting shader bytes reside inside `libGLESv2.dylib`, with no separate
-shader-file search or compiler requirement during application startup.
-The driver version includes the pinned ANGLE revision and its generated program
-binary version. Application-owned shader caches can use the original GL version
-and renderer strings to distinguish incompatible binary formats after updates.
-The Metal backend retains the upstream framebuffer flip state from ANGLE
+### Delivered binaries
+
+Native delivery copies keep relocatable install names, have their compiler debug
+records stripped and are signed independently of cached development products. A
+changed signed binary replaces the destination atomically with a new file, so
+running mappings and open readers keep the previous binary. When the bytes and
+executable permissions are identical, the destination and its modification time
+are left alone. Published permissions never include the set-user-ID,
+set-group-ID or sticky bits. Staging applies the same debug-record removal and
+signing to verified ANGLE copies, while the supplied Android framework library
+is kept byte for byte. Licence texts live in the flat `licenses/` directory, with component
+associations in `licenses/components.txt`. Source records keep the exact upstream
+revisions. A build emits a complete list of its outputs, its source revision and
+its runtime profile, and staging uses them to install the build atomically.
+
+## ANGLE
+
+ANGLE's native build keeps upstream's embedded internal Metal shader library.
+Its original GN actions call Apple's `metal` and `metallib` tools through
+`xcrun`, and both the separate Metal toolchain and the standard `TOOLCHAINS`
+selection are supported. The resulting shader bytes live inside
+`libGLESv2.dylib`, so application startup needs no separate shader-file search
+or compiler. The driver version includes the exact ANGLE revision and its
+generated program binary version, so application-owned shader caches can use
+the original GL version and renderer strings to tell incompatible binary formats
+apart after updates.
+
+The Metal backend keeps the upstream framebuffer flip state from ANGLE
 `37c976ffba9d2940add977cad9945b23de14c150`. `GL_MESA_framebuffer_flip_y`
-combines the requested framebuffer origin with the native backbuffer origin;
+combines the requested framebuffer origin with the native backbuffer origin, and
 viewport, scissor, winding, clears and blits follow that state. AIM uses this
-operation when producing top-row-first Android window buffers. CPU buffers and
-framebuffers without an explicit flip retain their ordinary row order.
+operation to produce Android window buffers with the top row first. CPU buffers
+and framebuffers without an explicit flip keep their ordinary row order.
 
 The combined ANGLE provider exports `kljAngleVkImageOwnership(device, image,
-transfer)` for native Android buffer storage. Transfer `1` enrolls shared
-storage, `2` enrolls a converted Metal texture, and `0` cancels an unconsumed
-transfer. Enrolling a pending transfer lets
-the next `EGL_ANGLE_vulkan_image` import adopt that `VkImage`; cancelling removes
-an unconsumed transfer. Ordinary external image imports keep their borrowed
-lifetime. Adopted images retire through ANGLE's final GL reference and Vulkan
-garbage queue. Shared VM aliases follow the Metal buffer's deallocator, so an
-Android mapping can close while a GL object still holds the storage. ANGLE's original
-foreign-image submission tracker publishes shared image writes through an exact
-Vulkan host-access barrier in the same command batch and resource serial as GL
-work. Normal EGL and native fences cover these writes, including imported
-textures rendered outside window presentation.
-Planar video images retain the same image lease and CoreImage conversion in
-both backends. Vulkan uses that lease's timeline semaphores and their exported
-Metal shared events to order previous GL reads, conversion, and subsequent GL
-reads on the original ANGLE queue. The lease retires its pending conversion
-and queue wait before releasing source storage or synchronization objects;
-the converted RGB texture follows the last GL reference independently.
+transfer)` for native Android buffer storage:
 
-[MacLauncher Builds](https://github.com/procrastinine/maclauncher-builds) packages
-completed producer outputs with their source identities and notices. MacLauncher
-downloads and installs these versioned packages through its runtime manager.
+| `transfer` | Effect |
+| --- | --- |
+| `1` | Registers shared storage |
+| `2` | Registers a converted Metal texture |
+| `0` | Cancels an unconsumed transfer |
+
+After a pending transfer is registered, the next `EGL_ANGLE_vulkan_image` import
+adopts that `VkImage`. Ordinary external image imports keep their borrowed
+lifetime. Adopted images are released through ANGLE's final GL reference and
+Vulkan garbage queue. Shared VM aliases follow the Metal buffer's deallocator,
+so an Android mapping can close while a GL object still holds the storage.
+ANGLE's original foreign-image submission tracker publishes shared image writes
+through an exact Vulkan host-access barrier in the same command batch and
+resource serial as the GL work. Normal EGL and native fences cover these writes,
+including writes to imported textures rendered outside window presentation.
+
+Planar video images keep the same image lease and CoreImage conversion in both
+backends. Vulkan uses that lease's timeline semaphores and their exported Metal
+shared events to order earlier GL reads, the conversion and later GL reads on
+the original ANGLE queue. The lease completes its pending conversion and queue
+wait before releasing source storage or synchronization objects, and the
+converted RGB texture follows the last GL reference independently.
+
+## Distribution
+
+[MacLauncher Builds](https://github.com/procrastinine/maclauncher-builds)
+packages the completed build outputs with their source revisions and notices as
+versioned packages, which MacLauncher installs.
 
 ## Process identity leases
 

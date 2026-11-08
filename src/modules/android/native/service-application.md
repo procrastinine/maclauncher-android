@@ -1,14 +1,16 @@
 # Service Application ownership
 
-Local services use the Application attached to the bound process's original
-LoadedApk. The caller Context resolves the requested component; it does not
-select the service's Application. Component metadata must match the bound
-package, UID and process before the original AppComponentFactory creates the
-service. Service.attach compares the supplied Application with that exact original
-LoadedApk instance. An initial entry Application retained by the host is not a
-second service owner when original process records adopt another Application.
+Local services use the Application attached to the original LoadedApk of the
+process they are bound to. The caller's Context resolves the requested component
+but does not choose the service's Application. Before the original
+AppComponentFactory creates the service, the component metadata must match the
+bound package, UID and process. Service.attach compares the supplied Application
+with that exact original LoadedApk instance. If the original process records
+adopt another Application, the initial entry Application that the host keeps
+does not become a second owner of services.
 
-Service creation runs on the application lifecycle handler, after Application
-attachment. Original LoadedApk dispatchers retain binding and rebind callbacks;
-stopping or retiring the owner preserves normal Service cleanup and removes
-queued creation work. Remote service routing keeps its separate process owner.
+Service creation runs on the application lifecycle handler after the
+Application is attached. The original LoadedApk dispatchers keep the binding and
+rebind callbacks. Stopping or shutting down the owning Application keeps normal
+Service cleanup and removes queued creation work. Remote service routing keeps
+its own process owner.
