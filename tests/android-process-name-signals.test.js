@@ -10,5 +10,5 @@ test('Android names and thread signals share the existing process and live-threa
  const binary=path.join(output,'probe');
  run('clang',['-std=gnu11','-Wall','-Wextra','-Werror','-I'+native,'-I'+path.join(jdk,'include'),'-I'+path.join(jdk,'include/darwin'),path.join(__dirname,'fixtures/android-native/process-name-signals.c'),...['process-identity.c','process-ids.c','thread-identity.c','signal-bridge.c'].map(f=>path.join(native,f)),core,'-Wl,-rpath,'+path.dirname(core),'-o',binary]);
  const ids=path.join(output,'ids');fs.mkdirSync(ids,{mode:0o700});
- assert.match(run(binary,[ids]),/PASS Android process-name data, cmdline snapshots and live-thread signal ownership/);
+ assert.match(run(binary,[fs.realpathSync(ids)]),/PASS Android process-name data, cmdline snapshots and live-thread signal ownership/);
 });
