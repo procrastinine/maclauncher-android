@@ -91,3 +91,5 @@ Android system image is downloaded separately. Installing a runtime and playing
 a game need neither this source checkout nor any compiler tools.
 
 Shared source helpers and graphics declarations come from the exact `sources/maclauncher` Gitlink. Initialize that submodule before running the Node suite or source producers. Android runtime tests and fixtures live in this repository.
+
+Explicit ART supplier reassembly accepts a flat `inputs.licenses` directory with its component index and licence texts. The directory retains its identity and content when the supplier moves.
