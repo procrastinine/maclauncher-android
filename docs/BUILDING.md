@@ -84,3 +84,5 @@ binary-only release archives. Its tagged source tree contains the build recipes,
 owned patches and pinned Android source. The original Android system image is
 acquired separately. Ordinary runtime installation and play do not require this
 source checkout or compiler tools.
+
+Shared source helpers and graphics declarations come from the exact `sources/maclauncher` Gitlink. Initialize that submodule before running the Node suite or source producers. Android runtime tests and fixtures live in this repository.
