@@ -22,7 +22,7 @@ export function sourceInventory(root,destination,{links=false,exclude=[]}={}){
       if(exclude.includes(name))continue;
       if(entry.isDirectory()){visit(name);continue;}
       if(entry.isSymbolicLink()&&links){files.push({path:name,link:fs.readlinkSync(file)});continue;}
-      if(!entry.isFile())throw Error('Android build source must be a regular file: '+name);
+      if(!entry.isFile()&&!(entry.isSymbolicLink()&&fs.statSync(file).isFile()))throw Error('Android build source must be a regular file: '+name);
       const bytes=fs.readFileSync(file);files.push({path:name,sha256:digest(bytes)});
       if(destination){const target=path.join(destination,name);fs.mkdirSync(path.dirname(target),{recursive:true});fs.writeFileSync(target,bytes);}
     }
