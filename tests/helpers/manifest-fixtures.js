@@ -8,7 +8,7 @@ function prepare(output){
   for(const entry of fs.readdirSync(directory,{withFileTypes:true})){
    const file=path.join(directory,entry.name);
    if(entry.isDirectory())visit(file);
-   else if((entry.isFile()||entry.isSymbolicLink()&&fs.statSync(file).isFile())&&entry.name.endsWith('.xml.tree.json')){
+   else if(entry.name.endsWith('.xml.tree.json')&&(entry.isFile()||entry.isSymbolicLink()&&fs.statSync(file).isFile())){
     const {tree,resourceIds}=JSON.parse(fs.readFileSync(file));
     const destination=path.join(output,path.relative(source,file).replace(/\.tree\.json$/,'.bin'));
     fs.mkdirSync(path.dirname(destination),{recursive:true});fs.writeFileSync(destination,binaryXml(tree,true,resourceIds));
