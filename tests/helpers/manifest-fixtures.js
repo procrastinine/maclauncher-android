@@ -1,13 +1,14 @@
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 const {binaryXml}=require('./binary-xml');
-const source=path.resolve(__dirname,'../fixtures'),directories=new WeakMap();
+function create({source=path.resolve(__dirname,'../fixtures')}={}){
+const directories=new WeakMap();
 function prepare(output){
  if(!path.isAbsolute(output||''))throw new Error('A temporary fixture directory is required.');
  function visit(directory){
   for(const entry of fs.readdirSync(directory,{withFileTypes:true})){
    const file=path.join(directory,entry.name);
    if(entry.isDirectory())visit(file);
-   else if(entry.isFile()&&entry.name.endsWith('.xml.tree.json')){
+   else if((entry.isFile()||entry.isSymbolicLink()&&fs.statSync(file).isFile())&&entry.name.endsWith('.xml.tree.json')){
     const {tree,resourceIds}=JSON.parse(fs.readFileSync(file));
     const destination=path.join(output,path.relative(source,file).replace(/\.tree\.json$/,'.bin'));
     fs.mkdirSync(path.dirname(destination),{recursive:true});fs.writeFileSync(destination,binaryXml(tree,true,resourceIds));
@@ -23,4 +24,6 @@ function file(t,name){
  if(!/^[A-Za-z0-9/-]+$/.test(name)||name.split('/').includes('..'))throw new Error('Invalid manifest fixture name.');
  return path.join(directory,name+'.xml.bin');
 }
-module.exports={prepare,file};
+return {prepare,file};
+}
+module.exports={...create(),create};
