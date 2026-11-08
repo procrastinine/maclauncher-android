@@ -118,7 +118,7 @@ public final class HostTextInput {
     public static void shortcut(int code){
         if(HostWindowManager.delegatedShortcut(code))return;
         Connection value=current;if(!usable(value))return;
-        Handler main=new Handler(Looper.myLooper());
+        Handler main=clipboardHandler();
         if(code==KeyEvent.KEYCODE_V){
             ProcessAuthority.clipboard("paste",null).thenAccept(text->main.post(()->{if(text!=null&&current==value&&usable(value))text(text,false,0,0);}));
         }else if(code==KeyEvent.KEYCODE_C){
@@ -132,4 +132,6 @@ public final class HostTextInput {
             try{value.remote.getSelectedText(header(value),0,selection);value.remote.performContextMenuAction(header(value),android.R.id.copy);}catch(RemoteException failure){throw failure.rethrowAsRuntimeException();}
         }else if(code==KeyEvent.KEYCODE_A||code==KeyEvent.KEYCODE_X){try{value.remote.performContextMenuAction(header(value),code==KeyEvent.KEYCODE_A?android.R.id.selectAll:android.R.id.cut);}catch(RemoteException failure){throw failure.rethrowAsRuntimeException();}}
     }
+    /** Clipboard completion is physical input and must cross traversal barriers. */
+    private static Handler clipboardHandler(){return Handler.createAsync(Looper.myLooper());}
 }

@@ -7,6 +7,7 @@ import android.system.Os;
 import android.system.OsConstants;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -25,6 +26,7 @@ final class AccountControl implements AutoCloseable {
     private final DataInputStream input;
     private final DataOutputStream output;
     private final Map<String,Operation> pending=new ConcurrentHashMap<>();
+    private final Map<String,AccountManagerFuture<Bundle>> storeTokens=new ConcurrentHashMap<>();
     private final AutoCloseable listener;
     private final AtomicBoolean closed=new AtomicBoolean();
     private final Runnable disconnected;
@@ -73,7 +75,9 @@ final class AccountControl implements AutoCloseable {
                     HostUriGrants.flush();reply(id,true);
                 }
                 case "accounts"->reply(id,inventory());
-                case "cancel"->{Operation operation=pending.get(request.getJSONObject("payload").getString("id"));if(operation!=null)operation.cancel();}
+                case "cancel"->{String selected=request.getJSONObject("payload").getString("id");Operation operation=pending.get(selected);if(operation!=null)operation.cancel();var token=storeTokens.remove(selected);if(token!=null)token.cancel(true);}
+                case "storeToken"->storeToken(id,request);
+                case "storeImport"->storeImport(id,request);
                 case "enroll","retire"->{
                     JSONObject payload=request.getJSONObject("payload"),value=payload.getJSONObject("peer");
                     var peer=new HostBinderRpc.Peer(value.getString("packageName"),value.getString("processName"),value.getInt("pid"),value.getInt("uid"),value.optString("securityContext","u:r:untrusted_app:s0"));
@@ -108,6 +112,57 @@ final class AccountControl implements AutoCloseable {
         }catch(SecurityException failure){diagnostic("Account authorization",failure);failure(id,AccountManager.ERROR_CODE_REMOTE_EXCEPTION,failure);}
         catch(IllegalArgumentException|JSONException failure){failure(id,AccountManager.ERROR_CODE_BAD_ARGUMENTS,failure);}
         catch(Exception failure){diagnostic("Account command",failure);failure(id,AccountManager.ERROR_CODE_REMOTE_EXCEPTION,failure);}
+    }
+    /** Runs as the supervised, publisher-verified Companion APK, never system_server. */
+    private void storeToken(String id,JSONObject request)throws Exception {
+        verifyCaller("com.android.vending");
+        if(!request.optBoolean("networkAllowed",false)){failure(id,AccountManager.ERROR_CODE_NETWORK_ERROR);return;}
+        JSONObject payload=request.getJSONObject("payload");
+        String name=payload.getString("name");
+        Account selected=Arrays.stream(accounts.getAccountsByType("com.google")).filter(account->account.name.equals(name)).findFirst().orElseThrow(SecurityException::new);
+        String previous=payload.optString("invalidateToken",null);
+        if(previous!=null){if(previous.isBlank()||previous.length()>16384)throw new IllegalArgumentException();accounts.invalidateAuthToken("com.google",previous);}
+        String service="oauth2:https://www.googleapis.com/auth/googleplay";
+        Bundle options=new Bundle();
+        AccountManagerFuture<Bundle> future=accounts.getAuthToken(selected,service,options,false,result->{
+            if(storeTokens.remove(id)==null||closed.get())return;
+            try{
+                Bundle value=result.getResult();
+                if(value.containsKey(AccountManager.KEY_INTENT)){failure(id,AccountManager.ERROR_CODE_CANCELED);return;}
+                String token=value.getString(AccountManager.KEY_AUTHTOKEN);
+                if(token==null||token.isBlank()||token.length()>16384)throw new IllegalStateException();
+                String account=value.getString(AccountManager.KEY_ACCOUNT_NAME);
+                if(account!=null&&!account.equals(name))throw new SecurityException();
+                JSONObject response=new JSONObject().put("token",token);
+                long expiry=value.getLong("android.accounts.expiry",0),now=System.currentTimeMillis()/1000;
+                if(expiry>now)expiry-=now;if(expiry>0&&expiry<=86400)response.put("expirySeconds",expiry);
+                reply(id,response);
+            }catch(android.accounts.OperationCanceledException failure){failure(id,AccountManager.ERROR_CODE_CANCELED);}
+            catch(Exception failure){failure(id,AccountManager.ERROR_CODE_REMOTE_EXCEPTION);}
+        },handler);
+        storeTokens.put(id,future);
+    }
+    private void verifyCaller(String packageName)throws Exception {
+        if(!context.getPackageName().equals(packageName)||android.os.Process.myUid()<10000)throw new SecurityException();
+        var details=HostPackages.verifiedCurrentSigningDetails();
+        Set<String> actual=new HashSet<>();for(var signer:details.getSignatures())actual.add(java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(signer.toByteArray())));
+        if(!actual.equals(Set.of("9bd06727e62796c0130eb6dab39b73157451582cbd138e86c468acc395d14165")))throw new SecurityException();
+    }
+    /** Original authenticator identity stores an already authenticated browser session. */
+    private void storeImport(String id,JSONObject request)throws Exception {
+        verifyCaller("com.google.android.gms");
+        JSONObject payload=request.getJSONObject("payload");
+        String email=payload.getString("email"),token=payload.getString("aasToken");
+        if(email.isBlank()||!email.contains("@")||email.length()>320||token.isBlank()||token.length()>16384)throw new IllegalArgumentException();
+        Account selected=new Account(email,"com.google");
+        Bundle data=new Bundle();data.putString("flags","1");data.putString("oauthAccessToken","1");
+        if(!accounts.addAccountExplicitly(selected,token,data)){
+            selected=Arrays.stream(accounts.getAccountsByType("com.google")).filter(account->account.name.equalsIgnoreCase(email)).findFirst().orElseThrow(SecurityException::new);
+            accounts.setPassword(selected,token);
+            accounts.setUserData(selected,"flags","1");accounts.setUserData(selected,"oauthAccessToken","1");
+        }
+        accounts.setAccountVisibility(selected,AccountManager.PACKAGE_NAME_KEY_LEGACY_NOT_VISIBLE,AccountManager.VISIBILITY_USER_MANAGED_VISIBLE);
+        reply(id,new JSONObject().put("imported",true));
     }
     private JSONObject inventory()throws JSONException {
         Map<String,String> providers=new HashMap<>();JSONArray authenticators=new JSONArray();
@@ -176,6 +231,7 @@ final class AccountControl implements AutoCloseable {
     private void close(boolean notify){
         if(!closed.compareAndSet(false,true))return;
         for(var operation:pending.values())operation.cancel();pending.clear();
+        for(var token:storeTokens.values())token.cancel(true);storeTokens.clear();
         if(listener!=null)try{listener.close();}catch(Exception ignored){}
         handler.removeCallbacksAndMessages(null);
         try{Os.shutdown(socket.getFileDescriptor(),OsConstants.SHUT_RDWR);}catch(Exception ignored){}
