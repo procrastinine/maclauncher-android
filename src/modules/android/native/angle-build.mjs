@@ -26,7 +26,7 @@ const read=(cmd,args)=>execFileSync(cmd,args,{encoding:'utf8'}).trim();
 const run=(cmd,args,extra={})=>execFileSync(cmd,args,{stdio:'inherit',...extra});
 const check=(directory,revision)=>{if(read('git',['-C',directory,'rev-parse','HEAD'])!==revision)throw Error('Unexpected source revision: '+directory);};
 check(options.source,pins.revision);
-for(const dependency of dependencies)check(path.join(options.dependencies,path.basename(dependency.directory)),dependency.commit);
+for(const dependency of dependencies)check(path.join(options.dependencies,path.basename(dependency.directory)),dependency.revision);
 fs.mkdirSync(options.output,{recursive:true});
 const source=path.join(options.output,'source'),output=path.join(options.output,'build');
 const copy=(from,to)=>fs.cpSync(from,to,{recursive:true,filter:file=>path.basename(file)!=='.git'});

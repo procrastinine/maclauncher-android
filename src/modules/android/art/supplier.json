@@ -15,12 +15,12 @@
     "aim": {
       "path": "src/external/aim-custom",
       "url": "https://github.com/hahnlee/aim.git",
-      "commit": "0309a89af09727b215063843bd7f5ef0a1e422b2"
+      "revision": "0309a89af09727b215063843bd7f5ef0a1e422b2"
     },
     "libffi": {
       "path": "src/external/libffi",
       "url": "https://github.com/libffi/libffi.git",
-      "commit": "bc553867367246d140cd156f060bd0409f57f157"
+      "revision": "bc553867367246d140cd156f060bd0409f57f157"
     }
   },
   "hostcallVersion": 1,

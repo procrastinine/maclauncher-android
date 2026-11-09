@@ -23,9 +23,9 @@ function rename(text,names) {
 export function prepareGzip({zlibSource,klepton,build}) {
   const output=path.join(build,'gzip'),source=path.join(output,'source');
   const flags=[...baseFlags,...nativePathFlags({source:zlibSource,build,roots:[[klepton,'/src/klepton']]})];
-  const files=run('git',['-C',zlibSource,'ls-tree','--name-only',supplier.commit]).trim().split('\n')
+  const files=run('git',['-C',zlibSource,'ls-tree','--name-only',supplier.revision]).trim().split('\n')
     .filter(name=>/^gz.*\.[ch]$/.test(name)||['zlib.h', 'zconf.h'].includes(name));
-  exportSources(zlibSource,supplier.commit,files,source);
+  exportSources(zlibSource,supplier.revision,files,source);
   const api=path.join(output,'api.c');fs.writeFileSync(api,'#include "gzguts.h"\n');
   const declarations=new Map();
   function visit(node){if(node.kind==='FunctionDecl'&&node.name?.startsWith('gz'))declarations.set(node.name,node.type.qualType);for(const child of node.inner||[])visit(child);}

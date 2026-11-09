@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repository": "https://github.com/robolectric/robolectric",
-  "commit": "3cfa3a4b8e2910ae06ce0d12e6f7bd927f8a5d2e",
+  "revision": "3cfa3a4b8e2910ae06ce0d12e6f7bd927f8a5d2e",
   "upstreamPath": "sandbox/src/main/java/org/robolectric/interceptors/AndroidInterceptors.java",
   "upstreamSha256": "0ced2827c89bf40ad702d1b56469a6d5f2b6f20439828cae755388a315ff4539",
   "implementation": "Build-time callsite normalization across the complete executable AOSP archive; no Robolectric test runtime or shadows",
@@ -61,7 +61,7 @@
     "arrayTransport": "AOSP TypedArray pooling uses JDK int arrays; AssetManager nativeApplyStyleWithArray receives arrays without fabricated ART addresses.",
     "osConstants": {
       "repository": "https://github.com/robolectric/robolectric",
-      "commit": "3cfa3a4b8e2910ae06ce0d12e6f7bd927f8a5d2e",
+      "revision": "3cfa3a4b8e2910ae06ce0d12e6f7bd927f8a5d2e",
       "path": "shadows/framework/src/main/java/org/robolectric/shadows/ShadowOsConstants.java",
       "sha256": "29bd8554dc60b5593728e36b0d2ad55c1c7c774258c3a3a09f39c5961c72b7f4",
       "scope": "544 Linux ABI constant assignments only; no shadow execution or simulated file permissions.",
@@ -80,7 +80,7 @@
   "propertyAccessPortability": {
     "source": "framework/UiPortability.java",
     "repository": "https://github.com/robolectric/robolectric",
-    "commit": "3cfa3a4b8e2910ae06ce0d12e6f7bd927f8a5d2e",
+    "revision": "3cfa3a4b8e2910ae06ce0d12e6f7bd927f8a5d2e",
     "path": "shadows/framework/src/main/java/org/robolectric/shadows/ShadowPropertyValuesHolder.java",
     "sha256": "dd9d16b8d99d473c46474dee37d6c51aa956b6632bba31d544dc8695f211b6e1",
     "scope": "Reuse the public-Method accessibility strategy at the return of original PropertyValuesHolder.setupSetterOrGetter. Original AOSP lookup, numeric conversion, getter/setter algorithms and Method caches remain intact; no shadow class or parallel animation state."

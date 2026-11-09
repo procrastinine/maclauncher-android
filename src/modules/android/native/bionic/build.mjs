@@ -77,7 +77,7 @@ export function buildBionicAbi({source,build,output,rustToolchain,target,env=pro
  run(cargo,['build','--offline','--locked','--release','-j','2','--manifest-path',path.join(source,'Cargo.toml'),'--target-dir',target,'-p','aim-linux-abi','--lib'],{cwd:source,env:environment});
  const library=path.join(output,'libaim_linux_abi.dylib');
  publishNativeBinary(path.join(target,'release/libaim_linux_abi.dylib'),library,{installName:'@rpath/libaim_linux_abi.dylib'});
- return {library,sourceRevision:JSON.parse(fs.readFileSync(path.resolve(root,'../../art/supplier.json'),'utf8')).sources.aim.commit};
+ return {library,sourceRevision:JSON.parse(fs.readFileSync(path.resolve(root,'../../art/supplier.json'),'utf8')).sources.aim.revision};
 }
 
 /** Build every guest carrier against the same original C/JNI headers. Each

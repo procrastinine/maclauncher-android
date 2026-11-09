@@ -8,7 +8,7 @@ import {nativePathFlags,nativeFlagsString} from '../native/upstream/native-paths
  * Its configure checks and Make dependency graph own architecture selection. */
 export async function buildArtFfi({source,revision,output,ndk,autoreconf='autoreconf',make='make',env=process.env}){
  const pin=JSON.parse(fs.readFileSync(new URL('./supplier.json',import.meta.url))).sources.libffi;
- revision??=pin.commit;
+ revision??=pin.revision;
  source=path.resolve(source);output=path.resolve(output);ndk=path.resolve(ndk);
  const run=(program,args,options={})=>execFileSync(program,args,{env,stdio:'inherit',...options});
  const actual=run('git',['-C',source,'rev-parse','HEAD'],{encoding:'utf8',stdio:'pipe'}).trim();

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repository": "https://android.googlesource.com/platform/frameworks/base",
-  "commit": "4e43ad12e1b211f15152e9c5b16b0fe88e6b93f3",
+  "revision": "4e43ad12e1b211f15152e9c5b16b0fe88e6b93f3",
   "files": [],
   "apiReferences": [
     {

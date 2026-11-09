@@ -7,91 +7,91 @@
     {
       "name": "buildtools",
       "url": "https://chromium.googlesource.com/chromium/src/buildtools.git",
-      "commit": "6a6a2b6fd3c37c0624e52cb563d999a3819134f8",
+      "revision": "6a6a2b6fd3c37c0624e52cb563d999a3819134f8",
       "directory": "src/external/android-angle-deps/buildtools"
     },
     {
       "name": "third_party/zlib",
       "url": "https://chromium.googlesource.com/chromium/src/third_party/zlib",
-      "commit": "363a126ed293970f3df97ee5f760cba29a29e193",
+      "revision": "363a126ed293970f3df97ee5f760cba29a29e193",
       "directory": "src/external/android-angle-deps/third_party-zlib"
     },
     {
       "name": "third_party/spirv-headers/src",
       "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/SPIRV-Headers",
-      "commit": "97e96f9e9defeb4bba3cfbd034dec516671dd7a3",
+      "revision": "97e96f9e9defeb4bba3cfbd034dec516671dd7a3",
       "directory": "src/external/android-angle-deps/third_party-spirv-headers-src"
     },
     {
       "name": "third_party/rapidjson/src",
       "url": "https://chromium.googlesource.com/external/github.com/Tencent/rapidjson",
-      "commit": "781a4e667d84aeedbeb8184b7b62425ea66ec59f",
+      "revision": "781a4e667d84aeedbeb8184b7b62425ea66ec59f",
       "directory": "src/external/android-angle-deps/third_party-rapidjson-src"
     },
     {
       "name": "build",
       "url": "https://chromium.googlesource.com/chromium/src/build.git",
-      "commit": "38265dc9620be22c42da758e534deca1a8af1fbd",
+      "revision": "38265dc9620be22c42da758e534deca1a8af1fbd",
       "directory": "src/external/android-angle-deps/build"
     },
     {
       "name": "testing",
       "url": "https://chromium.googlesource.com/chromium/src/testing",
-      "commit": "d383bed741641364fe020bfe9eac7a36180e9e6f",
+      "revision": "d383bed741641364fe020bfe9eac7a36180e9e6f",
       "directory": "src/external/android-angle-deps/testing"
     },
     {
       "name": "third_party/abseil-cpp",
       "url": "https://chromium.googlesource.com/chromium/src/third_party/abseil-cpp",
-      "commit": "5f6b05eac05371bee829951e64f3fd35854e9311",
+      "revision": "5f6b05eac05371bee829951e64f3fd35854e9311",
       "directory": "src/external/android-angle-deps/third_party-abseil-cpp"
     },
     {
       "name": "third_party/astc-encoder/src",
       "url": "https://chromium.googlesource.com/external/github.com/ARM-software/astc-encoder",
-      "commit": "2319d9c4d4af53a7fc7c52985e264ce6e8a02a9b",
+      "revision": "2319d9c4d4af53a7fc7c52985e264ce6e8a02a9b",
       "directory": "src/external/android-angle-deps/third_party-astc-encoder-src"
     },
     {
       "name": "third_party/jsoncpp",
       "url": "https://chromium.googlesource.com/chromium/src/third_party/jsoncpp",
-      "commit": "f62d44704b4da6014aa231cfc116e7fd29617d2a",
+      "revision": "f62d44704b4da6014aa231cfc116e7fd29617d2a",
       "directory": "src/external/android-angle-deps/third_party-jsoncpp"
     },
     {
       "name": "third_party/jsoncpp/source",
       "url": "https://chromium.googlesource.com/external/github.com/open-source-parsers/jsoncpp",
-      "commit": "42e892d96e47b1f6e29844cc705e148ec4856448",
+      "revision": "42e892d96e47b1f6e29844cc705e148ec4856448",
       "directory": "src/external/android-angle-deps/third_party-jsoncpp-source"
     },
     {
       "name": "tools/clang",
       "url": "https://chromium.googlesource.com/chromium/src/tools/clang",
-      "commit": "094a12c2b1338e4af17d3ebfae8c7206228a3630",
+      "revision": "094a12c2b1338e4af17d3ebfae8c7206228a3630",
       "directory": "src/external/android-angle-deps/tools-clang"
     },
     {
       "name": "third_party/spirv-tools/src",
       "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/SPIRV-Tools",
-      "commit": "3aeaaa088d37b86cff036eee1a9bf452abad7d9d",
+      "revision": "3aeaaa088d37b86cff036eee1a9bf452abad7d9d",
       "directory": "src/external/android-angle-deps/third_party-spirv-tools-src"
     },
     {
       "name": "third_party/glslang/src",
       "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/glslang",
-      "commit": "38f6708b6b6f213010c51ffa8f577a7751e12ce7",
+      "revision": "38f6708b6b6f213010c51ffa8f577a7751e12ce7",
       "directory": "src/external/android-angle-deps/third_party-glslang-src"
     },
     {
       "name": "third_party/spirv-cross/src",
       "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/SPIRV-Cross",
-      "commit": "b8fcf307f1f347089e3c46eb4451d27f32ebc8d3",
+      "revision": "b8fcf307f1f347089e3c46eb4451d27f32ebc8d3",
       "directory": "src/external/android-angle-deps/third_party-spirv-cross-src"
     },
     {
       "name": "third_party/vulkan-headers/src",
       "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/Vulkan-Headers",
-      "commit": "37057b4756df4009ad85803bd2e06ec8a3bb1bca",
+      "revision": "37057b4756df4009ad85803bd2e06ec8a3bb1bca",
       "directory": "src/external/android-angle-deps/third_party-vulkan-headers-src",
       "backends": [
         "metal-vulkan"
@@ -100,7 +100,7 @@
     {
       "name": "third_party/vulkan_memory_allocator",
       "url": "https://chromium.googlesource.com/external/github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator",
-      "commit": "cb0597213b0fcb999caa9ed08c2f88dc45eb7d50",
+      "revision": "cb0597213b0fcb999caa9ed08c2f88dc45eb7d50",
       "directory": "src/external/android-angle-deps/third_party-vulkan_memory_allocator",
       "backends": [
         "metal-vulkan"
@@ -109,7 +109,7 @@
     {
       "name": "third_party/vulkan-loader/src",
       "url": "https://chromium.googlesource.com/external/github.com/KhronosGroup/Vulkan-Loader",
-      "commit": "f2389e27734347c1d9f40e03be53f69f969976b1",
+      "revision": "f2389e27734347c1d9f40e03be53f69f969976b1",
       "directory": "src/external/android-angle-deps/third_party-vulkan-loader-src",
       "backends": [
         "metal-vulkan"
