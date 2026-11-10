@@ -1,6 +1,6 @@
 # MacLauncher Android
 
-> **[MacLauncher](https://github.com/procrastinine/maclauncher)** plays Windows, PS5, Switch, Android and iOS games natively on macOS, with ReShade, DLSS, MetalFX and Lossless Scaling effects, Steam downloads and version management for every runtime. This repository is one of its components. The [MacLauncher website](https://procrastinine.github.io/maclauncher/) describes its features, and the app is on the [MacLauncher releases page](https://github.com/procrastinine/maclauncher/releases).
+> This runtime is part of **[MacLauncher](https://github.com/procrastinine/maclauncher)**, which installs and runs Android games on Apple Silicon Macs with per-game storage, accounts and settings. The [MacLauncher website](https://procrastinine.github.io/maclauncher/) describes its features, and the app is on the [MacLauncher releases page](https://github.com/procrastinine/maclauncher/releases).
 
 MacLauncher Android contains the Android and VR/XR runtime components that [MacLauncher](https://github.com/procrastinine/maclauncher) uses on Apple Silicon Macs. Android application code runs on a Java 21 JVM or on ART, with shared Android framework services and native macOS graphics, audio and input.
 
