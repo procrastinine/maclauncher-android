@@ -9,7 +9,8 @@ test('JVM terminal exit preserves shutdown hooks, VM death, status and Invocatio
   if (process.platform !== 'darwin' || process.arch !== 'arm64') return t.skip('Requires macOS arm64');
   const found = process.env.ANDROID_JDK ? {status: 0, stdout: process.env.ANDROID_JDK} :
     spawnSync('/usr/libexec/java_home', ['-v', '21'], {encoding: 'utf8'});
-  assert.equal(found.status, 0, found.stderr);
+  if (found.status !== 0) return t.skip('Requires a JDK 21: /usr/libexec/java_home -v 21 found none (' +
+    String(found.stderr || found.error?.message || '').trim().split('\n')[0] + '); set ANDROID_JDK to select one');
   const jdk = process.env.ANDROID_JDK || found.stdout.trim(), directory = fs.mkdtempSync(path.join(os.tmpdir(), 'android-jvm-process-'));
   t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
   const native = path.resolve(process.env.ANDROID_NATIVE_SOURCE || path.join(__dirname, '../src/modules/android/native'), 'jvm-process.c');
