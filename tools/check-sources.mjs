@@ -80,11 +80,6 @@ export function checkSources(root,{metadataOnly=false}={}){
    }catch(error){issues.push('Source pin differs: '+project.id+' '+ref.path+'#'+ref.property);}
   }
  }
- const shared=[];
- for(const [id,module]of modules)if(module['maclauncher-role']==='shared-source'){
-  if(ids.has(id)||declared.has(module.path)||shared.some(owner=>owner.path===module.path)||!/^sources\/[A-Za-z0-9_.-]+$/.test(module.path)||!/^https:\/\//.test(module.url)){issues.push('Invalid shared source owner: '+id);continue;}
-  ids.add(id);shared.push(module);
- }
  for(const [id]of modules)if(!ids.has(id))issues.push('Undeclared Git module: '+id);
  let modulesChecked=0;
  if(!metadataOnly){
@@ -108,13 +103,6 @@ export function checkSources(root,{metadataOnly=false}={}){
     }
    }
    for(const [name]of links)if(!declared.has(name))issues.push('Unregistered Gitlink: '+name);
-   for(const owner of shared){
-    const row=git(['ls-files','--stage','--',owner.path]),match=/^160000 ([a-f0-9]{40}) 0\t(.+)$/.exec(row),checkout=path.join(root,owner.path);
-    if(!match||match[2]!==owner.path){issues.push('Shared source owner requires an exact Gitlink: '+owner.path);continue;}
-    if(!fs.existsSync(path.join(checkout,'.git'))){issues.push('Initialize declared shared source owner: '+owner.path);continue;}
-    if(git(['-C',checkout,'rev-parse','HEAD'])!==match[1])issues.push('Shared source checkout revision differs: '+owner.path);
-    if(git(['-C',checkout,'status','--porcelain','--untracked-files=no','--ignore-submodules=all']))issues.push('Shared source checkout has tracked changes: '+owner.path);
-   }
   }
  }
  let sourceModules=0;
@@ -127,7 +115,7 @@ export function checkSources(root,{metadataOnly=false}={}){
   for(const name of moduleImports(fs.readFileSync(file,'utf8')))if(!name.startsWith('.')&&!name.startsWith('node:'))issues.push('External package import: '+path.relative(root,file)+' '+name);
  }
  if(issues.length)throw Error(issues.join('\n'));
- return {sourceModules,projects:projects.length,pins,gitlinks:modulesChecked,sharedSources:shared.length,metadataOnly};
+ return {sourceModules,projects:projects.length,pins,gitlinks:modulesChecked,metadataOnly};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const args=process.argv.slice(2);if(args.some(arg=>arg!=='--metadata-only'))throw Error('Usage: node tools/check-sources.mjs [--metadata-only]');

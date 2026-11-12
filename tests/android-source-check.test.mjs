@@ -27,22 +27,22 @@ test('source import scanning ignores generated code and nested source templates'
 });
 
 
-test('shared source owners require their declared Gitlink and exact initialized checkout',t=>{
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-shared-source-check-'));
+test('every Git module is a declared upstream supplier',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-undeclared-module-check-'));
  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
- const owner=path.join(root,'sources/shared');fs.mkdirSync(owner,{recursive:true});fs.mkdirSync(path.join(root,'src'));
+ fs.mkdirSync(path.join(root,'src'));
  fs.writeFileSync(path.join(root,'upstreams.json'),JSON.stringify({schemaVersion:1,projects:[]}));
  fs.writeFileSync(path.join(root,'.gitmodules'),'[submodule "shared"]\npath = sources/shared\nurl = https://example.invalid/shared.git\nmaclauncher-role = shared-source\n');
- const git=(directory,...args)=>execFileSync('git',['-C',directory,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
- git(root,'init','-q');git(owner,'init','-q');
- git(owner,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--allow-empty','-qm','Source fixture');
- const revision=git(owner,'rev-parse','HEAD');
- assert.throws(()=>checkSources(root),/requires an exact Gitlink/);
- git(root,'update-index','--add','--cacheinfo','160000,'+revision+',sources/shared');
- assert.equal(checkSources(root).sharedSources,1);
- git(root,'update-index','--cacheinfo','160000,'+'a'.repeat(40)+',sources/shared');
- assert.throws(()=>checkSources(root),/Shared source checkout revision differs/);
- git(root,'update-index','--cacheinfo','160000,'+revision+',sources/shared');
- git(owner,'config','core.filemode','false');fs.writeFileSync(path.join(owner,'tracked'),'source');git(owner,'add','tracked');
- assert.throws(()=>checkSources(root),/Shared source checkout has tracked changes/);
+ assert.throws(()=>checkSources(root,{metadataOnly:true}),/Undeclared Git module: shared/);
+});
+
+test('tracked files never read through a pinned checkout',()=>{
+ const root=path.resolve(import.meta.dirname,'..'),git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',maxBuffer:1<<28});
+ const index=git('ls-files','-s','-z').split('\0').filter(Boolean).map(row=>{const [header,file]=row.split('\t'),[mode,object]=header.split(' ');return {mode,object,file};});
+ const gitlinks=index.filter(entry=>entry.mode==='160000').map(entry=>entry.file);
+ for(const link of index.filter(entry=>entry.mode==='120000')){
+  const target=path.posix.normalize(path.posix.join(path.posix.dirname(link.file),git('cat-file','blob',link.object)));
+  assert.ok(!target.startsWith('../'),`${link.file} points outside the repository`);
+  assert.equal(gitlinks.find(gitlink=>target===gitlink||target.startsWith(gitlink+'/')),undefined,`${link.file} reads ${target} through a pinned checkout`);
+ }
 });

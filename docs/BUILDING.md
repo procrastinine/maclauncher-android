@@ -90,13 +90,12 @@ this repository at the commit that was built. The original
 Android system image is downloaded separately. Installing a runtime and playing
 a game need neither this source checkout nor any compiler tools.
 
-Shared source helpers and graphics declarations come from the exact `sources/maclauncher` Gitlink. Initialize that submodule before running the Node suite or source producers. Android runtime tests and fixtures live in this repository.
+The Node suite and the source producers read only files of this repository and its `src/external` suppliers. Android runtime tests and fixtures live in this repository.
 
 Explicit ART supplier reassembly accepts a flat `inputs.licenses` directory with its component index and licence texts. The directory retains its identity and content when the supplier moves.
 
-Source checks read the shared helpers at the `sources/maclauncher` Gitlink. Initialize that exact source owner before checking imports:
+Source checks need no initialized supplier checkout:
 
 ```sh
-git submodule update --init --depth 1 -- sources/maclauncher
 npm run check
 ```

@@ -604,9 +604,3 @@
 	url = https://android.googlesource.com/platform/external/llvm-libc
 	maclauncher-revision = 549bb629f8325dc9f5221bb16a3de908a753c304
 	maclauncher-role = source
-
-
-[submodule "sources/maclauncher"]
-	path = sources/maclauncher
-	url = https://github.com/procrastinine/maclauncher.git
-	maclauncher-role = shared-source
