@@ -46,3 +46,14 @@ test('tracked files never read through a pinned checkout',()=>{
   assert.equal(gitlinks.find(gitlink=>target===gitlink||target.startsWith(gitlink+'/')),undefined,`${link.file} reads ${target} through a pinned checkout`);
  }
 });
+
+test('a supplier no build checks out is not a Git module',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'android-reference-module-check-'));
+ t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const revision='c'.repeat(40),project={id:'reference',path:'src/external/reference',repository:'https://example.invalid/reference',revision,pinRefs:[{kind:'json',path:'src/adaptation.json',property:'revision'}],referenceOnly:true};
+ fs.mkdirSync(path.join(root,'src'));
+ fs.writeFileSync(path.join(root,'src/adaptation.json'),JSON.stringify({repository:project.repository,revision}));
+ fs.writeFileSync(path.join(root,'upstreams.json'),JSON.stringify({schemaVersion:1,projects:[project]}));
+ fs.writeFileSync(path.join(root,'.gitmodules'),`[submodule "reference"]\npath = ${project.path}\nurl = ${project.repository}\nmaclauncher-revision = ${revision}\nmaclauncher-role = reference\nmaclauncher-init = false\n`);
+ assert.throws(()=>checkSources(root,{metadataOnly:true}),/Reference-only Git module: reference/);
+});

@@ -112,13 +112,6 @@
 	maclauncher-revision = 094a12c2b1338e4af17d3ebfae8c7206228a3630
 	maclauncher-role = source
 
-[submodule "android-angle-flip-reference"]
-	path = src/external/android-angle-flip-reference
-	url = https://chromium.googlesource.com/angle/angle
-	maclauncher-revision = 37c976ffba9d2940add977cad9945b23de14c150
-	maclauncher-role = reference
-	maclauncher-init = false
-
 [submodule "android-gles-headers"]
 	path = src/external/android-gles-headers
 	url = https://github.com/krkrz/angle.git
@@ -437,12 +430,6 @@
 	maclauncher-revision = 3441b633c2fe2c494e958780ba0f4227b1327634
 	maclauncher-role = source
 
-[submodule "robolectric"]
-	path = src/external/robolectric
-	url = https://github.com/robolectric/robolectric
-	maclauncher-revision = 3cfa3a4b8e2910ae06ce0d12e6f7bd927f8a5d2e
-	maclauncher-role = reference
-	maclauncher-init = false
 [submodule "unicorn"]
 	path = src/external/unicorn
 	url = https://github.com/unicorn-engine/unicorn.git

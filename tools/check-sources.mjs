@@ -59,6 +59,7 @@ function files(directory){
   const name=path.join(directory,e.name);if(path.basename(directory)==='src'&&e.name==='external')return [];return e.isDirectory()?files(name):[name];
  });
 }
+const own=(value,key)=>Object.hasOwn(value,key);
 export function checkSources(root,{metadataOnly=false}={}){
  root=path.resolve(root);const issues=[],projects=JSON.parse(fs.readFileSync(path.join(root,'upstreams.json'))).projects;
  const git=(args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
@@ -70,7 +71,9 @@ export function checkSources(root,{metadataOnly=false}={}){
   if(ids.has(project.id)||declared.has(project.path)||!sha.test(project.revision)||!/^src\/external\/[A-Za-z0-9_./-]+$/.test(project.path)||project.path.split('/').includes('..')){issues.push('Invalid or duplicate supplier: '+project.id);continue;}
   ids.add(project.id);declared.set(project.path,project);
   const module=modules.get(project.id);
-  if(!module||module.path!==project.path||module.url!==project.repository||module['maclauncher-revision']!==project.revision||module['maclauncher-role']!==(project.referenceOnly?'reference':'source'))issues.push('Git module metadata differs: '+project.id);
+  if(!module||module.path!==project.path||module.url!==project.repository||module['maclauncher-revision']!==project.revision||module['maclauncher-role']!=='source')issues.push('Git module metadata differs: '+project.id);
+  // A supplier that no build checks out is recorded once, by the adaptation that uses it.
+  if(own(project,'referenceOnly'))issues.push('Reference-only Git module: '+project.id);
   if(!project.pinRefs?.length)issues.push('Missing source pin reference: '+project.id);
   for(const ref of project.pinRefs||[]){
    try{
@@ -91,7 +94,7 @@ export function checkSources(root,{metadataOnly=false}={}){
    }
    for(const project of projects){
     const revision=links.get(project.path);
-    if((!project.referenceOnly||revision)&&revision!==project.revision)issues.push('Gitlink differs or is missing: '+project.path);
+    if(revision!==project.revision)issues.push('Gitlink differs or is missing: '+project.path);
     if(revision)modulesChecked++;
     const checkout=path.join(root,project.path);
     if(fs.existsSync(path.join(checkout,'.git'))){
