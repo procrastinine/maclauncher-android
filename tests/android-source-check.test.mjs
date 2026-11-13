@@ -57,3 +57,12 @@ test('a supplier no build checks out is not a Git module',t=>{
  fs.writeFileSync(path.join(root,'.gitmodules'),`[submodule "reference"]\npath = ${project.path}\nurl = ${project.repository}\nmaclauncher-revision = ${revision}\nmaclauncher-role = reference\nmaclauncher-init = false\n`);
  assert.throws(()=>checkSources(root,{metadataOnly:true}),/Reference-only Git module: reference/);
 });
+
+test('every Git module is named by a tracked file other than its pin metadata',()=>{
+ const root=path.resolve(import.meta.dirname,'..'),git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',maxBuffer:1<<28});
+ const paths=git('config','--file','.gitmodules','--get-regexp','\\.path$').trim().split('\n').map(line=>line.split(' ')[1]);
+ const unread=paths.filter(file=>{
+  try{git('grep','-q','-F','-e',file.replace(/^src\/external\//,''),'--','.',':!.gitmodules',':!upstreams.json');return false;}catch{return true;}
+ });
+ assert.deepEqual(unread,[],'Git modules that only their own pin metadata names');
+});

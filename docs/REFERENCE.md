@@ -22,7 +22,15 @@ Builds.
 ## Upstream sources and licenses
 
 `npm run check` validates source import paths and the exact upstream Git
-commits. `upstreams.json` records the source URLs and commits. Upstream checkouts are read-only inputs, and adaptations are applied to
+commits. `upstreams.json` records the source URLs and commits of the Git modules. The HWUI
+component's original sources are recorded with their commits and checked Git objects in
+`src/modules/android/native/hwui/sources.json`, from which its producer acquires them.
+The Metal `GL_MESA_framebuffer_flip_y` framebuffer-state handling in the ANGLE adaptation
+follows ANGLE commit 37c976ffba9d2940add977cad9945b23de14c150
+(`src/modules/android/native/angle-flip-source.json`). The JVM portability call adapters
+follow Robolectric commit 3cfa3a4b8e2910ae06ce0d12e6f7bd927f8a5d2e
+(`src/modules/android/native/sources/robolectric-portability/source.json`).
+Upstream checkouts are read-only inputs, and adaptations are applied to
 staged copies of the sources that belong to this repository's build. The source
 check can verify source Gitlinks and metadata without initializing checkouts;
 initialized checkouts are also checked for their exact HEAD commit and for
